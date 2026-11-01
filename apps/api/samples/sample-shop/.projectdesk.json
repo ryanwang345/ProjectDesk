@@ -1,0 +1,7 @@
+{
+  "description": "Tiny static shop page used to demonstrate the AI loop end to end. The Search button is missing the shared .btn class.",
+  "test": {
+    "image": "node:22-alpine",
+    "command": ["node", "test.mjs"]
+  }
+}

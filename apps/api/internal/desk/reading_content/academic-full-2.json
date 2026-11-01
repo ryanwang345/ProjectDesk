@@ -1,0 +1,807 @@
+{
+  "slug": "academic-full-2",
+  "title": "Academic Reading Test 2: Seed Banks, Ocean Sound & the Repair Economy",
+  "subtitle": "Original, unofficial full-length mock · 3 parts · 40 questions · 60 minutes",
+  "module": "academic",
+  "category": "full",
+  "difficulty": "Exam standard · increasing difficulty",
+  "durationSeconds": 3600,
+  "questionCount": 40,
+  "passages": [
+    {
+      "id": "ac2-p1",
+      "index": 1,
+      "title": "Banking the harvest of the future",
+      "wordCount": 764,
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "In a hillside building outside the fictional town of Merrow, a conservation team is making an unusual collection. Its packets contain neither rare jewels nor ancient manuscripts, but seeds of ordinary food plants. These are local crop varieties, sometimes called landraces, that farming families have maintained through repeated selection. Unlike a commercial variety bred to produce a uniform harvest under specified conditions, a landrace can contain considerable genetic variation. One plant may tolerate a late frost while another survives a dry spring. That variation can make a field look untidy, yet it provides options when growing conditions change. The Merrow collection was established after an agricultural survey found that several local bean varieties survived on only two or three farms."
+        },
+        {
+          "label": "B",
+          "text": "Collecting material for a seed bank involves more than choosing the largest specimen. If collectors take seeds from a single unusually vigorous plant, they risk excluding most of the variation present in a population. The Merrow team therefore samples from at least fifty plants spread across each field, keeping the farms' collections separate until their origins have been documented. Farmers give permission before collection and receive a duplicate sample. Alongside each packet, the team stores information about soil, altitude, planting dates and local uses in a digital catalogue. These records can later help researchers decide whether an apparently unremarkable sample is worth investigating for a particular breeding programme."
+        },
+        {
+          "label": "C",
+          "text": "The seeds next enter a preparation room. Here, air with low humidity removes moisture gradually, avoiding the damage that rapid heating could cause. For the kinds of crop seeds accepted by Merrow, the target moisture content is about six per cent. Technicians then seal the seeds in foil packets and place them in a cold room maintained at minus eighteen degrees Celsius. Drying and cooling slow the chemical reactions associated with ageing; they do not stop them altogether. Staff therefore describe storage as a way of buying time rather than providing immortality. A packet that looks unchanged from the outside may eventually contain very few living embryos."
+        },
+        {
+          "label": "D",
+          "text": "To detect that decline, technicians perform a germination test on a small sample every ten years. They place seeds on moist paper under controlled conditions and count those that produce normal seedlings. When germination falls below eighty-five per cent of the sample's original rate, the collection is scheduled for regeneration. The remaining seeds are grown in plots from which fresh seeds can be harvested. During this process, related varieties must be kept apart to prevent unwanted cross-pollination. Regeneration is expensive, and it introduces another risk: conditions in the regeneration field may favour some plants over others, gradually changing the genetic balance that collectors originally intended to preserve."
+        },
+        {
+          "label": "E",
+          "text": "Cold storage is not suitable for every species. Some seeds suffer damage when dried, while others lose viability at low temperatures. Many tropical tree crops fall into these categories. Their diversity may instead be conserved in field collections, where living plants are maintained, or by storing very small pieces of plant tissue under specialised laboratory conditions. Field collections allow researchers to examine mature plants directly, but a single storm or disease outbreak can destroy years of work. They also need land and continuous care. A conservation budget that purchases only larger freezers will consequently leave important gaps, however impressive its total storage capacity may appear."
+        },
+        {
+          "label": "F",
+          "text": "For the crops that can be banked, keeping a second sample elsewhere reduces the danger of a local disaster. Merrow sends duplicate packets to a partner institution in another region, using a sealed container and an inventory checked by both teams. Ownership remains with the depositing collection; the partner does not distribute those samples to plant breeders. Access to working samples is handled separately through agreements that specify how material may be used and how benefits should be shared. Such arrangements matter to farmers who have contributed generations of selection. Conservation can lose their support if it is presented as merely removing resources from a community for someone else's advantage."
+        },
+        {
+          "label": "G",
+          "text": "Seed banks nevertheless preserve only one part of an agricultural system. A stored sample cannot capture all the knowledge needed to cultivate, cook or exchange a crop. Nor can it continue adapting to conditions in farmers' fields. Merrow therefore supports a network of community gardens where older varieties are grown alongside current ones. Visitors compare harvests, record unusual weather damage and share seed-saving skills. Researchers regard this activity and cold storage as complementary: the bank protects material against sudden loss, while cultivation maintains an active relationship between plants and people. Neither approach eliminates uncertainty, but together they offer a wider range of responses to an unpredictable future."
+        }
+      ],
+      "subtitle": "Reading Passage 1 · Questions 1–13 · Spend about 20 minutes on this part."
+    },
+    {
+      "id": "ac2-p2",
+      "index": 2,
+      "title": "Listening beneath the surface",
+      "wordCount": 768,
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "To someone standing on a calm shore, the sea may appear almost silent. Underwater recordings tell another story: breaking waves, moving sediment and the calls of animals create a changing acoustic environment. Into that environment people introduce propellers, construction work and survey equipment. The distinction between sound and harmful noise cannot be made simply by identifying whether a source is natural or human. A sound's effect also depends on its frequency, its duration and the animal receiving it. In a fictional coastal research programme at Bellhaven Bay, three teams set out to examine these differences. Their results illustrate why measuring a noisy ocean is more complicated than recording a single maximum sound level."
+        },
+        {
+          "label": "B",
+          "text": "Marine acoustician Lena Ortiz placed hydrophones, or underwater microphones, at twelve sites along a shipping channel. A hydrophone records changes in pressure, but converting those recordings into a useful sound map required careful calibration of the instruments. Ortiz's team also collected ship positions and local weather reports, because wind and rain could otherwise be mistaken for changes in vessel activity. They found that the loudest short event did not necessarily make the largest contribution to daily exposure. Repeated passages by moderately noisy ships sometimes added more acoustic energy over a day than one brief, much louder event. A harbour policy based only on peak readings would miss that pattern."
+        },
+        {
+          "label": "C",
+          "text": "Ecologist Samir Chen investigated a different problem. Some fish produce low-frequency sounds when defending nesting areas, and those signals can overlap with the frequencies generated by engines. In Chen's experiments, background vessel noise made a recorded territorial call harder for fish to detect, even when the noise was not intense enough to cause physical injury. This interference is known as masking. Observers initially interpreted reduced responses as evidence that the fish had stopped communicating. Tests in quieter water showed that the calls were still being produced; it was their effective range that had shrunk. For Chen, counting visible injuries alone would therefore provide an incomplete account of disturbance."
+        },
+        {
+          "label": "D",
+          "text": "Engineer Ruth Vale focused on a period when a new pier was being installed. Pile driving produced a series of powerful pulses, quite unlike the continuous rumble associated with a busy channel. Around the work site, contractors installed a bubble curtain: air released through a perforated hose formed a barrier around the pile. Measurements suggested that the curtain reduced some frequencies more effectively than others. Strong tidal currents could also carry the bubbles away from their intended position, opening gaps in the barrier. Vale argued that performance should be checked throughout construction rather than assumed from the equipment's presence. A technique that worked during a sheltered demonstration might be less successful in an exposed harbour."
+        },
+        {
+          "label": "E",
+          "text": "Each team faced a common obstacle: there was no reliable recording of the bay before large-scale shipping began. An apparently quiet neighbouring inlet was not a perfect substitute, because its seabed, depth and resident species differed. Ortiz therefore recommended establishing a baseline at each site before any further development. She also cautioned against comparing figures collected with different instruments or averaged over different periods. A weekly average could conceal short intervals important to animal behaviour, while a snapshot could exaggerate an unusual event. Consistent methods would not settle every argument about acceptable noise, but they would make disagreements about the evidence easier to identify."
+        },
+        {
+          "label": "F",
+          "text": "The programme also tested the appeal of a simple solution: asking all ships to travel more slowly. Slower speeds can reduce the formation and collapse of bubbles around a propeller, a process called cavitation that is an important source of ship noise. However, quieter passage may take longer, extending the duration of exposure for an animal. Some vessels also operate less efficiently below their design speed. Vale proposed evaluating both sound level and journey duration before choosing a speed restriction. The researchers favoured trials on particular routes, with results checked against pre-agreed measures, rather than a single rule assumed to work equally well for every ship and coastline."
+        },
+        {
+          "label": "G",
+          "text": "Perhaps the most difficult issue was deciding what success should look like. A fall in average noise did not guarantee that animals had returned to a breeding ground; food availability or water quality might still discourage them. Chen wanted acoustic monitoring combined with observations of feeding and reproduction. Local fishing groups asked for results to be published in accessible language, since technical charts alone gave them little basis for judging changes. The final proposal linked engineering measures to ecological outcomes and included regular opportunities to revise the policy. It treated uncertainty as a reason to continue measuring, rather than as proof that either unrestricted activity or a complete ban was justified."
+        }
+      ],
+      "subtitle": "Reading Passage 2 · Questions 14–26 · Spend about 20 minutes on this part."
+    },
+    {
+      "id": "ac2-p3",
+      "index": 3,
+      "title": "When keeping a product becomes a design problem",
+      "wordCount": 777,
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "A broken appliance presents an apparently private decision: repair it or replace it. Yet the options available to its owner have been shaped long before the fault occurs. Designers choose whether a casing can be opened, manufacturers decide how long to supply parts, and retailers influence expectations about what a sensible repair should cost. In a fictional regional study led by economist Mara Ellis, households were offered independent assessments of faulty vacuum cleaners. Many people who had planned to buy replacements changed their minds after learning that the fault could be fixed quickly. Their initial decisions reflected uncertainty about repair, rather than a positive preference for owning something new."
+        },
+        {
+          "label": "B",
+          "text": "That observation challenges a familiar explanation for short product lives: consumers supposedly demand novelty so strongly that longer-lasting goods cannot compete. Ellis does not deny that fashion matters. She argues that its influence is often inferred from purchases made under constrained conditions. If a replacement is displayed with a clear price and warranty while a repair requires several phone calls and an unpredictable bill, choosing the replacement reveals little about the attraction of novelty itself. An alternative service with a reliable quotation might change the decision without changing the consumer's underlying tastes. Studying demand therefore requires examining the alternatives people actually encounter, not merely counting what they buy."
+        },
+        {
+          "label": "C",
+          "text": "Product engineer Daniel Rook examined the appliances returned during the study. He distinguished durability, the ability to resist failure, from repairability, the ease with which a failure can be corrected. A sealed unit may be durable in everyday use but almost impossible to repair after one component breaks. Conversely, a modular device can be easy to open while containing parts that wear out rapidly. Rook warned against combining these two properties into a single unexplained label. His team timed common repairs and recorded which tools were needed. A design requiring a specialist tool was not automatically unacceptable, but it created a dependency that purchasers ought to understand before deciding what to buy."
+        },
+        {
+          "label": "D",
+          "text": "Access to a spare part was not sufficient if nobody could identify it. Independent technicians in Ellis's study sometimes received components with several incompatible revisions carrying nearly identical names. A searchable parts catalogue, linked to the product's model number, reduced these errors. Repair manuals mattered too, especially where disassembly involved hidden clips that could snap if handled incorrectly. Manufacturers raised concerns about publishing instructions for work involving dangerous electrical components. The study treated these concerns as a reason to distinguish tasks suitable for owners from tasks requiring trained technicians, rather than as a reason to withhold all information. Useful transparency depended on how information was organised and who was expected to act on it."
+        },
+        {
+          "label": "E",
+          "text": "The environmental case for repair also needs qualification. Making a replacement consumes materials and energy, but an old appliance may use much more electricity during operation. Analyst Priya Nair compared the energy needed to manufacture a replacement with the energy savings it would deliver over its expected life. For a rarely used device, production could dominate the calculation; for equipment running continuously, operating efficiency could matter more. The decisive factor was not age alone. Nair cautioned against general claims that every repair is environmentally superior or that every newer model is greener. The comparison has to account for actual patterns of use and the kind of replacement under consideration."
+        },
+        {
+          "label": "F",
+          "text": "Community repair events offered another perspective. Participants brought damaged possessions to volunteers who attempted a repair while explaining what they were doing. Success was usually reported as the number of objects restored to working order. Sociologist Ivo Bell suggested that this overlooked a second outcome: visitors became better able to describe a fault and evaluate a quotation, even when their own object could not be saved. Nevertheless, volunteer events were not a substitute for a professional repair network. They opened only occasionally, their expertise varied, and many could not provide warranties. Bell valued their educational role without assuming they could absorb the whole demand for repairs."
+        },
+        {
+          "label": "G",
+          "text": "The study's final recommendation was consequently a package of measures rather than a single durability score. Manufacturers would state how long key parts would remain available; repair providers would offer diagnostic fees that could be credited against completed work; and product information would distinguish owner-level tasks from specialist ones. Ellis argued that clearer choices could reveal demand currently hidden by inconvenience and uncertainty. Such measures would not make replacement irrational in every case, nor guarantee that every repair business survived. They would make it easier to judge a product over its useful life. The question would shift from whether people were virtuous enough to keep old objects to whether the system gave them a workable opportunity to do so."
+        }
+      ],
+      "subtitle": "Reading Passage 3 · Questions 27–40 · Spend about 20 minutes on this part."
+    }
+  ],
+  "questions": [
+    {
+      "passageId": "ac2-p1",
+      "type": "tfng",
+      "prompt": "A landrace may include plants that respond differently to difficult weather.",
+      "correctAnswer": "TRUE",
+      "evidenceParagraph": "A",
+      "evidenceQuote": "a landrace can contain considerable genetic variation",
+      "explanation": "The passage describes different plants tolerating frost or dry conditions; genetic uniformity is not implied.",
+      "options": [
+        "TRUE",
+        "FALSE",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 1–6: Do the following statements agree with the information in Reading Passage 1? Write TRUE if the statement agrees, FALSE if it contradicts the information, or NOT GIVEN if there is no information about this.",
+      "id": "academic-full-2-q1",
+      "number": 1
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "tfng",
+      "prompt": "The Merrow seed bank began because all local bean varieties had already disappeared.",
+      "correctAnswer": "FALSE",
+      "evidenceParagraph": "A",
+      "evidenceQuote": "several local bean varieties survived on only two or three farms",
+      "explanation": "The varieties still existed on a few farms. Being at risk is different from having disappeared.",
+      "options": [
+        "TRUE",
+        "FALSE",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 1–6: Do the following statements agree with the information in Reading Passage 1? Write TRUE if the statement agrees, FALSE if it contradicts the information, or NOT GIVEN if there is no information about this.",
+      "id": "academic-full-2-q2",
+      "number": 2
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "tfng",
+      "prompt": "Collectors take seeds only from the strongest plant in a field.",
+      "correctAnswer": "FALSE",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "samples from at least fifty plants spread across each field",
+      "explanation": "Sampling across many plants is explicitly contrasted with selecting a single vigorous plant.",
+      "options": [
+        "TRUE",
+        "FALSE",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 1–6: Do the following statements agree with the information in Reading Passage 1? Write TRUE if the statement agrees, FALSE if it contradicts the information, or NOT GIVEN if there is no information about this.",
+      "id": "academic-full-2-q3",
+      "number": 3
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "tfng",
+      "prompt": "Farmers are paid the same amount for every packet they contribute.",
+      "correctAnswer": "NOT GIVEN",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "Farmers give permission before collection and receive a duplicate sample.",
+      "explanation": "Permission and duplicate samples are mentioned, but payment and payment rates are not discussed.",
+      "options": [
+        "TRUE",
+        "FALSE",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 1–6: Do the following statements agree with the information in Reading Passage 1? Write TRUE if the statement agrees, FALSE if it contradicts the information, or NOT GIVEN if there is no information about this.",
+      "id": "academic-full-2-q4",
+      "number": 4
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "tfng",
+      "prompt": "Low temperatures completely prevent seeds from ageing.",
+      "correctAnswer": "FALSE",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "they do not stop them altogether",
+      "explanation": "Drying and cooling slow the reactions; the passage explicitly denies that they stop them.",
+      "options": [
+        "TRUE",
+        "FALSE",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 1–6: Do the following statements agree with the information in Reading Passage 1? Write TRUE if the statement agrees, FALSE if it contradicts the information, or NOT GIVEN if there is no information about this.",
+      "id": "academic-full-2-q5",
+      "number": 5
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "tfng",
+      "prompt": "The cold room uses electricity produced entirely by solar panels.",
+      "correctAnswer": "NOT GIVEN",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "a cold room maintained at minus eighteen degrees Celsius",
+      "explanation": "The temperature is stated, but the source of electricity is not given.",
+      "options": [
+        "TRUE",
+        "FALSE",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 1–6: Do the following statements agree with the information in Reading Passage 1? Write TRUE if the statement agrees, FALSE if it contradicts the information, or NOT GIVEN if there is no information about this.",
+      "id": "academic-full-2-q6",
+      "number": 6
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "sentence_completion",
+      "prompt": "Information about a seed sample's origin and growing conditions is kept in a ________.",
+      "correctAnswer": "digital catalogue",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "in a digital catalogue",
+      "explanation": "The records are stored in a digital catalogue; the foil packets hold the seeds themselves.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 7–10: Complete the sentences. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+      "id": "academic-full-2-q7",
+      "number": 7
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "sentence_completion",
+      "prompt": "Before cold storage, seeds are sealed in ________.",
+      "correctAnswer": "foil packets",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "seal the seeds in foil packets",
+      "explanation": "The passage names foil packets as the immediate container.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 7–10: Complete the sentences. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+      "id": "academic-full-2-q8",
+      "number": 8
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "sentence_completion",
+      "prompt": "Seed viability is checked by carrying out a ________.",
+      "correctAnswer": "germination test",
+      "evidenceParagraph": "D",
+      "evidenceQuote": "perform a germination test",
+      "explanation": "This test measures whether the seeds can produce normal seedlings.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 7–10: Complete the sentences. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+      "id": "academic-full-2-q9",
+      "number": 9
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "sentence_completion",
+      "prompt": "Related varieties are separated during regeneration to avoid ________.",
+      "correctAnswer": "cross-pollination",
+      "evidenceParagraph": "D",
+      "evidenceQuote": "to prevent unwanted cross-pollination",
+      "explanation": "The separation prevents pollen from one variety changing another variety.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 7–10: Complete the sentences. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+      "id": "academic-full-2-q10",
+      "number": 10
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "short_answer",
+      "prompt": "In what type of collections can living examples of tropical tree crops be kept?",
+      "correctAnswer": "field collections",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "in field collections",
+      "explanation": "Field collections conserve living plants when cold seed storage is unsuitable.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 11–13: Answer the questions. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+      "id": "academic-full-2-q11",
+      "number": 11
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "short_answer",
+      "prompt": "What does Merrow send to an institution in another region?",
+      "correctAnswer": "duplicate packets",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "sends duplicate packets",
+      "explanation": "The bank sends duplicate packets as protection against a local disaster.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 11–13: Answer the questions. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+      "id": "academic-full-2-q12",
+      "number": 12
+    },
+    {
+      "passageId": "ac2-p1",
+      "type": "short_answer",
+      "prompt": "Where does the Merrow network grow old and current varieties together?",
+      "correctAnswer": "community gardens",
+      "evidenceParagraph": "G",
+      "evidenceQuote": "a network of community gardens",
+      "explanation": "Community gardens keep cultivation and seed-saving knowledge active.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 11–13: Answer the questions. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+      "id": "academic-full-2-q13",
+      "number": 13
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "matching_headings",
+      "prompt": "Paragraph A",
+      "correctAnswer": "iii",
+      "evidenceParagraph": "A",
+      "evidenceQuote": "Underwater recordings tell another story",
+      "explanation": "The paragraph contrasts the apparently silent sea with its complex acoustic environment.",
+      "options": [
+        "i. A physical barrier whose effectiveness can vary",
+        "ii. The difficulty of selecting a valid point of comparison",
+        "iii. A contrast between appearances and underwater reality",
+        "iv. Evidence that animals have permanently lost their hearing",
+        "v. A trade-off within a seemingly straightforward remedy",
+        "vi. Signals that are present but harder to detect",
+        "vii. Why every natural sound is harmless",
+        "viii. The importance of repeated events in total exposure",
+        "ix. Ecological and public measures of progress"
+      ],
+      "groupInstruction": "Questions 14–18: Reading Passage 2 has seven paragraphs, A–G. Choose the correct heading for paragraphs A–E from the list of headings i–ix.",
+      "id": "academic-full-2-q14",
+      "number": 14
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "matching_headings",
+      "prompt": "Paragraph B",
+      "correctAnswer": "viii",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "Repeated passages by moderately noisy ships",
+      "explanation": "The central finding concerns cumulative exposure from repeated events, rather than a single peak.",
+      "options": [
+        "i. A physical barrier whose effectiveness can vary",
+        "ii. The difficulty of selecting a valid point of comparison",
+        "iii. A contrast between appearances and underwater reality",
+        "iv. Evidence that animals have permanently lost their hearing",
+        "v. A trade-off within a seemingly straightforward remedy",
+        "vi. Signals that are present but harder to detect",
+        "vii. Why every natural sound is harmless",
+        "viii. The importance of repeated events in total exposure",
+        "ix. Ecological and public measures of progress"
+      ],
+      "groupInstruction": "Questions 14–18: Reading Passage 2 has seven paragraphs, A–G. Choose the correct heading for paragraphs A–E from the list of headings i–ix.",
+      "id": "academic-full-2-q15",
+      "number": 15
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "matching_headings",
+      "prompt": "Paragraph C",
+      "correctAnswer": "vi",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "it was their effective range that had shrunk",
+      "explanation": "Calls continued, but noise reduced their detectability; permanent deafness was not established.",
+      "options": [
+        "i. A physical barrier whose effectiveness can vary",
+        "ii. The difficulty of selecting a valid point of comparison",
+        "iii. A contrast between appearances and underwater reality",
+        "iv. Evidence that animals have permanently lost their hearing",
+        "v. A trade-off within a seemingly straightforward remedy",
+        "vi. Signals that are present but harder to detect",
+        "vii. Why every natural sound is harmless",
+        "viii. The importance of repeated events in total exposure",
+        "ix. Ecological and public measures of progress"
+      ],
+      "groupInstruction": "Questions 14–18: Reading Passage 2 has seven paragraphs, A–G. Choose the correct heading for paragraphs A–E from the list of headings i–ix.",
+      "id": "academic-full-2-q16",
+      "number": 16
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "matching_headings",
+      "prompt": "Paragraph D",
+      "correctAnswer": "i",
+      "evidenceParagraph": "D",
+      "evidenceQuote": "opening gaps in the barrier",
+      "explanation": "The bubble curtain is a physical barrier whose performance changes with currents and frequency.",
+      "options": [
+        "i. A physical barrier whose effectiveness can vary",
+        "ii. The difficulty of selecting a valid point of comparison",
+        "iii. A contrast between appearances and underwater reality",
+        "iv. Evidence that animals have permanently lost their hearing",
+        "v. A trade-off within a seemingly straightforward remedy",
+        "vi. Signals that are present but harder to detect",
+        "vii. Why every natural sound is harmless",
+        "viii. The importance of repeated events in total exposure",
+        "ix. Ecological and public measures of progress"
+      ],
+      "groupInstruction": "Questions 14–18: Reading Passage 2 has seven paragraphs, A–G. Choose the correct heading for paragraphs A–E from the list of headings i–ix.",
+      "id": "academic-full-2-q17",
+      "number": 17
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "matching_headings",
+      "prompt": "Paragraph E",
+      "correctAnswer": "ii",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "there was no reliable recording of the bay before large-scale shipping began",
+      "explanation": "The main difficulty is establishing a meaningful baseline and comparable measurements.",
+      "options": [
+        "i. A physical barrier whose effectiveness can vary",
+        "ii. The difficulty of selecting a valid point of comparison",
+        "iii. A contrast between appearances and underwater reality",
+        "iv. Evidence that animals have permanently lost their hearing",
+        "v. A trade-off within a seemingly straightforward remedy",
+        "vi. Signals that are present but harder to detect",
+        "vii. Why every natural sound is harmless",
+        "viii. The importance of repeated events in total exposure",
+        "ix. Ecological and public measures of progress"
+      ],
+      "groupInstruction": "Questions 14–18: Reading Passage 2 has seven paragraphs, A–G. Choose the correct heading for paragraphs A–E from the list of headings i–ix.",
+      "id": "academic-full-2-q18",
+      "number": 18
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "matching_features",
+      "prompt": "Warnings about interpreting weather sounds as vessel activity",
+      "correctAnswer": "A",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "wind and rain could otherwise be mistaken for changes in vessel activity",
+      "explanation": "Ortiz used weather reports to distinguish weather noise from shipping noise.",
+      "options": [
+        "A. Lena Ortiz",
+        "B. Samir Chen",
+        "C. Ruth Vale"
+      ],
+      "groupInstruction": "Questions 19–22: Match each statement with the correct researcher, A–C. You may use any letter more than once.",
+      "id": "academic-full-2-q19",
+      "number": 19
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "matching_features",
+      "prompt": "The need to measure whether construction equipment continues to work as intended",
+      "correctAnswer": "C",
+      "evidenceParagraph": "D",
+      "evidenceQuote": "performance should be checked throughout construction",
+      "explanation": "Vale called for ongoing checks of the bubble curtain.",
+      "options": [
+        "A. Lena Ortiz",
+        "B. Samir Chen",
+        "C. Ruth Vale"
+      ],
+      "groupInstruction": "Questions 19–22: Match each statement with the correct researcher, A–C. You may use any letter more than once.",
+      "id": "academic-full-2-q20",
+      "number": 20
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "matching_features",
+      "prompt": "A proposal to monitor animal reproduction as well as sound",
+      "correctAnswer": "B",
+      "evidenceParagraph": "G",
+      "evidenceQuote": "observations of feeding and reproduction",
+      "explanation": "Chen proposed combining acoustic data with ecological observations.",
+      "options": [
+        "A. Lena Ortiz",
+        "B. Samir Chen",
+        "C. Ruth Vale"
+      ],
+      "groupInstruction": "Questions 19–22: Match each statement with the correct researcher, A–C. You may use any letter more than once.",
+      "id": "academic-full-2-q21",
+      "number": 21
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "matching_features",
+      "prompt": "The importance of taking measurements before additional building begins",
+      "correctAnswer": "A",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "establishing a baseline at each site before any further development",
+      "explanation": "Ortiz recommended site-specific baseline measurements.",
+      "options": [
+        "A. Lena Ortiz",
+        "B. Samir Chen",
+        "C. Ruth Vale"
+      ],
+      "groupInstruction": "Questions 19–22: Match each statement with the correct researcher, A–C. You may use any letter more than once.",
+      "id": "academic-full-2-q22",
+      "number": 22
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "summary_completion",
+      "prompt": "The collapse of bubbles around a propeller is a process called ________.",
+      "correctAnswer": "cavitation",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "a process called cavitation",
+      "explanation": "Cavitation is identified as a source of propeller noise.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 23–26: Complete the summary of the speed-reduction proposal. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+      "id": "academic-full-2-q23",
+      "number": 23
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "summary_completion",
+      "prompt": "A slower voyage may increase the overall duration of ________ for an animal.",
+      "correctAnswer": "exposure",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "the duration of exposure for an animal",
+      "explanation": "The passage discusses exposure duration as well as instantaneous sound level.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 23–26: Complete the summary of the speed-reduction proposal. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+      "id": "academic-full-2-q24",
+      "number": 24
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "summary_completion",
+      "prompt": "The engineering team proposed considering journey duration alongside ________.",
+      "correctAnswer": "sound level",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "both sound level and journey duration",
+      "explanation": "These two measures must be considered together.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 23–26: Complete the summary of the speed-reduction proposal. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+      "id": "academic-full-2-q25",
+      "number": 25
+    },
+    {
+      "passageId": "ac2-p2",
+      "type": "summary_completion",
+      "prompt": "The researchers preferred route-specific ________ to one universal rule.",
+      "correctAnswer": "trials",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "trials on particular routes",
+      "explanation": "They recommended testing measures in specific operating contexts.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 23–26: Complete the summary of the speed-reduction proposal. Choose NO MORE THAN TWO WORDS from the passage for each answer.",
+      "id": "academic-full-2-q26",
+      "number": 26
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "multiple_choice",
+      "prompt": "Why did some households initially decide to replace their vacuum cleaners?",
+      "correctAnswer": "B",
+      "evidenceParagraph": "A",
+      "evidenceQuote": "Their initial decisions reflected uncertainty about repair",
+      "explanation": "The study attributes the initial choice to uncertainty about repair, not a documented enthusiasm for novelty.",
+      "options": [
+        "A. They were refused any assessment of the fault.",
+        "B. They lacked clear information about the repair option.",
+        "C. Their machines all required unavailable components.",
+        "D. They had already tested the newest models."
+      ],
+      "groupInstruction": "Questions 27–30: Choose the correct letter, A, B, C or D.",
+      "id": "academic-full-2-q27",
+      "number": 27
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "multiple_choice",
+      "prompt": "What point does Ellis make about observing replacement purchases?",
+      "correctAnswer": "D",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "purchases made under constrained conditions",
+      "explanation": "Purchases alone do not isolate preferences when the alternatives differ in clarity and convenience.",
+      "options": [
+        "A. They prove that fashion has no influence.",
+        "B. They show that warranties are unnecessary.",
+        "C. They establish the exact lifespan customers want.",
+        "D. They may give an incomplete picture of customer preferences."
+      ],
+      "groupInstruction": "Questions 27–30: Choose the correct letter, A, B, C or D.",
+      "id": "academic-full-2-q28",
+      "number": 28
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "multiple_choice",
+      "prompt": "Why does Rook distinguish durability from repairability?",
+      "correctAnswer": "A",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "A sealed unit may be durable in everyday use but almost impossible to repair",
+      "explanation": "A product can resist failure but still be difficult to fix; these are separate properties.",
+      "options": [
+        "A. One property does not guarantee the other.",
+        "B. Both can be measured by the retail price.",
+        "C. Specialist tools always make products unsafe.",
+        "D. Modular products never experience component failure."
+      ],
+      "groupInstruction": "Questions 27–30: Choose the correct letter, A, B, C or D.",
+      "id": "academic-full-2-q29",
+      "number": 29
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "multiple_choice",
+      "prompt": "What is the writer's view of the manufacturers' safety concerns?",
+      "correctAnswer": "C",
+      "evidenceParagraph": "D",
+      "evidenceQuote": "distinguish tasks suitable for owners from tasks requiring trained technicians",
+      "explanation": "The passage takes safety seriously while favouring information adapted to the intended user.",
+      "options": [
+        "A. They demonstrate that all manuals should remain confidential.",
+        "B. They are irrelevant to electrical repairs.",
+        "C. They justify different instructions for different levels of expertise.",
+        "D. They mean owners should receive complete electrical training."
+      ],
+      "groupInstruction": "Questions 27–30: Choose the correct letter, A, B, C or D.",
+      "id": "academic-full-2-q30",
+      "number": 30
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "ynng",
+      "prompt": "The popularity of replacements proves that customers always prefer new designs.",
+      "correctAnswer": "NO",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "choosing the replacement reveals little about the attraction of novelty itself",
+      "explanation": "Ellis challenges the inference that a replacement purchase proves a preference for novelty.",
+      "options": [
+        "YES",
+        "NO",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 31–36: Do the following statements agree with the views of the writer? Write YES if the statement agrees, NO if it contradicts the views, or NOT GIVEN if it is impossible to say what the writer thinks about this.",
+      "id": "academic-full-2-q31",
+      "number": 31
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "ynng",
+      "prompt": "Repairability and resistance to failure should be evaluated as separate qualities.",
+      "correctAnswer": "YES",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "warned against combining these two properties into a single unexplained label",
+      "explanation": "Rook explicitly separates the two qualities.",
+      "options": [
+        "YES",
+        "NO",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 31–36: Do the following statements agree with the views of the writer? Write YES if the statement agrees, NO if it contradicts the views, or NOT GIVEN if it is impossible to say what the writer thinks about this.",
+      "id": "academic-full-2-q32",
+      "number": 32
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "ynng",
+      "prompt": "The study found that most manufacturers deliberately use confusing names for components.",
+      "correctAnswer": "NOT GIVEN",
+      "evidenceParagraph": "D",
+      "evidenceQuote": "several incompatible revisions carrying nearly identical names",
+      "explanation": "Confusing part names are reported, but neither deliberate intent nor the proportion of manufacturers is established.",
+      "options": [
+        "YES",
+        "NO",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 31–36: Do the following statements agree with the views of the writer? Write YES if the statement agrees, NO if it contradicts the views, or NOT GIVEN if it is impossible to say what the writer thinks about this.",
+      "id": "academic-full-2-q33",
+      "number": 33
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "ynng",
+      "prompt": "An appliance's age is enough to determine whether replacing it benefits the environment.",
+      "correctAnswer": "NO",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "The decisive factor was not age alone.",
+      "explanation": "Patterns of use, manufacturing impacts and replacement efficiency also matter.",
+      "options": [
+        "YES",
+        "NO",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 31–36: Do the following statements agree with the views of the writer? Write YES if the statement agrees, NO if it contradicts the views, or NOT GIVEN if it is impossible to say what the writer thinks about this.",
+      "id": "academic-full-2-q34",
+      "number": 34
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "ynng",
+      "prompt": "A repair event may be valuable even when it does not restore a visitor's possession.",
+      "correctAnswer": "YES",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "even when their own object could not be saved",
+      "explanation": "Bell identifies learning to describe faults and assess quotations as another benefit.",
+      "options": [
+        "YES",
+        "NO",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 31–36: Do the following statements agree with the views of the writer? Write YES if the statement agrees, NO if it contradicts the views, or NOT GIVEN if it is impossible to say what the writer thinks about this.",
+      "id": "academic-full-2-q35",
+      "number": 35
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "ynng",
+      "prompt": "Visitors who attended repair events subsequently spent less money on electricity.",
+      "correctAnswer": "NOT GIVEN",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "visitors became better able to describe a fault and evaluate a quotation",
+      "explanation": "The passage describes learning outcomes, not subsequent household electricity bills.",
+      "options": [
+        "YES",
+        "NO",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 31–36: Do the following statements agree with the views of the writer? Write YES if the statement agrees, NO if it contradicts the views, or NOT GIVEN if it is impossible to say what the writer thinks about this.",
+      "id": "academic-full-2-q36",
+      "number": 36
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "matching_sentence_endings",
+      "prompt": "A catalogue organised by model number",
+      "correctAnswer": "C",
+      "evidenceParagraph": "D",
+      "evidenceQuote": "linked to the product's model number, reduced these errors",
+      "explanation": "Linking the catalogue to model numbers helps technicians identify compatible parts.",
+      "options": [
+        "A. can make production impacts relatively more important.",
+        "B. removes the need for any professional repair services.",
+        "C. can make it easier to identify the correct spare component.",
+        "D. makes every replacement environmentally desirable.",
+        "E. can expose demand obscured by inconvenient services.",
+        "F. may offer learning benefits beyond a successful repair."
+      ],
+      "groupInstruction": "Questions 37–40: Complete each sentence with the correct ending, A–F. There are more endings than sentences.",
+      "id": "academic-full-2-q37",
+      "number": 37
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "matching_sentence_endings",
+      "prompt": "Using an appliance only occasionally",
+      "correctAnswer": "A",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "For a rarely used device, production could dominate the calculation",
+      "explanation": "When operating energy use is low, the impact of making a replacement may dominate.",
+      "options": [
+        "A. can make production impacts relatively more important.",
+        "B. removes the need for any professional repair services.",
+        "C. can make it easier to identify the correct spare component.",
+        "D. makes every replacement environmentally desirable.",
+        "E. can expose demand obscured by inconvenient services.",
+        "F. may offer learning benefits beyond a successful repair."
+      ],
+      "groupInstruction": "Questions 37–40: Complete each sentence with the correct ending, A–F. There are more endings than sentences.",
+      "id": "academic-full-2-q38",
+      "number": 38
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "matching_sentence_endings",
+      "prompt": "Taking part in a community repair event",
+      "correctAnswer": "F",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "visitors became better able to describe a fault and evaluate a quotation",
+      "explanation": "Visitors may learn useful skills even when repair fails.",
+      "options": [
+        "A. can make production impacts relatively more important.",
+        "B. removes the need for any professional repair services.",
+        "C. can make it easier to identify the correct spare component.",
+        "D. makes every replacement environmentally desirable.",
+        "E. can expose demand obscured by inconvenient services.",
+        "F. may offer learning benefits beyond a successful repair."
+      ],
+      "groupInstruction": "Questions 37–40: Complete each sentence with the correct ending, A–F. There are more endings than sentences.",
+      "id": "academic-full-2-q39",
+      "number": 39
+    },
+    {
+      "passageId": "ac2-p3",
+      "type": "matching_sentence_endings",
+      "prompt": "Offering customers more predictable repair choices",
+      "correctAnswer": "E",
+      "evidenceParagraph": "G",
+      "evidenceQuote": "clearer choices could reveal demand currently hidden by inconvenience and uncertainty",
+      "explanation": "Clearer repair options can reveal demand that was concealed by uncertainty.",
+      "options": [
+        "A. can make production impacts relatively more important.",
+        "B. removes the need for any professional repair services.",
+        "C. can make it easier to identify the correct spare component.",
+        "D. makes every replacement environmentally desirable.",
+        "E. can expose demand obscured by inconvenient services.",
+        "F. may offer learning benefits beyond a successful repair."
+      ],
+      "groupInstruction": "Questions 37–40: Complete each sentence with the correct ending, A–F. There are more endings than sentences.",
+      "id": "academic-full-2-q40",
+      "number": 40
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+import { ProjectCard } from '@/components/project-card'
+import { useI18n, type MessageKey } from '@/i18n'
+import { STATUS_META, projectsByStatus, type Project, type Status } from '@/lib/projects'
+
+type ProjectColumnProps = {
+  status: Status
+  projects: Project[]
+  onEdit: (project: Project) => void
+  onDelete: (project: Project) => void
+  onStatus: (project: Project, status: Status) => void
+}
+
+export function ProjectColumn({
+  status,
+  projects,
+  onEdit,
+  onDelete,
+  onStatus,
+}: ProjectColumnProps) {
+  const { t } = useI18n()
+  const meta = STATUS_META[status]
+  const visible = projectsByStatus(projects, status)
+
+  return (
+    <section aria-labelledby={`column-${status}`} className="flex min-w-0 flex-col gap-3 rounded-3xl border border-border/80 bg-card/45 p-3 shadow-[0_18px_40px_-32px_oklch(0.32_0.04_160/0.7)]">
+      <div className="flex items-baseline justify-between gap-3 px-1">
+        <div>
+          <h2 id={`column-${status}`} className="flex items-center gap-2 text-sm font-medium">
+            <span className={`size-2 rounded-full ${meta.dot}`} aria-hidden />
+            {t(`status.${status}` as MessageKey)}
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t(`status.${status}.hint` as MessageKey)}</p>
+        </div>
+        <p className="text-xs text-muted-foreground tabular-nums">{visible.length}</p>
+      </div>
+      {visible.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border px-3 py-10 text-center text-sm text-muted-foreground">
+          {t(`status.${status}.empty` as MessageKey)}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {visible.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onStatus={onStatus}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}

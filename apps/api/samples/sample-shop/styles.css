@@ -1,0 +1,13 @@
+body {
+  font-family: Georgia, serif;
+  background: #f7f3ea;
+  color: #1f2a1f;
+}
+
+.btn {
+  background: #2f6b3a;
+  color: #fff;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+}

@@ -1,0 +1,7 @@
+node_modules
+artifacts
+.env
+chart
+helmfile.yaml
+README.md
+*.log

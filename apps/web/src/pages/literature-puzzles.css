@@ -1,0 +1,19 @@
+.literature-print { display: none; }
+@media print {
+  @page { size: auto; margin: 16mm; }
+  body > * { display: none !important; }
+  body > .literature-print { display: block !important; color: #111; background: white; font: 11pt Georgia, serif; }
+  .literature-print h1 { margin: 0 0 5mm; font-size: 21pt; line-height: 1.2; }
+  .literature-print p { margin: 2mm 0; }
+  .literature-print .print-name { margin: 6mm 0; }
+  .literature-print .print-instruction { margin-top: 5mm; font-size: 13pt; }
+  .literature-print svg { width: 100%; max-width: 85mm; max-height: 95mm; margin: 5mm auto 8mm; }
+  .literature-print > .grid, .print-answer-key > .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8mm; font-size: 10pt; }
+  .literature-print h3 { margin: 0 0 2mm; font-size: 11pt; }
+  .literature-print ul { margin: 0; padding: 0; list-style: none; }
+  .literature-print li { break-inside: avoid; }
+  .literature-print .print-credit { margin-top: 6mm; font-size: 8pt; }
+  .literature-print .print-bank { margin-top: 5mm; font-size: 9pt; }
+  .print-answer-key { break-before: page; }
+  .print-answers { columns: 2; font-size: 11pt; }
+}

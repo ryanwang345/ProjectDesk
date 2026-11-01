@@ -1,0 +1,7 @@
+node_modules
+dist
+.git
+.nginx
+*.log
+server
+e2e

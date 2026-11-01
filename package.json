@@ -1,0 +1,13 @@
+{
+  "name": "projectdesk-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ProjectDesk enterprise monorepo with React, Go, Cypress, and Kubernetes GitOps",
+  "scripts": {
+    "dev:web": "cd apps/web && npm run dev",
+    "build:web": "cd apps/web && npm run build",
+    "lint:web": "cd apps/web && npm run lint",
+    "test:e2e": "cd apps/e2e && npm run typecheck",
+    "clean": "rm -rf apps/web/node_modules apps/web/dist apps/e2e/node_modules"
+  }
+}

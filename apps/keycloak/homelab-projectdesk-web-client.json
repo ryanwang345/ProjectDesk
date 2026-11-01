@@ -1,0 +1,53 @@
+{
+  "clientId": "projectdesk-web",
+  "name": "ProjectDesk web",
+  "enabled": true,
+  "protocol": "openid-connect",
+  "publicClient": true,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": false,
+  "directAccessGrantsEnabled": false,
+  "serviceAccountsEnabled": false,
+  "redirectUris": [
+    "https://www.ryanwang.dev/*",
+    "https://ryanwang.dev/*",
+    "https://desk.ryanwang.dev/*",
+    "https://staging.ryanwang.dev/*",
+    "https://desk-staging.ryanwang.dev/*",
+    "https://desk-dev.ryanwang.dev/*",
+    "http://localhost:47291/*",
+    "http://127.0.0.1:47291/*",
+    "http://localhost:47311/*",
+    "http://127.0.0.1:47311/*"
+  ],
+  "webOrigins": [
+    "https://www.ryanwang.dev",
+    "https://ryanwang.dev",
+    "https://desk.ryanwang.dev",
+    "https://staging.ryanwang.dev",
+    "https://desk-staging.ryanwang.dev",
+    "https://desk-dev.ryanwang.dev",
+    "http://localhost:47291",
+    "http://127.0.0.1:47291",
+    "http://localhost:47311",
+    "http://127.0.0.1:47311"
+  ],
+  "attributes": {
+    "pkce.code.challenge.method": "S256",
+    "post.logout.redirect.uris": "https://www.ryanwang.dev/*##https://ryanwang.dev/*##https://desk.ryanwang.dev/*##https://staging.ryanwang.dev/*##https://desk-staging.ryanwang.dev/*##https://desk-dev.ryanwang.dev/*##http://localhost:47291/*##http://127.0.0.1:47291/*##http://localhost:47311/*##http://127.0.0.1:47311/*"
+  },
+  "defaultClientScopes": ["basic", "web-origins", "acr", "profile", "email"],
+  "protocolMappers": [
+    {
+      "name": "projectdesk-api-audience",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper",
+      "consentRequired": false,
+      "config": {
+        "included.custom.audience": "projectdesk-api",
+        "id.token.claim": "false",
+        "access.token.claim": "true"
+      }
+    }
+  ]
+}

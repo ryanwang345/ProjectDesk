@@ -1,0 +1,27 @@
+flowchart TD
+    subgraph SCM ["1. Source Control"]
+        DEV["Developer Push"] -->|"1. git push origin main"| GH["GitHub Monorepo"]
+    end
+
+    subgraph CI ["2. Jenkins CI"]
+        JENKINS["Jenkins Pipeline"] -->|"3. Parallel Validation"| TEST["Web, API & E2E Tests"]
+        TEST -->|"4. Build Containers"| KANIKO["Kaniko Builder"]
+        KANIKO -->|"5. Push Docker Images"| REGISTRY["Docker Hub"]
+    end
+
+    subgraph GITOPS ["3. GitOps & Kubernetes"]
+        ARGO["ArgoCD"] -->|"8. Reconcile & Deploy"| K8S["Kubernetes Cluster"]
+        K8S -->|"9. Rollout Workloads"| PODS["Web, API & Postgres"]
+        PODS -->|"10. Route Cluster Traffic"| INGRESS["Ingress-Nginx"]
+    end
+
+    subgraph EDGE ["4. Edge & Public Access"]
+        TUNNEL["Cloudflare Tunnel"] -->|"12. Encrypted Tunnel"| CDN["Cloudflare Edge"]
+        CDN -->|"13. HTTPS: www.ryanwang.dev"| CLIENT["Client Devices"]
+    end
+
+    GH -->|"2. SCM Poll Trigger"| JENKINS
+    KANIKO -->|"6. Bump Tag (skip ci)"| GH
+    GH -->|"7. Auto-Sync deploy/helm"| ARGO
+    INGRESS -->|"11. Route to Tunnel"| TUNNEL
+    REGISTRY ~~~ TUNNEL

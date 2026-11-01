@@ -1,0 +1,90 @@
+services:
+  languagetool:
+    build:
+      context: apps/languagetool
+      secrets:
+        - extra-ca
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx512m
+    ports:
+      - "127.0.0.1:8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/v2/languages"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: projectdesk
+      POSTGRES_PASSWORD: projectdesk
+      POSTGRES_DB: projectdesk
+    ports:
+      - "54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U projectdesk -d projectdesk"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: apps/api
+      secrets:
+        - extra-ca
+    environment:
+      DATABASE_URL: postgres://projectdesk:projectdesk@postgres:5432/projectdesk?sslmode=disable
+      PORT: "47292"
+      PROJECT_DESK_KEYCLOAK_URL: ${PROJECT_DESK_KEYCLOAK_URL:-https://keycloak.ryanwang.dev}
+      PROJECT_DESK_KEYCLOAK_REALM: ${PROJECT_DESK_KEYCLOAK_REALM:-homelab}
+      PROJECT_DESK_KEYCLOAK_CLIENT_ID: ${PROJECT_DESK_KEYCLOAK_CLIENT_ID:-projectdesk-web}
+      PROJECT_DESK_KEYCLOAK_AUDIENCE: ${PROJECT_DESK_KEYCLOAK_AUDIENCE:-projectdesk-api}
+      PROJECT_DESK_KEYCLOAK_JWKS_URL: ${PROJECT_DESK_KEYCLOAK_JWKS_URL:-https://keycloak.ryanwang.dev/realms/homelab/protocol/openid-connect/certs}
+      PROJECT_DESK_AUTH_DISABLED: ${PROJECT_DESK_AUTH_DISABLED:-0}
+      PROJECT_DESK_LANGUAGETOOL_URL: http://languagetool:8081
+      # Encrypts provider API keys at rest. Change this for anything shared;
+      # rotating it means re-entering provider keys under AI Settings.
+      PROJECT_DESK_SECRET_KEY: ${PROJECT_DESK_SECRET_KEY:-local-compose-only-change-me}
+      # Optional extra admin credential for AI settings changes (providers, agents).
+      PROJECT_DESK_ADMIN_TOKEN: ${PROJECT_DESK_ADMIN_TOKEN:-}
+      # Optional natural sentence audio. Recorded word audio needs no API key.
+      PROJECT_DESK_SPEECH_API_KEY: ${PROJECT_DESK_SPEECH_API_KEY:-}
+      PROJECT_DESK_SPEECH_BASE_URL: ${PROJECT_DESK_SPEECH_BASE_URL:-https://api.openai.com/v1}
+      PROJECT_DESK_SPEECH_MODEL: ${PROJECT_DESK_SPEECH_MODEL:-gpt-audio-1.5}
+      PROJECT_DESK_SPEECH_VOICE: ${PROJECT_DESK_SPEECH_VOICE:-marin}
+      # The API container has no Docker daemon, so sandboxed test runs report
+      # "not run" here. Run the API on a host with Docker to enable them.
+      PROJECT_DESK_RUNNER: none
+      PROJECT_DESK_WORKER_CONCURRENCY: "2"
+      # Set to 1 to write dictionary senses for every word at startup. Off by
+      # default because one full run can use up a free model quota.
+      PROJECT_DESK_FILL_SENSES: ${PROJECT_DESK_FILL_SENSES:-0}
+      PROJECT_DESK_FILL_PRONUNCIATIONS: ${PROJECT_DESK_FILL_PRONUNCIATIONS:-0}
+    ports:
+      - "47292:47292"
+    depends_on:
+      languagetool:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: apps/web
+      secrets:
+        - extra-ca
+    ports:
+      - "47291:80"
+    depends_on:
+      - api
+
+# Public CA bundle for TLS interception. Used while apk installs git and
+# left in the API trust store so provider calls can verify. Empty on a
+# network that does not intercept. Never a private key.
+# Recreate it on a Netskope machine with:
+#   echo | openssl s_client -showcerts -connect dl-cdn.alpinelinux.org:443 -servername dl-cdn.alpinelinux.org 2>/dev/null | awk 'BEGIN{n=0} /BEGIN CERT/{n++; if(n==1) next} n>=2 && n<=4' > apps/api/extra-ca.crt
+secrets:
+  extra-ca:
+    file: apps/api/extra-ca.crt
