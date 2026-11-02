@@ -1,0 +1,61 @@
+worker_processes 1;
+daemon off;
+error_log logs/error.log warn;
+pid logs/nginx.pid;
+
+events {
+    worker_connections 128;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    sendfile on;
+    keepalive_timeout 65;
+    server_tokens off;
+    access_log logs/access.log;
+
+    client_body_temp_path tmp/client_body;
+    proxy_temp_path tmp/proxy;
+    fastcgi_temp_path tmp/fastcgi;
+    uwsgi_temp_path tmp/uwsgi;
+    scgi_temp_path tmp/scgi;
+
+    server {
+        listen 47291;
+        server_name _;
+        root __ROOT__/dist;
+        index index.html;
+
+        gzip on;
+        gzip_types text/css application/javascript application/json image/svg+xml;
+        gzip_min_length 256;
+
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+        location = /index.html {
+            add_header Cache-Control "no-cache";
+            add_header X-Content-Type-Options nosniff always;
+            add_header Referrer-Policy strict-origin-when-cross-origin always;
+        }
+
+        location = /healthz {
+            access_log off;
+            default_type text/plain;
+            return 200 "ok\n";
+        }
+
+        location /assets/ {
+            try_files $uri =404;
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            add_header X-Content-Type-Options nosniff always;
+            add_header Referrer-Policy strict-origin-when-cross-origin always;
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }
+}
