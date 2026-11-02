@@ -48,7 +48,7 @@ The page is at [http://127.0.0.1:47291](http://127.0.0.1:47291). Postgres is pub
 
 ## Kubernetes
 
-Helmfile installs the chart in `chart/` into the `rwang` namespace. That chart runs Postgres with a 1Gi PersistentVolumeClaim, the Go API, and nginx. Build the images in this folder first. On Docker Desktop or Rancher Desktop the cluster can see local images.
+Helmfile installs the chart in `chart/` into the existing `rwang` namespace. It does not create that namespace. The chart runs Postgres with a 1Gi PersistentVolumeClaim, the Go API, and nginx. Build the images in this folder first. On Docker Desktop or Rancher Desktop the cluster can see local images.
 
 ```bash
 docker build -t project-desk-api:local ./server

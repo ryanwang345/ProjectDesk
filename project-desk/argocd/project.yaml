@@ -10,6 +10,3 @@ spec:
   destinations:
     - namespace: rwang
       server: https://kubernetes.default.svc
-  clusterResourceWhitelist:
-    - group: ""
-      kind: Namespace
