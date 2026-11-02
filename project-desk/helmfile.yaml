@@ -1,6 +1,10 @@
+helmDefaults:
+  createNamespace: false
+
 releases:
   - name: project-desk
     namespace: rwang
+    createNamespace: false
     chart: ./chart
     values:
       - ./chart/values.yaml
