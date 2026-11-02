@@ -22,7 +22,7 @@ export function AboutPage() {
       <div>
         <h1 className="font-display text-4xl tracking-tight sm:text-5xl">How it runs</h1>
         <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
-          Vail is a small React app with nginx in front of it. The board is the product. This page is
+          Project Desk is a small React app with nginx in front of it. The board is the product. This page is
           how the two pieces meet.
         </p>
       </div>

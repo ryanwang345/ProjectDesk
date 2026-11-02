@@ -10,8 +10,8 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        <NavLink to="/" className="font-display text-2xl leading-none tracking-tight text-foreground">
-          Vail
+        <NavLink to="/" className="font-display text-xl leading-none tracking-tight text-foreground sm:text-2xl">
+          Project Desk
         </NavLink>
         <nav aria-label="Primary" className="flex items-center gap-1">
           {links.map((link) => (

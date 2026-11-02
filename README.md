@@ -1,4 +1,4 @@
-# Vail
+# Project Desk
 
 A small React desk for the projects you are actually working on. Vite builds the app, and nginx serves the static files.
 
@@ -34,8 +34,8 @@ That listens on port `47311`. It does not use nginx.
 If you would rather not install nginx on the host:
 
 ```bash
-docker build -t vail .
-docker run --rm -p 47291:80 vail
+docker build -t project-desk .
+docker run --rm -p 47291:80 project-desk
 ```
 
 The image builds the React app, then serves `dist` with nginx. The container listens on port 80.

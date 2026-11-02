@@ -9,7 +9,7 @@ PORT=47291
 
 if ! command -v nginx >/dev/null 2>&1; then
   echo "nginx is not installed." >&2
-  echo "Install nginx, or use Docker: docker build -t vail . && docker run --rm -p ${PORT}:80 vail" >&2
+  echo "Install nginx, or use Docker: docker build -t project-desk . && docker run --rm -p ${PORT}:80 project-desk" >&2
   exit 1
 fi
 
@@ -41,5 +41,5 @@ if [[ -f "$PREFIX/logs/nginx.pid" ]]; then
 fi
 
 sed "s#__ROOT__#${ROOT}#g" "$TEMPLATE" > "$CONF"
-echo "Vail is being served at http://127.0.0.1:${PORT}"
+echo "Project Desk is being served at http://127.0.0.1:${PORT}"
 exec nginx -c "$CONF" -p "$PREFIX/"
