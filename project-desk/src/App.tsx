@@ -17,7 +17,7 @@ export default function App() {
           </Routes>
         </main>
         <footer className="mx-auto w-full max-w-6xl px-4 pb-8 text-xs text-muted-foreground sm:px-6">
-          Saved in this browser. nginx serves the built files.
+          Saved in Postgres. nginx serves the page and forwards /api to Go.
         </footer>
       </div>
     </BrowserRouter>

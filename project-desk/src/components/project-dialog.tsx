@@ -32,7 +32,7 @@ type ProjectDialogProps = {
   session: number
   draft: Project | null
   onOpenChange: (open: boolean) => void
-  onSubmit: (input: ProjectInput) => void
+  onSubmit: (input: ProjectInput) => Promise<void>
 }
 
 const emptyInput: ProjectInput = {
@@ -53,12 +53,17 @@ export function ProjectDialog({
   )
   const [errors, setErrors] = useState<Partial<Record<'name' | 'note', string>>>({})
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const nextErrors = validateProject(input)
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
-    onSubmit(input)
+    try {
+      await onSubmit(input)
+    } catch {
+      setErrors({ name: 'The desk could not save this project.' })
+      return
+    }
     onOpenChange(false)
   }
 

@@ -4,15 +4,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 const steps = [
   {
     title: 'React builds static files',
-    body: 'Vite compiles this interface into HTML, CSS, and JavaScript in the dist folder. There is no application server behind the page.',
+    body: 'Vite compiles this interface into HTML, CSS, and JavaScript in the dist folder.',
   },
   {
-    title: 'nginx serves those files',
-    body: 'nginx answers on this host, sends the built assets, and returns index.html for any path it does not recognize. That is why refreshing /about still opens the app.',
+    title: 'nginx serves the page and the API',
+    body: 'nginx answers on this host, sends the built assets, and forwards /api to the Go server. Unknown page paths still return index.html, so refreshing /about opens the app.',
   },
   {
-    title: 'The desk stays in the browser',
-    body: 'Projects are written to localStorage under the key vail.projects.v1. Nothing on the desk is sent to a server.',
+    title: 'Go saves each card in Postgres',
+    body: 'Creating, editing, moving, or removing a project is a request to the Go API. Postgres stores the name, note, status, and updated time.',
   },
 ]
 
@@ -22,8 +22,7 @@ export function AboutPage() {
       <div>
         <h1 className="font-display text-4xl tracking-tight sm:text-5xl">How it runs</h1>
         <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
-          Project Desk is a small React app with nginx in front of it. The board is the product. This page is
-          how the two pieces meet.
+          Project Desk is a React board, a Go API, and Postgres. nginx sits in front and sends each piece to the right place.
         </p>
       </div>
       <div className="grid gap-3">

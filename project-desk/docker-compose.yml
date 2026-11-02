@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: projectdesk
+      POSTGRES_PASSWORD: projectdesk
+      POSTGRES_DB: projectdesk
+    ports:
+      - "54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U projectdesk -d projectdesk"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./server
+    environment:
+      DATABASE_URL: postgres://projectdesk:projectdesk@postgres:5432/projectdesk?sslmode=disable
+      PORT: "47292"
+    ports:
+      - "47292:47292"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build: .
+    ports:
+      - "47291:80"
+    depends_on:
+      - api

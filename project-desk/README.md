@@ -1,44 +1,50 @@
 # Project Desk
 
-A small React desk for the projects you are actually working on. Vite builds the app, and nginx serves the static files.
+A small React desk for the projects you are actually working on. A Go API saves each card in Postgres. nginx serves the built page and forwards `/api` to Go.
 
-Projects stay in this browser under `localStorage` key `vail.projects.v1`. Nothing on the desk is sent to a server.
-
-The app lives in this folder. On this machine that path is `/workspace/project-desk`. On your own computer, `/Users/rwang/vail-projects/project-desk` is a natural place for it.
+The app lives in this folder. On this machine that path is `/workspace/project-desk`. On your own computer, `/Users/rwang/vail-projects/react-serve/project-desk` is where the clone puts it.
 
 ## Run it
+
+Postgres needs a database named `projectdesk` owned by a user named `projectdesk` with the password `projectdesk`. The API listens on port `47292`.
+
+```bash
+cd server
+go run ./cmd/server
+```
+
+In another terminal, from this folder:
 
 ```bash
 npm install
 npm run serve
 ```
 
-`npm run serve` builds the app and starts nginx in the foreground at [http://127.0.0.1:47291](http://127.0.0.1:47291).
+`npm run serve` builds the app and starts nginx at [http://127.0.0.1:47291](http://127.0.0.1:47291).
 
 - `/` is the desk
 - `/about` explains how the app is served
+- `/api/projects` is the Go API
+- `/api/healthz` checks that Go can reach Postgres
 - `/healthz` is nginx itself, and returns the text `ok`
 
-Unknown paths return `index.html`, so a refresh on `/about` still opens the React app.
-
-For UI work with hot reload, use the Vite dev server instead:
+For UI work with hot reload, keep the Go API running and use:
 
 ```bash
 npm run dev
 ```
 
-That listens on port `47311`. It does not use nginx.
+Vite listens on port `47311` and proxies `/api` to the Go server.
 
 ## Docker
 
-If you would rather not install nginx on the host:
+This starts Postgres, the Go API, and nginx together:
 
 ```bash
-docker build -t project-desk .
-docker run --rm -p 47291:80 project-desk
+docker compose up --build
 ```
 
-The image builds the React app, then serves `dist` with nginx. The container listens on port 80.
+The page is at [http://127.0.0.1:47291](http://127.0.0.1:47291). Postgres is published on port `54329`.
 
 ## Scripts
 
@@ -48,3 +54,5 @@ The image builds the React app, then serves `dist` with nginx. The container lis
 | `npm run build` | Typecheck and write `dist/` |
 | `npm run serve` | Build, then serve `dist/` with nginx on port 47291 |
 | `npm run lint` | Run oxlint |
+| `go run ./cmd/server` | Go API on port 47292, from the `server` directory |
+| `go test ./...` | Run the Go tests, from the `server` directory |

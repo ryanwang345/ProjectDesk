@@ -1,68 +1,100 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
-  createProject,
-  loadProjects,
-  sampleProjects,
-  saveProjects,
-  withUpdate,
-  type Project,
-  type ProjectInput,
-  type StorageProblem,
-} from '@/lib/projects'
-
-function readDesk(): { projects: Project[]; problem: StorageProblem | null } {
-  const loaded = loadProjects()
-  return { projects: loaded.projects, problem: loaded.problem }
-}
+  clearProjects as clearProjectsRequest,
+  createProject as createProjectRequest,
+  deleteProject,
+  listProjects,
+  loadSampleProjects,
+  updateProject as updateProjectRequest,
+} from '@/lib/api'
+import type { Project, ProjectInput, StorageProblem } from '@/lib/projects'
 
 export function useProjects() {
-  const [desk, setDesk] = useState(readDesk)
-  const { projects, problem } = desk
+  const [projects, setProjects] = useState<Project[]>([])
+  const [ready, setReady] = useState(false)
+  const [problem, setProblem] = useState<StorageProblem | null>(null)
 
-  const commit = useCallback((recipe: (current: Project[]) => Project[]) => {
-    setDesk((current) => {
-      const next = recipe(current.projects)
-      const saved = saveProjects(next)
-      return {
-        projects: next,
-        problem: saved ? null : current.problem === 'unavailable' ? 'unavailable' : 'write-failed',
-      }
-    })
+  const load = useCallback(async () => {
+    try {
+      const next = await listProjects()
+      setProjects(next)
+      setProblem(null)
+    } catch {
+      setProjects([])
+      setProblem('unavailable')
+    } finally {
+      setReady(true)
+    }
   }, [])
 
-  const addProject = useCallback(
-    (input: ProjectInput) => {
-      commit((current) => [createProject(input), ...current])
-    },
-    [commit],
-  )
+  useEffect(() => {
+    void load()
+  }, [load])
 
-  const updateProject = useCallback(
-    (id: string, patch: Partial<ProjectInput>) => {
-      commit((current) =>
-        current.map((project) => (project.id === id ? withUpdate(project, patch) : project)),
+  const addProject = useCallback(async (input: ProjectInput) => {
+    try {
+      const created = await createProjectRequest(input)
+      setProjects((current) => [created, ...current])
+      setProblem(null)
+    } catch (error) {
+      setProblem('write-failed')
+      throw error
+    }
+  }, [])
+
+  const updateProject = useCallback(async (id: string, input: ProjectInput) => {
+    try {
+      const saved = await updateProjectRequest(id, input)
+      setProjects((current) =>
+        current.map((project) => (project.id === id ? saved : project)),
       )
-    },
-    [commit],
-  )
+      setProblem(null)
+    } catch (error) {
+      setProblem('write-failed')
+      throw error
+    }
+  }, [])
 
-  const removeProject = useCallback(
-    (id: string) => {
-      commit((current) => current.filter((project) => project.id !== id))
-    },
-    [commit],
-  )
+  const removeProject = useCallback(async (id: string) => {
+    const previous = projects
+    setProjects((current) => current.filter((project) => project.id !== id))
+    try {
+      await deleteProject(id)
+      setProblem(null)
+    } catch (error) {
+      setProjects(previous)
+      setProblem('write-failed')
+      throw error
+    }
+  }, [projects])
 
-  const useSamples = useCallback(() => {
-    commit(() => sampleProjects())
-  }, [commit])
+  const useSamples = useCallback(async () => {
+    try {
+      const next = await loadSampleProjects()
+      setProjects(next)
+      setProblem(null)
+    } catch (error) {
+      setProblem('write-failed')
+      throw error
+    }
+  }, [])
 
-  const clearProjects = useCallback(() => {
-    commit(() => [])
-  }, [commit])
+  const clearProjects = useCallback(async () => {
+    const previous = projects
+    setProjects([])
+    try {
+      await clearProjectsRequest()
+      setProblem(null)
+    } catch (error) {
+      setProjects(previous)
+      setProblem('write-failed')
+      throw error
+    }
+  }, [projects])
 
   return {
     projects,
+    ready,
     problem,
     addProject,
     updateProject,

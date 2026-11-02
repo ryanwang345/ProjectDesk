@@ -30,17 +30,14 @@ function useDesktopBoard() {
 }
 
 const PROBLEM_COPY: Record<StorageProblem, string> = {
-  unavailable:
-    'This browser is not keeping a local save. You can still edit, and a reload will start from an empty desk.',
-  unreadable:
-    'The saved desk could not be read, so it was left empty. The next change you make writes a fresh save.',
-  'write-failed':
-    'The last change did not save. Check that this site is allowed to store data, then try again.',
+  unavailable: 'The desk could not reach the Go API. Start the API and Postgres, then reload.',
+  'write-failed': 'The last change did not save in Postgres. Try again.',
 }
 
 export function BoardPage() {
   const {
     projects,
+    ready,
     problem,
     addProject,
     updateProject,
@@ -68,16 +65,17 @@ export function BoardPage() {
   }
 
   function handleSubmit(input: ProjectInput) {
-    if (draft) {
-      updateProject(draft.id, input)
-      return
-    }
-    addProject(input)
+    if (draft) return updateProject(draft.id, input)
+    return addProject(input)
   }
 
   function handleStatus(project: Project, status: Status) {
     if (project.status === status) return
-    updateProject(project.id, { status })
+    void updateProject(project.id, {
+      name: project.name,
+      note: project.note,
+      status,
+    })
   }
 
   return (
@@ -88,7 +86,7 @@ export function BoardPage() {
             The desk
           </h1>
           <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-            Projects you are actually working on. They stay in this browser, and nginx serves the page.
+            Projects you are actually working on. The Go API saves each card in Postgres.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -113,7 +111,14 @@ export function BoardPage() {
         </p>
       ) : null}
 
-      {projects.length === 0 ? (
+      {!ready ? (
+        <div aria-busy="true" aria-live="polite" className="grid gap-4 md:grid-cols-3">
+          <p className="sr-only">Loading projects</p>
+          {STATUSES.map((status) => (
+            <div key={status} className="h-48 animate-pulse rounded-xl bg-muted" />
+          ))}
+        </div>
+      ) : projects.length === 0 ? (
         <EmptyDesk onAdd={openCreate} onSamples={useSamples} />
       ) : (
         desktop ? (
@@ -169,7 +174,7 @@ export function BoardPage() {
         title="Remove this project?"
         description={
           pendingDelete
-            ? `"${pendingDelete.name}" will leave this browser. There is no undo.`
+            ? `"${pendingDelete.name}" will be deleted from Postgres. There is no undo.`
             : ''
         }
         confirmLabel="Remove"
@@ -183,7 +188,7 @@ export function BoardPage() {
       <ConfirmDialog
         open={clearOpen}
         title="Clear the desk?"
-        description="Every project saved in this browser will be removed."
+        description="Every project saved in Postgres will be removed."
         confirmLabel="Clear desk"
         onOpenChange={setClearOpen}
         onConfirm={clearProjects}
@@ -197,7 +202,7 @@ function EmptyDesk({ onAdd, onSamples }: { onAdd: () => void; onSamples: () => v
     <div className="rounded-2xl border border-dashed border-border bg-card/70 px-6 py-14 text-center">
       <h2 className="font-display text-3xl tracking-tight">Nothing on the desk</h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-        Add the next thing you mean to finish. A name is enough, and it stays on this machine.
+        Add the next thing you mean to finish. A name is enough, and Postgres keeps the card.
       </p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
         <Button type="button" onClick={onAdd}>
