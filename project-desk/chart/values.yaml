@@ -15,4 +15,3 @@ api:
 web:
   image: project-desk-web:local
   pullPolicy: IfNotPresent
-  nodePort: 30091

@@ -57,7 +57,7 @@ helmfile apply
 kubectl port-forward -n rwang svc/web 47291:80
 ```
 
-The page is again at [http://127.0.0.1:47291](http://127.0.0.1:47291). The web Service is also a NodePort on port `30091`. Query the cards with:
+The page is again at [http://127.0.0.1:47291](http://127.0.0.1:47291). The web Service is ClusterIP because the `rwang` namespace quota does not allow NodePorts. Query the cards with:
 
 ```bash
 kubectl exec -n rwang deploy/postgres -- psql -U projectdesk -d projectdesk -c "SELECT name, status FROM projects;"
