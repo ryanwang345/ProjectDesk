@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: project-desk
+  namespace: argocd
+spec:
+  project: project-desk
+  source:
+    repoURL: https://origin.cursor.com/vail/react-serve.git
+    targetRevision: main
+    path: project-desk/chart
+    helm:
+      releaseName: project-desk
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: project-desk
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

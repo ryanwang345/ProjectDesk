@@ -63,6 +63,26 @@ The page is again at [http://127.0.0.1:47291](http://127.0.0.1:47291). The web S
 kubectl exec -n project-desk deploy/postgres -- psql -U projectdesk -d projectdesk -c "SELECT name, status FROM projects;"
 ```
 
+## Argo CD
+
+Argo CD syncs the Helm chart in `chart/` from `main`. Install Argo CD, then apply the project and application in `argocd/`.
+
+```bash
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply -f argocd/project.yaml
+kubectl apply -f argocd/application.yaml
+kubectl port-forward -n argocd svc/argocd-server 8080:443
+```
+
+The initial admin password is the name of the `argocd-initial-admin-secret` pod secret:
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```
+
+Sign in at `https://127.0.0.1:8080` as `admin`. The Project Desk application appears after Argo CD can clone the repository. Build `project-desk-api:local` and `project-desk-web:local` on the cluster before the first sync, because the chart uses those local image names.
+
 ## Scripts
 
 | Command | What it does |

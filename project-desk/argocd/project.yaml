@@ -1,0 +1,15 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: project-desk
+  namespace: argocd
+spec:
+  description: Project Desk
+  sourceRepos:
+    - https://origin.cursor.com/vail/react-serve.git
+  destinations:
+    - namespace: project-desk
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
