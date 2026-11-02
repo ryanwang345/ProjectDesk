@@ -75,7 +75,7 @@ kubectl apply -f argocd/application.yaml
 kubectl port-forward -n argocd svc/argocd-server 8080:443
 ```
 
-The initial admin password is the name of the `argocd-initial-admin-secret` pod secret:
+The initial admin password is stored in `argocd-initial-admin-secret`:
 
 ```bash
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
