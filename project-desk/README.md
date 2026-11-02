@@ -48,12 +48,12 @@ The page is at [http://127.0.0.1:47291](http://127.0.0.1:47291). Postgres is pub
 
 ## Kubernetes
 
-The manifests in `k8s/` run the same three pieces: Postgres with a 1Gi PersistentVolumeClaim, the Go API, and nginx. Build the images in this folder first. On Docker Desktop or Rancher Desktop the cluster can see local images.
+Helmfile installs the chart in `chart/`. That chart runs Postgres with a 1Gi PersistentVolumeClaim, the Go API, and nginx. Build the images in this folder first. On Docker Desktop or Rancher Desktop the cluster can see local images.
 
 ```bash
 docker build -t project-desk-api:local ./server
 docker build -t project-desk-web:local .
-kubectl apply -k k8s
+helmfile apply
 kubectl port-forward -n project-desk svc/web 47291:80
 ```
 

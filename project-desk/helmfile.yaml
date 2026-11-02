@@ -1,0 +1,7 @@
+releases:
+  - name: project-desk
+    namespace: project-desk
+    createNamespace: true
+    chart: ./chart
+    values:
+      - ./chart/values.yaml

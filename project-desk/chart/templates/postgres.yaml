@@ -2,19 +2,37 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: project-desk-postgres
-  namespace: project-desk
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: project-desk
+    app.kubernetes.io/instance: {{ .Release.Name }}
 type: Opaque
 stringData:
-  POSTGRES_USER: projectdesk
-  POSTGRES_PASSWORD: projectdesk
-  POSTGRES_DB: projectdesk
-  DATABASE_URL: postgres://projectdesk:projectdesk@postgres:5432/projectdesk?sslmode=disable
+  POSTGRES_USER: {{ .Values.postgres.user | quote }}
+  POSTGRES_PASSWORD: {{ .Values.postgres.password | quote }}
+  POSTGRES_DB: {{ .Values.postgres.database | quote }}
+  DATABASE_URL: {{ printf "postgres://%s:%s@postgres:5432/%s?sslmode=disable" .Values.postgres.user .Values.postgres.password .Values.postgres.database | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: project-desk-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: project-desk
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.postgres.storage }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
-  namespace: project-desk
+  namespace: {{ .Release.Namespace }}
   labels:
     app: postgres
 spec:
@@ -28,11 +46,11 @@ spec:
         app: postgres
     spec:
       securityContext:
-        fsGroup: 70
+        fsGroup: {{ .Values.postgres.fsGroup }}
       containers:
         - name: postgres
-          image: postgres:16-alpine
-          imagePullPolicy: IfNotPresent
+          image: {{ .Values.postgres.image }}
+          imagePullPolicy: {{ .Values.postgres.pullPolicy }}
           ports:
             - containerPort: 5432
           env:
@@ -55,7 +73,7 @@ spec:
               value: /var/lib/postgresql/data/pgdata
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "projectdesk", "-d", "projectdesk"]
+              command: ["pg_isready", "-U", {{ .Values.postgres.user | quote }}, "-d", {{ .Values.postgres.database | quote }}]
             initialDelaySeconds: 5
             periodSeconds: 5
           volumeMounts:
@@ -70,7 +88,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: project-desk
+  namespace: {{ .Release.Namespace }}
 spec:
   selector:
     app: postgres

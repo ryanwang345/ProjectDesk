@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: project-desk-nginx
-  namespace: project-desk
+  namespace: {{ .Release.Namespace }}
 data:
   default.conf: |
     server {
@@ -22,7 +22,7 @@ data:
 
         location /api/ {
             resolver kube-dns.kube-system.svc.cluster.local valid=10s;
-            set $api_upstream api.project-desk.svc.cluster.local:47292;
+            set $api_upstream api.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.api.port }};
             proxy_pass http://$api_upstream;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
@@ -47,7 +47,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web
-  namespace: project-desk
+  namespace: {{ .Release.Namespace }}
   labels:
     app: web
 spec:
@@ -62,8 +62,8 @@ spec:
     spec:
       containers:
         - name: web
-          image: project-desk-web:local
-          imagePullPolicy: IfNotPresent
+          image: {{ .Values.web.image }}
+          imagePullPolicy: {{ .Values.web.pullPolicy }}
           ports:
             - containerPort: 80
           readinessProbe:
@@ -83,7 +83,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: web
-  namespace: project-desk
+  namespace: {{ .Release.Namespace }}
 spec:
   type: NodePort
   selector:
@@ -91,4 +91,4 @@ spec:
   ports:
     - port: 80
       targetPort: 80
-      nodePort: 30091
+      nodePort: {{ .Values.web.nodePort }}

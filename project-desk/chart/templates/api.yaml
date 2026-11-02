@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api
-  namespace: project-desk
+  namespace: {{ .Release.Namespace }}
   labels:
     app: api
 spec:
@@ -17,13 +17,13 @@ spec:
     spec:
       containers:
         - name: api
-          image: project-desk-api:local
-          imagePullPolicy: IfNotPresent
+          image: {{ .Values.api.image }}
+          imagePullPolicy: {{ .Values.api.pullPolicy }}
           ports:
-            - containerPort: 47292
+            - containerPort: {{ .Values.api.port }}
           env:
             - name: PORT
-              value: "47292"
+              value: {{ .Values.api.port | quote }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -32,7 +32,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /api/healthz
-              port: 47292
+              port: {{ .Values.api.port }}
             initialDelaySeconds: 3
             periodSeconds: 5
 ---
@@ -40,10 +40,10 @@ apiVersion: v1
 kind: Service
 metadata:
   name: api
-  namespace: project-desk
+  namespace: {{ .Release.Namespace }}
 spec:
   selector:
     app: api
   ports:
-    - port: 47292
-      targetPort: 47292
+    - port: {{ .Values.api.port }}
+      targetPort: {{ .Values.api.port }}

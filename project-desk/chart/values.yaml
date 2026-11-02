@@ -1,0 +1,18 @@
+postgres:
+  image: postgres:16-alpine
+  pullPolicy: IfNotPresent
+  user: projectdesk
+  password: projectdesk
+  database: projectdesk
+  storage: 1Gi
+  fsGroup: 70
+
+api:
+  image: project-desk-api:local
+  pullPolicy: IfNotPresent
+  port: 47292
+
+web:
+  image: project-desk-web:local
+  pullPolicy: IfNotPresent
+  nodePort: 30091
