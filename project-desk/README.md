@@ -46,6 +46,23 @@ docker compose up --build
 
 The page is at [http://127.0.0.1:47291](http://127.0.0.1:47291). Postgres is published on port `54329`.
 
+## Kubernetes
+
+The manifests in `k8s/` run the same three pieces: Postgres with a 1Gi PersistentVolumeClaim, the Go API, and nginx. Build the images in this folder first. On Docker Desktop or Rancher Desktop the cluster can see local images.
+
+```bash
+docker build -t project-desk-api:local ./server
+docker build -t project-desk-web:local .
+kubectl apply -k k8s
+kubectl port-forward -n project-desk svc/web 47291:80
+```
+
+The page is again at [http://127.0.0.1:47291](http://127.0.0.1:47291). The web Service is also a NodePort on port `30091`. Query the cards with:
+
+```bash
+kubectl exec -n project-desk deploy/postgres -- psql -U projectdesk -d projectdesk -c "SELECT name, status FROM projects;"
+```
+
 ## Scripts
 
 | Command | What it does |
