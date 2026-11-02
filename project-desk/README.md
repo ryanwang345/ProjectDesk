@@ -38,7 +38,7 @@ Vite listens on port `47311` and proxies `/api` to the Go server.
 
 ## Docker
 
-This starts Postgres, the Go API, and nginx together:
+This starts Postgres, the Go API, and nginx together. Go dependencies are vendored, so the API image does not download modules during the build:
 
 ```bash
 docker compose up --build
