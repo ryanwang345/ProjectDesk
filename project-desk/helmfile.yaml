@@ -1,6 +1,6 @@
 releases:
   - name: project-desk
-    namespace: project-desk
+    namespace: rwang
     createNamespace: true
     chart: ./chart
     values:

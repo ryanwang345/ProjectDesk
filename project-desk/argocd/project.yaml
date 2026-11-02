@@ -8,7 +8,7 @@ spec:
   sourceRepos:
     - https://origin.cursor.com/vail/react-serve.git
   destinations:
-    - namespace: project-desk
+    - namespace: rwang
       server: https://kubernetes.default.svc
   clusterResourceWhitelist:
     - group: ""

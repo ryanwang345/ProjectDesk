@@ -48,24 +48,24 @@ The page is at [http://127.0.0.1:47291](http://127.0.0.1:47291). Postgres is pub
 
 ## Kubernetes
 
-Helmfile installs the chart in `chart/`. That chart runs Postgres with a 1Gi PersistentVolumeClaim, the Go API, and nginx. Build the images in this folder first. On Docker Desktop or Rancher Desktop the cluster can see local images.
+Helmfile installs the chart in `chart/` into the `rwang` namespace. That chart runs Postgres with a 1Gi PersistentVolumeClaim, the Go API, and nginx. Build the images in this folder first. On Docker Desktop or Rancher Desktop the cluster can see local images.
 
 ```bash
 docker build -t project-desk-api:local ./server
 docker build -t project-desk-web:local .
 helmfile apply
-kubectl port-forward -n project-desk svc/web 47291:80
+kubectl port-forward -n rwang svc/web 47291:80
 ```
 
 The page is again at [http://127.0.0.1:47291](http://127.0.0.1:47291). The web Service is also a NodePort on port `30091`. Query the cards with:
 
 ```bash
-kubectl exec -n project-desk deploy/postgres -- psql -U projectdesk -d projectdesk -c "SELECT name, status FROM projects;"
+kubectl exec -n rwang deploy/postgres -- psql -U projectdesk -d projectdesk -c "SELECT name, status FROM projects;"
 ```
 
 ## Argo CD
 
-Argo CD syncs the Helm chart in `chart/` from `main`. Install Argo CD, then apply the project and application in `argocd/`.
+Argo CD syncs the Helm chart in `chart/` from `main` into the `rwang` namespace. Install Argo CD, then apply the project and application in `argocd/`.
 
 ```bash
 kubectl create namespace argocd
