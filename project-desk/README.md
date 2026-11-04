@@ -63,7 +63,7 @@ kubectl exec -n rwang deploy/postgres -- psql -U projectdesk -d projectdesk -c "
 
 ## End-to-end tests
 
-Cypress tests live in [`e2e`](e2e) and run every 6 minutes as the `project-desk-e2e` CronJob. See [`e2e/README.md`](e2e/README.md).
+Cypress tests live in [`e2e`](e2e) and run once an hour as the `project-desk-e2e` CronJob. See [`e2e/README.md`](e2e/README.md).
 
 ## Scripts
 

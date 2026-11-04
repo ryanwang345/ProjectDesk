@@ -6,14 +6,14 @@ environment: dev
 
 cronjob:
   enabled: true
-  schedule: "*/6 * * * *"
+  schedule: "*/20 * * * *" # Run every 20 minutes
   # IANA zone such as America/Los_Angeles. Empty uses the controller's zone.
   timeZone: ""
   suspend: false
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 120
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 5
+  successfulJobsHistoryLimit: 3 # Keep only the most recent successful job
+  failedJobsHistoryLimit: 3 # Keep only the most recent failed job
   backoffLimit: 0
   activeDeadlineSeconds: 900
   terminationGracePeriodSeconds: 60

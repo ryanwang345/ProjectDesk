@@ -1,6 +1,6 @@
 # Project Desk end-to-end tests
 
-Cypress tests for the deployed Project Desk app. They run on your machine, in Jenkins checks, and as a Kubernetes CronJob in the `rwang` namespace every 6 minutes.
+Cypress tests for the deployed Project Desk app. They run on your machine, in Jenkins checks, and as a Kubernetes CronJob in the `rwang` namespace once an hour.
 
 This folder is its own npm package. The web image never downloads Cypress, and `project-desk/.dockerignore` excludes this folder from the web build.
 
@@ -104,6 +104,7 @@ Credentials never go in values. Put them in a Secret and set `existingSecret` to
 Set `cronjob.schedule` in the environment values file, for example `"*/15 * * * *"`. Set `cronjob.timeZone` (for example `America/Los_Angeles`) to read the schedule in that zone instead of the controller's. `cronjob.suspend: true` pauses runs without removing anything. Other settings:
 
 - `cronjob.activeDeadlineSeconds` (900): when a run takes longer, it gets SIGTERM and has `terminationGracePeriodSeconds` (60) to save its result and artifacts.
+- `cronjob.successfulJobsHistoryLimit` and `cronjob.failedJobsHistoryLimit` are both 1, so the namespace keeps only the latest finished run of each outcome.
 - `cronjob.concurrencyPolicy: Forbid`: a scheduled run is skipped while the previous one is still going.
 - `cronjob.backoffLimit: 0` and `restartPolicy: Never`: a failed run is not retried. Cypress retries individual tests instead (`cypress.retries`).
 - `resources`: 500m CPU / 1Gi requested, 1 CPU / 3Gi limit. `/dev/shm` is a 512Mi memory-backed volume that counts toward that limit.
