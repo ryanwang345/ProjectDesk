@@ -6,7 +6,7 @@ metadata:
 spec:
   description: Project Desk
   sourceRepos:
-    - https://origin.cursor.com/vail/react-serve.git
+    - https://github.com/ryanwang345/ProjectDesk.git
   destinations:
     - namespace: rwang
       server: https://kubernetes.default.svc

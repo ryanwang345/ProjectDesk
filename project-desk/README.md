@@ -48,13 +48,9 @@ The page is at [http://127.0.0.1:47291](http://127.0.0.1:47291). Postgres is pub
 
 ## Kubernetes
 
-Helmfile installs the chart in `chart/` into the existing `rwang` namespace. `createNamespace` is false, so Helm does not try to create or patch that namespace. The chart runs Postgres with a 1Gi PersistentVolumeClaim, the Go API, and nginx. Jenkins publishes `docker.io/rwang345/project-desk-web` and `docker.io/rwang345/project-desk-api`. Create a pull secret before the first install so the namespace can pull those private images:
+Helmfile installs the chart in `chart/` into the existing `rwang` namespace. `createNamespace` is false, so Helm does not try to create or patch that namespace. The chart runs Postgres with a 1Gi PersistentVolumeClaim, the Go API, and nginx. Jenkins publishes `docker.io/rwang345/project-desk-web` and `docker.io/rwang345/project-desk-api`. The `rwang` namespace cannot store a pull secret, so both Docker Hub repositories need to be public. Then:
 
 ```bash
-kubectl create secret docker-registry dockerhub -n rwang \
-  --docker-server=https://index.docker.io/v1/ \
-  --docker-username=rwang345 \
-  --docker-password='<Docker Hub access token>'
 helmfile apply
 kubectl port-forward -n rwang svc/web 47291:80
 ```
@@ -67,23 +63,9 @@ kubectl exec -n rwang deploy/postgres -- psql -U projectdesk -d projectdesk -c "
 
 ## Argo CD
 
-Argo CD syncs the Helm chart in `chart/` from `main` into the `rwang` namespace. Install Argo CD, then apply the project and application in `argocd/`.
+Argo CD at `argocd.k8s-test.sf.vailsys.net` syncs the Helm chart in `chart/` from `main` into the existing `rwang` namespace. Register `argocd/application.yaml` with **+ NEW APP**. The destination is the cluster named `in-cluster`.
 
-```bash
-kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-kubectl apply -f argocd/project.yaml
-kubectl apply -f argocd/application.yaml
-kubectl port-forward -n argocd svc/argocd-server 8080:443
-```
-
-The initial admin password is stored in `argocd-initial-admin-secret`:
-
-```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
-```
-
-Sign in at `https://127.0.0.1:8080` as `admin`. The Project Desk application appears after Argo CD can clone the repository. The chart pulls `project-desk-web:latest` and `project-desk-api:latest` from Docker Hub, so the `dockerhub` pull secret must exist in the `rwang` namespace before the first sync.
+The Project Desk application tracks `main`. After Jenkins pushes the images, it commits the build number into `chart/values.yaml`. Argo CD syncs that commit and rolls the web and API Deployments in the `rwang` namespace. The Docker Hub repositories must be public, because this namespace cannot store an image pull secret.
 
 ## Scripts
 

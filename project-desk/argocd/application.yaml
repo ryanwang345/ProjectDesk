@@ -6,7 +6,7 @@ metadata:
 spec:
   project: project-desk
   source:
-    repoURL: https://origin.cursor.com/vail/react-serve.git
+    repoURL: https://github.com/ryanwang345/ProjectDesk.git
     targetRevision: main
     path: project-desk/chart
     helm:
@@ -14,9 +14,11 @@ spec:
       valueFiles:
         - values.yaml
   destination:
-    server: https://kubernetes.default.svc
+    name: in-cluster
     namespace: rwang
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

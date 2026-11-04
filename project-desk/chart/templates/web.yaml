@@ -66,7 +66,7 @@ spec:
       {{- end }}
       containers:
         - name: web
-          image: {{ .Values.web.image }}
+          image: "{{ .Values.web.image }}:{{ .Values.web.tag }}"
           imagePullPolicy: {{ .Values.web.pullPolicy }}
           ports:
             - containerPort: 80

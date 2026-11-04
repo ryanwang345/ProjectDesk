@@ -63,6 +63,11 @@ pipeline {
 
   stages {
     stage('Check') {
+      when {
+        not {
+          changelog '\\[skip ci\\]' // Skip checking if the commit message contains "[skip ci]"
+        }
+      }
       parallel {
         stage('Web') {
           steps {
@@ -86,6 +91,11 @@ pipeline {
     }
 
     stage('Push images') {
+      when {
+        not {
+          changelog '\\[skip ci\\]' // Skip pushing images if the commit message contains "[skip ci]"
+        }
+      }
       steps {
         container('kaniko') {
           sh '''
@@ -109,6 +119,49 @@ pipeline {
             /kaniko/executor --context="dir://${ROOT}/project-desk/server" --dockerfile="${ROOT}/project-desk/server/Dockerfile" $API_DEST
             echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-web:${BUILD_NUMBER}"
             echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-api:${BUILD_NUMBER}"
+          '''
+        }
+      }
+    }
+
+    stage('Record image tag') {
+      when {
+        allOf {
+          branch 'main'
+          not {
+            changelog '\\[skip ci\\]'
+          }
+        }
+      }
+      steps {
+        container('jnlp') {
+          sh '''
+            if [ -z "$GITHUB_TOKEN" ]; then
+              echo "GITHUB_TOKEN must be set on the Project Desk job so the image tag can be committed."
+              exit 1
+            fi
+            ROOT="${WORKSPACE:-$(pwd)}"
+            cd "$ROOT"
+            awk -v tag="$BUILD_NUMBER" '
+              $0 ~ /^[^ ]/ { section=$1 }
+              section ~ /^api:/ && $1 == "tag:" { print "  tag: \\"" tag "\\""; next }
+              section ~ /^web:/ && $1 == "tag:" { print "  tag: \\"" tag "\\""; next }
+              { print }
+            ' project-desk/chart/values.yaml > project-desk/chart/values.yaml.new
+            mv project-desk/chart/values.yaml.new project-desk/chart/values.yaml
+            git add project-desk/chart/values.yaml
+            if git diff --cached --quiet; then
+              echo "Image tags already match build ${BUILD_NUMBER}"
+              exit 0
+            fi
+            git -c safe.directory="$ROOT" -c user.email="rwang@vailsys.com" -c user.name="Ryan Wang" \
+              commit -m "Roll Project Desk to image ${BUILD_NUMBER} [skip ci]"
+            printf '%s\n' '#!/bin/sh' 'printf "%s" "$GITHUB_TOKEN"' > "$ROOT/.git-askpass"
+            chmod 700 "$ROOT/.git-askpass"
+            GIT_ASKPASS="$ROOT/.git-askpass" GIT_TERMINAL_PROMPT=0 \
+              git -c safe.directory="$ROOT" \
+              push "https://x-access-token@github.com/ryanwang345/ProjectDesk.git" HEAD:main
+            rm -f "$ROOT/.git-askpass"
           '''
         }
       }

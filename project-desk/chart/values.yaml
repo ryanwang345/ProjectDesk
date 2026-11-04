@@ -7,14 +7,13 @@ postgres:
   storage: 1Gi
   fsGroup: 70
 
-imagePullSecrets:
-  - name: dockerhub
-
 api:
-  image: docker.io/rwang345/project-desk-api:latest
-  pullPolicy: Always
+  image: docker.io/rwang345/project-desk-api
+  tag: "latest"
+  pullPolicy: IfNotPresent
   port: 47292
 
 web:
-  image: docker.io/rwang345/project-desk-web:latest
-  pullPolicy: Always
+  image: docker.io/rwang345/project-desk-web
+  tag: "latest"
+  pullPolicy: IfNotPresent
