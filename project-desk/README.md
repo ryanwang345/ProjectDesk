@@ -48,11 +48,13 @@ The page is at [http://127.0.0.1:47291](http://127.0.0.1:47291). Postgres is pub
 
 ## Kubernetes
 
-Helmfile installs the chart in `chart/` into the existing `rwang` namespace. `createNamespace` is false, so Helm does not try to create or patch that namespace. The chart runs Postgres with a 1Gi PersistentVolumeClaim, the Go API, and nginx. Build the images in this folder first. On Docker Desktop or Rancher Desktop the cluster can see local images.
+Helmfile installs the chart in `chart/` into the existing `rwang` namespace. `createNamespace` is false, so Helm does not try to create or patch that namespace. The chart runs Postgres with a 1Gi PersistentVolumeClaim, the Go API, and nginx. Jenkins publishes `docker.io/rwang345/project-desk-web` and `docker.io/rwang345/project-desk-api`. Create a pull secret before the first install so the namespace can pull those private images:
 
 ```bash
-docker build -t project-desk-api:local ./server
-docker build -t project-desk-web:local .
+kubectl create secret docker-registry dockerhub -n rwang \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username=rwang345 \
+  --docker-password='<Docker Hub access token>'
 helmfile apply
 kubectl port-forward -n rwang svc/web 47291:80
 ```
@@ -81,7 +83,7 @@ The initial admin password is stored in `argocd-initial-admin-secret`:
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
 ```
 
-Sign in at `https://127.0.0.1:8080` as `admin`. The Project Desk application appears after Argo CD can clone the repository. Build `project-desk-api:local` and `project-desk-web:local` on the cluster before the first sync, because the chart uses those local image names.
+Sign in at `https://127.0.0.1:8080` as `admin`. The Project Desk application appears after Argo CD can clone the repository. The chart pulls `project-desk-web:latest` and `project-desk-api:latest` from Docker Hub, so the `dockerhub` pull secret must exist in the `rwang` namespace before the first sync.
 
 ## Scripts
 
