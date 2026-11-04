@@ -63,7 +63,11 @@ kubectl exec -n rwang deploy/postgres -- psql -U projectdesk -d projectdesk -c "
 
 ## Argo CD
 
-Argo CD at `argocd.k8s-test.sf.vailsys.net` syncs the Helm chart in `chart/` from `main` into the existing `rwang` namespace. Register `argocd/application.yaml` with **+ NEW APP**. The destination is the cluster named `in-cluster`.
+Argo CD at `argocd.k8s-test.sf.vailsys.net` syncs the Helm chart in `chart/` from `main` into the existing `rwang` namespace. The Application object also lives in `rwang` and uses the `syseng` project, same as the other apps in that namespace.
+
+```bash
+kubectl --context sf-test apply -f argocd/application.yaml
+```
 
 The Project Desk application tracks `main`. After Jenkins pushes the images, it commits the build number into `chart/values.yaml`. Argo CD syncs that commit and rolls the web and API Deployments in the `rwang` namespace. The Docker Hub repositories must be public, because this namespace cannot store an image pull secret.
 
