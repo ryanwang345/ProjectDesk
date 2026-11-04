@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: project-desk
+  namespace: rwang
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: vault-issuer
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - rwang.ingress.k8s-test.sf.vailsys.net
+      secretName: project-desk-tls
+  rules:
+    - host: rwang.ingress.k8s-test.sf.vailsys.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 80
