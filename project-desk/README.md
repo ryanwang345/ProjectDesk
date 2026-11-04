@@ -61,6 +61,10 @@ The page is again at [http://127.0.0.1:47291](http://127.0.0.1:47291). The web S
 kubectl exec -n rwang deploy/postgres -- psql -U projectdesk -d projectdesk -c "SELECT name, status FROM projects;"
 ```
 
+## End-to-end tests
+
+Cypress tests live in [`e2e`](e2e) and run every 6 minutes as the `project-desk-e2e` CronJob. See [`e2e/README.md`](e2e/README.md).
+
 ## Scripts
 
 | Command | What it does |

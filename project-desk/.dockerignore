@@ -4,3 +4,4 @@ dist
 .nginx
 *.log
 server
+e2e

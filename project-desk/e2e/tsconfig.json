@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022", "dom"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "types": ["cypress", "node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": ["cypress.config.ts", "cypress/**/*.ts", "scripts/load-env.d.mts"]
+}

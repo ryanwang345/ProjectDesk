@@ -1,0 +1,20 @@
+environments:
+  dev: {}
+  staging: {}
+  prod: {}
+
+---
+helmDefaults:
+  createNamespace: false
+
+releases:
+  - name: project-desk-e2e
+    namespace: rwang
+    createNamespace: false
+    chart: ./chart
+    values:
+      - ./chart/values.yaml
+      - ./chart/values-{{ .Environment.Name }}.yaml
+    set:
+      - name: dotenv
+        file: .env

@@ -38,6 +38,17 @@ pipeline {
                 limits:
                   cpu: "1"
                   memory: 1Gi
+            - name: helm
+              image: alpine/helm:4.3.1
+              command: ['cat']
+              tty: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
             - name: kaniko
               image: gcr.io/kaniko-project/executor:v1.23.2-debug
               command: ['/busybox/cat']
@@ -87,6 +98,24 @@ pipeline {
             }
           }
         }
+        stage('E2E') {
+          steps {
+            dir('project-desk/e2e') {
+              // The Cypress binary is installed and verified in the image build.
+              sh 'CYPRESS_INSTALL_BINARY=0 npm ci'
+              sh 'npm run typecheck'
+              container('helm') {
+                sh '''
+                  for env in dev staging prod; do
+                    helm lint ./chart -f "chart/values-${env}.yaml" --set image.tag="ci-${BUILD_NUMBER}" --set-file dotenv=.env
+                  done
+                  helm template project-desk-e2e ./chart --namespace rwang \
+                    -f chart/values-dev.yaml --set image.tag="${BUILD_NUMBER}" --set-file dotenv=.env > /dev/null
+                '''
+              }
+            }
+          }
+        }
       }
     }
 
@@ -117,8 +146,14 @@ pipeline {
 
             /kaniko/executor --context="dir://${ROOT}/project-desk" --dockerfile="${ROOT}/project-desk/Dockerfile" $WEB_DEST
             /kaniko/executor --context="dir://${ROOT}/project-desk/server" --dockerfile="${ROOT}/project-desk/server/Dockerfile" $API_DEST
+            # The Cypress image is about 3 GB unpacked; redo snapshots and no
+            # compressed caching keep Kaniko under its memory limit.
+            /kaniko/executor --context="dir://${ROOT}/project-desk/e2e" --dockerfile="${ROOT}/project-desk/e2e/Dockerfile" \
+              --snapshot-mode=redo --compressed-caching=false \
+              --destination="docker.io/${DOCKERHUB_USER}/project-desk-e2e:${BUILD_NUMBER}"
             echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-web:${BUILD_NUMBER}"
             echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-api:${BUILD_NUMBER}"
+            echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-e2e:${BUILD_NUMBER}"
           '''
         }
       }
@@ -149,7 +184,13 @@ pipeline {
               { print }
             ' project-desk/chart/values.yaml > project-desk/chart/values.yaml.new
             mv project-desk/chart/values.yaml.new project-desk/chart/values.yaml
-            git add project-desk/chart/values.yaml
+            awk -v tag="$BUILD_NUMBER" '
+              $0 ~ /^[^ ]/ { section=$1 }
+              section ~ /^image:/ && $1 == "tag:" { print "  tag: \\"" tag "\\""; next }
+              { print }
+            ' project-desk/e2e/chart/values-dev.yaml > project-desk/e2e/chart/values-dev.yaml.new
+            mv project-desk/e2e/chart/values-dev.yaml.new project-desk/e2e/chart/values-dev.yaml
+            git add project-desk/chart/values.yaml project-desk/e2e/chart/values-dev.yaml
             if git diff --cached --quiet; then
               echo "Image tags already match build ${BUILD_NUMBER}"
               exit 0

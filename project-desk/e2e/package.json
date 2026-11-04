@@ -1,0 +1,22 @@
+{
+  "name": "project-desk-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "e2e": "node scripts/run.mjs",
+    "e2e:smoke": "E2E_TAGS=@smoke node scripts/run.mjs",
+    "cypress:open": "cypress open --e2e",
+    "typecheck": "tsc -p tsconfig.json",
+    "verify": "cypress verify"
+  },
+  "devDependencies": {
+    "@cypress/grep": "7.0.0",
+    "@types/node": "22.20.5",
+    "cypress": "16.2.1",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1161.0"
+  }
+}
