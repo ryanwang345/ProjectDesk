@@ -10,7 +10,7 @@ metadata:
 spec:
   project: syseng
   source:
-    repoURL: https://github.com/ryanwang345/ProjectDesk.git
+    repoURL: git@gitlab.vailsys.com:vail-cloud-services/project-desk.git
     targetRevision: main
     path: project-desk/chart
     helm:
