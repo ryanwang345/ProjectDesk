@@ -88,26 +88,28 @@ pipeline {
     stage('Push images') {
       steps {
         container('kaniko') {
-          withCredentials([usernamePassword(credentialsId: 'dockerhub-rwang', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_TOKEN')]) {
-            sh '''
-              mkdir -p /kaniko/.docker
-              AUTH=$(printf "%s:%s" "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN" | base64 | tr -d '\n')
-              printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}\n' "$AUTH" > /kaniko/.docker/config.json
+          sh '''
+            if [ -z "$DOCKERHUB_USER" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
+              echo "DOCKERHUB_USER and DOCKERHUB_TOKEN must be set on the Project Desk job."
+              exit 1
+            fi
+            mkdir -p /kaniko/.docker
+            AUTH=$(printf "%s:%s" "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN" | base64 | tr -d '\n')
+            printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}\n' "$AUTH" > /kaniko/.docker/config.json
 
-              ROOT="${WORKSPACE:-$(pwd)}"
-              WEB_DEST="--destination=docker.io/${DOCKERHUB_USER}/project-desk-web:${BUILD_NUMBER}"
-              API_DEST="--destination=docker.io/${DOCKERHUB_USER}/project-desk-api:${BUILD_NUMBER}"
-              if [ "$BRANCH_NAME" = "main" ]; then
-                WEB_DEST="$WEB_DEST --destination=docker.io/${DOCKERHUB_USER}/project-desk-web:latest"
-                API_DEST="$API_DEST --destination=docker.io/${DOCKERHUB_USER}/project-desk-api:latest"
-              fi
+            ROOT="${WORKSPACE:-$(pwd)}"
+            WEB_DEST="--destination=docker.io/${DOCKERHUB_USER}/project-desk-web:${BUILD_NUMBER}"
+            API_DEST="--destination=docker.io/${DOCKERHUB_USER}/project-desk-api:${BUILD_NUMBER}"
+            if [ "$BRANCH_NAME" = "main" ]; then
+              WEB_DEST="$WEB_DEST --destination=docker.io/${DOCKERHUB_USER}/project-desk-web:latest"
+              API_DEST="$API_DEST --destination=docker.io/${DOCKERHUB_USER}/project-desk-api:latest"
+            fi
 
-              /kaniko/executor --context="dir://${ROOT}/project-desk" --dockerfile="${ROOT}/project-desk/Dockerfile" $WEB_DEST
-              /kaniko/executor --context="dir://${ROOT}/project-desk/server" --dockerfile="${ROOT}/project-desk/server/Dockerfile" $API_DEST
-              echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-web:${BUILD_NUMBER}"
-              echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-api:${BUILD_NUMBER}"
-            '''
-          }
+            /kaniko/executor --context="dir://${ROOT}/project-desk" --dockerfile="${ROOT}/project-desk/Dockerfile" $WEB_DEST
+            /kaniko/executor --context="dir://${ROOT}/project-desk/server" --dockerfile="${ROOT}/project-desk/server/Dockerfile" $API_DEST
+            echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-web:${BUILD_NUMBER}"
+            echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-api:${BUILD_NUMBER}"
+          '''
         }
       }
     }
