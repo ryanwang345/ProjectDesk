@@ -20,10 +20,10 @@ cronjob:
 
 image:
   repository: docker.io/rwang345/project-desk-e2e
-  # Required. Jenkins writes the immutable build number into the
-  # environment values file; mutable tags such as latest are rejected.
+  # Required. Dev uses latest so each run pulls the newest Jenkins push.
+  # A build number still works when you want one fixed image.
   tag: ""
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 imagePullSecrets: []
 

@@ -35,9 +35,9 @@ e2e.project-desk/environment: {{ .Values.environment | quote }}
 {{- end }}
 
 {{- define "project-desk-e2e.image" -}}
-{{- $tag := required "image.tag is required; set the immutable build number in the environment values file" .Values.image.tag | toString }}
-{{- if or (eq $tag "latest") (eq $tag "main") }}
-{{- fail (printf "image.tag %q is mutable; use an immutable build number or commit SHA" $tag) }}
+{{- $tag := required "image.tag is required; set latest or a build number in the environment values file" .Values.image.tag | toString }}
+{{- if eq $tag "main" }}
+{{- fail "image.tag \"main\" is a branch name, not an image tag; use latest or a build number" }}
 {{- end }}
 {{- printf "%s:%s" .Values.image.repository $tag }}
 {{- end }}

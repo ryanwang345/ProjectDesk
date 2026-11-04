@@ -86,7 +86,7 @@ The chart is in `chart/`. Run settings (URL, browser, tags, retries, S3, Pushgat
 | `values-staging.yaml` | Disabled; no staging deployment exists yet |
 | `values-prod.yaml` | Disabled; needs approval and a URL. Runs `@smoke` only every 15 minutes |
 
-The chart renders nothing until `image.tag` is set, and it rejects `latest` and `main`. Jenkins writes the build number into `values-dev.yaml`.
+The chart renders nothing until `image.tag` is set. Dev uses `latest`. Each run pulls that tag because `image.pullPolicy` is `Always`.
 
 ```bash
 cd project-desk/e2e
@@ -171,7 +171,7 @@ Alert on `project_desk_e2e_failure{type="test"} == 1` for broken app behavior. U
 The root `Jenkinsfile` adds three steps to the existing pipeline:
 
 - **Check, E2E:** installs the package without the Cypress binary, typechecks the config and specs (including the Cypress config types), and runs `helm lint` for all three environments plus `helm template` for dev. The existing Web stage's `npm run lint` already covers these files.
-- **Push images:** Kaniko builds `docker.io/<user>/project-desk-e2e:<build number>`. This image gets no `latest` tag.
-- **Record image tag:** on `main`, the build number is written into `chart/values-dev.yaml` and committed with the app's image tags, under the same `[skip ci]` commit.
+- **Push images:** Kaniko builds `docker.io/<user>/project-desk-e2e:<build number>`. On `main` it also pushes `:latest`, which is what the dev CronJob pulls.
+- **Record image tag:** on `main`, the web and API build number is committed with `[skip ci]`. The e2e chart stays on `latest`.
 
 Deploy the CronJob with `helmfile -e dev apply` from this folder. There is no Argo CD Application for these tests.

@@ -2,4 +2,4 @@
 environment: dev
 
 image:
-  tag: "9da9518"
+  tag: "latest"

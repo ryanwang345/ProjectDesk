@@ -144,9 +144,11 @@ pipeline {
             ROOT="${WORKSPACE:-$(pwd)}"
             WEB_DEST="--destination=docker.io/${DOCKERHUB_USER}/project-desk-web:${BUILD_NUMBER}"
             API_DEST="--destination=docker.io/${DOCKERHUB_USER}/project-desk-api:${BUILD_NUMBER}"
+            E2E_DEST="--destination=docker.io/${DOCKERHUB_USER}/project-desk-e2e:${BUILD_NUMBER}"
             if [ "$BRANCH_NAME" = "main" ]; then
               WEB_DEST="$WEB_DEST --destination=docker.io/${DOCKERHUB_USER}/project-desk-web:latest"
               API_DEST="$API_DEST --destination=docker.io/${DOCKERHUB_USER}/project-desk-api:latest"
+              E2E_DEST="$E2E_DEST --destination=docker.io/${DOCKERHUB_USER}/project-desk-e2e:latest"
             fi
 
             /kaniko/executor --context="dir://${ROOT}/project-desk" --dockerfile="${ROOT}/project-desk/Dockerfile" $WEB_DEST
@@ -155,7 +157,7 @@ pipeline {
             # compressed caching keep Kaniko under its memory limit.
             /kaniko/executor --context="dir://${ROOT}/project-desk/e2e" --dockerfile="${ROOT}/project-desk/e2e/Dockerfile" \
               --snapshot-mode=redo --compressed-caching=false \
-              --destination="docker.io/${DOCKERHUB_USER}/project-desk-e2e:${BUILD_NUMBER}"
+              $E2E_DEST
             echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-web:${BUILD_NUMBER}"
             echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-api:${BUILD_NUMBER}"
             echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-e2e:${BUILD_NUMBER}"
@@ -193,13 +195,7 @@ pipeline {
               { print }
             ' project-desk/chart/values.yaml > project-desk/chart/values.yaml.new
             mv project-desk/chart/values.yaml.new project-desk/chart/values.yaml
-            awk -v tag="$BUILD_NUMBER" '
-              $0 ~ /^[^ ]/ { section=$1 }
-              section ~ /^image:/ && $1 == "tag:" { print "  tag: \\"" tag "\\""; next }
-              { print }
-            ' project-desk/e2e/chart/values-dev.yaml > project-desk/e2e/chart/values-dev.yaml.new
-            mv project-desk/e2e/chart/values-dev.yaml.new project-desk/e2e/chart/values-dev.yaml
-            git add project-desk/chart/values.yaml project-desk/e2e/chart/values-dev.yaml
+            git add project-desk/chart/values.yaml
             if git diff --cached --quiet; then
               echo "Image tags already match build ${BUILD_NUMBER}"
               exit 0
