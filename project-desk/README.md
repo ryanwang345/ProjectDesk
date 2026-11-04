@@ -61,16 +61,6 @@ The page is again at [http://127.0.0.1:47291](http://127.0.0.1:47291). The web S
 kubectl exec -n rwang deploy/postgres -- psql -U projectdesk -d projectdesk -c "SELECT name, status FROM projects;"
 ```
 
-## Argo CD
-
-Argo CD at `argocd.k8s-test.sf.vailsys.net` syncs the Helm chart in `chart/` from `main` into the existing `rwang` namespace. The Application object also lives in `rwang` and uses the `syseng` project, same as the other apps in that namespace.
-
-```bash
-kubectl --context sf-test apply -f argocd/application.yaml
-```
-
-The Project Desk application tracks `main`. After Jenkins pushes the images, it commits the build number into `chart/values.yaml`. Argo CD syncs that commit and rolls the web and API Deployments in the `rwang` namespace. The Docker Hub repositories must be public, because this namespace cannot store an image pull secret.
-
 ## Scripts
 
 | Command | What it does |
