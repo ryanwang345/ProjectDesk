@@ -128,6 +128,9 @@ pipeline {
       steps {
         container('kaniko') {
           sh '''
+            # Jenkins runs this script with xtrace. Turn it off before any
+            # command expands the Docker Hub token, or the console prints it.
+            set +x
             if [ -z "$DOCKERHUB_USER" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
               echo "DOCKERHUB_USER and DOCKERHUB_TOKEN must be set on the Project Desk job."
               exit 1
@@ -135,6 +138,8 @@ pipeline {
             mkdir -p /kaniko/.docker
             AUTH=$(printf "%s:%s" "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN" | base64 | tr -d '\n')
             printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}\n' "$AUTH" > /kaniko/.docker/config.json
+            unset AUTH
+            set -x
 
             ROOT="${WORKSPACE:-$(pwd)}"
             WEB_DEST="--destination=docker.io/${DOCKERHUB_USER}/project-desk-web:${BUILD_NUMBER}"
@@ -171,8 +176,12 @@ pipeline {
       steps {
         container('jnlp') {
           sh '''
+            # Keep xtrace off for this whole stage. The GitHub token is in the
+            # environment, and the askpass helper reads it.
+            set +x
             if [ -z "$GITHUB_TOKEN" ]; then
               echo "GITHUB_TOKEN must be set on the Project Desk job so the image tag can be committed."
+              echo "Open Project Desk, then Configure, then Properties, then Environment variables, and add GITHUB_TOKEN."
               exit 1
             fi
             ROOT="${WORKSPACE:-$(pwd)}"
