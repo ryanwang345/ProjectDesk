@@ -6,7 +6,7 @@ metadata:
 spec:
   description: Project Desk
   sourceRepos:
-    - git@gitlab.vailsys.com:vail-cloud-services/project-desk.git
+    - https://github.com/ryanwang345/ProjectDesk.git
   destinations:
     - namespace: rwang
       server: https://kubernetes.default.svc
