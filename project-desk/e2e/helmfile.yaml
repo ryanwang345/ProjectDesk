@@ -6,6 +6,11 @@ environments:
 ---
 helmDefaults:
   createNamespace: false
+  # Helm 4 server-side apply leaves fields from the original client-side
+  # release with the manager "before-first-apply". Changing one of those
+  # fields, such as the CronJob imagePullPolicy, conflicts unless Helm takes it.
+  syncArgs:
+    - --force-conflicts
 
 releases:
   - name: project-desk-e2e

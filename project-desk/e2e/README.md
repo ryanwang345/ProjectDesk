@@ -112,7 +112,7 @@ Set `cronjob.schedule` in the environment values file, for example `"*/15 * * * 
 ## Run it now
 
 ```bash
-kubectl create job -n rwang --from=cronjob/project-desk-e2e project-desk-e2e-manual-$(date +%s)
+kubectl create job -n rwang --from=cronjob/project-desk-e2e project-desk-e2e-$(date +%s)
 ```
 
 ## Logs and failed Jobs
@@ -172,6 +172,6 @@ The root `Jenkinsfile` adds three steps to the existing pipeline:
 
 - **Check, E2E:** installs the package without the Cypress binary, typechecks the config and specs (including the Cypress config types), and runs `helm lint` for all three environments plus `helm template` for dev. The existing Web stage's `npm run lint` already covers these files.
 - **Push images:** Kaniko builds `docker.io/<user>/project-desk-e2e:<build number>`. On `main` it also pushes `:latest`, which is what the dev CronJob pulls.
-- **Record image tag:** on `main`, the web and API build number is committed with `[skip ci]`. The e2e chart stays on `latest`.
+- **Record image tag:** on `main`, when the secret-text credential `project-desk-github-token` is available, the web and API build number is committed with `[skip ci]`. The e2e chart stays on `latest`.
 
 Deploy the CronJob with `helmfile -e dev apply` from this folder. There is no Argo CD Application for these tests.
