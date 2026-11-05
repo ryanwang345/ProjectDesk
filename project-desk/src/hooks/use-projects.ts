@@ -14,21 +14,26 @@ export function useProjects() {
   const [ready, setReady] = useState(false)
   const [problem, setProblem] = useState<StorageProblem | null>(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (background = false) => {
     try {
       const next = await listProjects()
       setProjects(next)
       setProblem(null)
     } catch {
+      if (background) return
       setProjects([])
       setProblem('unavailable')
     } finally {
-      setReady(true)
+      if (!background) setReady(true)
     }
   }, [])
 
   useEffect(() => {
-    void load()
+    void load(false)
+    const timer = window.setInterval(() => {
+      void load(true)
+    }, 5000)
+    return () => window.clearInterval(timer)
   }, [load])
 
   const addProject = useCallback(async (input: ProjectInput) => {

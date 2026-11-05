@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,6 +32,13 @@ type ProjectCardProps = {
 }
 
 export function ProjectCard({ project, onEdit, onDelete, onStatus }: ProjectCardProps) {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
   return (
     <Card size="sm">
       <CardHeader>
@@ -77,7 +85,7 @@ export function ProjectCard({ project, onEdit, onDelete, onStatus }: ProjectCard
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">{formatUpdated(project.updatedAt)}</p>
+        <p className="text-xs text-muted-foreground">{formatUpdated(project.updatedAt, now)}</p>
       </CardFooter>
     </Card>
   )
