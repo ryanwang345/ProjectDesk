@@ -3,6 +3,10 @@ import { cn } from '@/lib/utils'
 
 const links = [
   { to: '/', label: 'Desk', end: true },
+  { to: '/loop', label: 'Loop', end: false },
+  { to: '/ai', label: 'Workflow Loop', end: true },
+  { to: '/knowledge', label: 'Knowledge', end: false },
+  { to: '/ai/settings', label: 'AI settings', end: false },
   { to: '/about', label: 'How it runs', end: false },
 ]
 

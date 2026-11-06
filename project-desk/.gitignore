@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+server/extra-ca.crt
 dist-ssr
 *.local
 .nginx

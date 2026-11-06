@@ -1,7 +1,11 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { SiteHeader } from '@/components/site-header'
 import { AboutPage } from '@/pages/about-page'
+import { AiControlPage } from '@/pages/ai-control-page'
+import { AiSettingsPage } from '@/pages/ai-settings-page'
 import { BoardPage } from '@/pages/board-page'
+import { KnowledgePage } from '@/pages/knowledge-page'
+import { LoopPage } from '@/pages/loop-page'
 import { NotFoundPage } from '@/pages/not-found-page'
 
 export default function App() {
@@ -12,6 +16,10 @@ export default function App() {
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
           <Routes>
             <Route index element={<BoardPage />} />
+            <Route path="loop" element={<LoopPage />} />
+            <Route path="ai" element={<AiControlPage />} />
+            <Route path="ai/settings" element={<AiSettingsPage />} />
+            <Route path="knowledge" element={<KnowledgePage />} />
             <Route path="about" element={<AboutPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

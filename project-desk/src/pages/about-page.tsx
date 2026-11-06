@@ -14,6 +14,10 @@ const steps = [
     title: 'Go saves each card in Postgres',
     body: 'Creating, editing, moving, or removing a project is a request to the Go API. Postgres stores the name, note, status, and updated time.',
   },
+  {
+    title: 'The loop keeps a change moving',
+    body: 'A cycle records a signal, the ship inside 48 hours, the measurements, and the lesson that becomes the next signal. Postgres stores each lap.',
+  },
 ]
 
 export function AboutPage() {
@@ -57,6 +61,10 @@ export function AboutPage() {
           <p>
             <Link className="text-sm underline underline-offset-4" to="/">
               Back to the desk
+            </Link>
+            <span className="px-2 text-muted-foreground">·</span>
+            <Link className="text-sm underline underline-offset-4" to="/loop">
+              Open the loop
             </Link>
           </p>
         </CardContent>

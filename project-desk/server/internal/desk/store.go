@@ -71,7 +71,16 @@ func Connect(ctx context.Context, databaseURL string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	return &Store{pool: pool}, nil
+	if _, err := pool.Exec(ctx, cycleSchema); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("migrate cycles: %w", err)
+	}
+	store := &Store{pool: pool}
+	if err := migrate(ctx, store); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("migrate platform: %w", err)
+	}
+	return store, nil
 }
 
 func (s *Store) Close() {

@@ -23,10 +23,22 @@ npm run serve
 `npm run serve` builds the app and starts nginx at [http://127.0.0.1:47291](http://127.0.0.1:47291).
 
 - `/` is the desk
+- `/loop` runs one change from signal to measurement and back, with the AI loop panel under each cycle
+- `/ai` is the AI control center: runs, approvals waiting, cost, audit log
+- `/ai/settings` connects AI providers and assigns agent roles
+- `/knowledge` is the searchable lesson base
 - `/about` explains how the app is served
 - `/api/projects` is the Go API
-- `/api/healthz` checks that Go can reach Postgres
+- `/api/healthz` checks that Go can reach Postgres; `/api/readyz` also waits for migrations
 - `/healthz` is nginx itself, and returns the text `ok`
+
+## The AI loop
+
+The four stages (Discover, Deliver, Validate, Rediscover) can each hand work to an AI agent. Every proposal is reviewed by a person before anything is applied; nothing runs in the browser, and a background worker inside the Go API carries jobs through Postgres so a reload or restart never loses work. [`docs/ai-platform.md`](docs/ai-platform.md) covers the architecture, every environment variable, provider setup (OpenAI, Anthropic, Ollama, and the explicitly labeled demo mode), the sandbox runner, the state machine, security, rollback, and the prioritized list of what is not built yet.
+
+Quick start with no credentials: open `/ai/settings`, add a provider of kind **Demo (simulated)**, then open a cycle on `/loop` and press **Analyze with AI**. Everything the demo produces is labeled *Simulated*.
+
+The API needs `PROJECT_DESK_SECRET_KEY` set to store OpenAI or Anthropic keys (they are encrypted at rest). Without it, Ollama and demo providers still work.
 
 For UI work with hot reload, keep the Go API running and use:
 
@@ -73,5 +85,5 @@ Cypress tests live in [`e2e`](e2e) and run once an hour as the `project-desk-e2e
 | `npm run build` | Typecheck and write `dist/` |
 | `npm run serve` | Build, then serve `dist/` with nginx on port 47291 |
 | `npm run lint` | Run oxlint |
-| `go run ./cmd/server` | Go API on port 47292, from the `server` directory |
-| `go test ./...` | Run the Go tests, from the `server` directory |
+| `go run ./cmd/server` | Go API and AI worker on port 47292, from the `server` directory |
+| `go test -mod=vendor ./...` | Run the Go tests, from the `server` directory |

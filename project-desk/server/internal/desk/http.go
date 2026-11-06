@@ -8,13 +8,24 @@ import (
 )
 
 type Handler struct {
-	store *Store
+	store    *Store
+	platform *Platform
 }
 
-func NewHandler(store *Store) http.Handler {
-	h := &Handler{store: store}
+// NewHandler serves the desk, the loop, and (when platform is non-nil) the
+// AI platform routes.
+func NewHandler(store *Store, platform *Platform) http.Handler {
+	h := &Handler{store: store, platform: platform}
 	mux := http.NewServeMux()
+	if platform != nil {
+		h.registerPlatform(mux)
+	}
 	mux.HandleFunc("GET /api/healthz", h.health)
+	mux.HandleFunc("GET /api/cycles", h.listCycles)
+	mux.HandleFunc("POST /api/cycles/sample", h.sampleCycle)
+	mux.HandleFunc("POST /api/cycles", h.createCycle)
+	mux.HandleFunc("PATCH /api/cycles/{id}", h.updateCycle)
+	mux.HandleFunc("DELETE /api/cycles/{id}", h.deleteCycle)
 	mux.HandleFunc("GET /api/projects", h.list)
 	mux.HandleFunc("POST /api/projects", h.create)
 	mux.HandleFunc("POST /api/projects/samples", h.samples)
