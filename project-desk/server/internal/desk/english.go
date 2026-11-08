@@ -2,6 +2,7 @@ package desk
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,17 +13,39 @@ import (
 
 const ExampleCount = 10
 
-const englishColumns = `id::text, word, meaning, examples, in_review, updated_at, generated, pronunciation`
+const englishColumns = `id::text, word, meaning, examples, in_review, updated_at, generated, pronunciation, senses, band`
+
+type WordSense struct {
+	Pos string `json:"pos"`
+	En  string `json:"en"`
+	Zh  string `json:"zh"`
+}
+
+// WordSenses is the learner-dictionary entry for one word.
+type WordSenses []WordSense
+
+// BandNote is how to use the word at IELTS band 9.
+type BandNote struct {
+	Collocations []string `json:"collocations"`
+	Writing      string   `json:"writing"`
+	Speaking     string   `json:"speaking"`
+	Weak         string   `json:"weak"`
+	Fix          string   `json:"fix"`
+	Paraphrases  []string `json:"paraphrases"`
+	Zh           string   `json:"zh"`
+}
 
 type EnglishCard struct {
-	ID            string    `json:"id"`
-	Word          string    `json:"word"`
-	Meaning       string    `json:"meaning"`
-	Examples      []string  `json:"examples"`
-	InReview      bool      `json:"inReview"`
-	Generated     bool      `json:"generated"`
-	Pronunciation string    `json:"pronunciation"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	ID            string     `json:"id"`
+	Word          string     `json:"word"`
+	Meaning       string     `json:"meaning"`
+	Examples      []string   `json:"examples"`
+	InReview      bool       `json:"inReview"`
+	Generated     bool       `json:"generated"`
+	Pronunciation string     `json:"pronunciation"`
+	Senses        WordSenses `json:"senses"`
+	Band          BandNote   `json:"band"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
 }
 
 type EnglishInput struct {
@@ -73,7 +96,9 @@ func (s *Store) UpdateEnglish(ctx context.Context, id string, input EnglishInput
 	row := s.pool.QueryRow(ctx, `
 		UPDATE english_cards
 		SET word = $2, meaning = $3, examples = $4, generated = true, updated_at = now(),
-			pronunciation = CASE WHEN lower(word) = lower($2) THEN pronunciation ELSE '' END
+			pronunciation = CASE WHEN lower(word) = lower($2) THEN pronunciation ELSE '' END,
+			senses = CASE WHEN lower(word) = lower($2) THEN senses ELSE '[]'::jsonb END,
+			band = CASE WHEN lower(word) = lower($2) THEN band ELSE '{}'::jsonb END
 		WHERE id = $1
 		RETURNING `+englishColumns,
 		id, input.Word, input.Meaning, input.Examples)
@@ -153,9 +178,29 @@ func ValidateEnglish(input EnglishInput) error {
 
 func scanEnglish(row scanner) (EnglishCard, error) {
 	var card EnglishCard
-	err := row.Scan(&card.ID, &card.Word, &card.Meaning, &card.Examples, &card.InReview, &card.UpdatedAt, &card.Generated, &card.Pronunciation)
+	var senses, band []byte
+	err := row.Scan(&card.ID, &card.Word, &card.Meaning, &card.Examples, &card.InReview, &card.UpdatedAt, &card.Generated, &card.Pronunciation, &senses, &band)
+	if len(senses) > 0 {
+		if jsonErr := json.Unmarshal(senses, &card.Senses); jsonErr != nil && err == nil {
+			err = jsonErr
+		}
+	}
+	if len(band) > 0 {
+		if jsonErr := json.Unmarshal(band, &card.Band); jsonErr != nil && err == nil {
+			err = jsonErr
+		}
+	}
 	if card.Examples == nil {
 		card.Examples = []string{}
+	}
+	if card.Senses == nil {
+		card.Senses = WordSenses{}
+	}
+	if card.Band.Collocations == nil {
+		card.Band.Collocations = []string{}
+	}
+	if card.Band.Paraphrases == nil {
+		card.Band.Paraphrases = []string{}
 	}
 	return card, err
 }

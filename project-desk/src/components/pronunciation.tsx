@@ -1,17 +1,59 @@
 import { Volume2 } from 'lucide-react'
 import { useI18n } from '@/i18n'
 
+let speaking: SpeechSynthesisUtterance | null = null
+
+function englishVoice(synth: SpeechSynthesis) {
+  const voices = synth.getVoices().filter((voice) => voice.lang.toLowerCase().startsWith('en'))
+  return voices.find((voice) => voice.localService && voice.lang.toLowerCase().startsWith('en-gb'))
+    ?? voices.find((voice) => voice.localService)
+    ?? voices.find((voice) => voice.lang.toLowerCase().startsWith('en-gb'))
+    ?? voices[0]
+}
+
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+  window.speechSynthesis.getVoices()
+  window.speechSynthesis.addEventListener('voiceschanged', () => {
+    window.speechSynthesis.getVoices()
+  })
+}
+
 export function speakWord(word: string) {
   const synth = window.speechSynthesis
-  if (!synth || word.trim() === '') return
-  synth.cancel()
-  const utter = new SpeechSynthesisUtterance(word.trim())
-  utter.lang = 'en-GB'
-  utter.rate = 0.85
-  const voice = synth.getVoices().find((item) => item.lang === 'en-GB')
-    ?? synth.getVoices().find((item) => item.lang.toLowerCase().startsWith('en'))
-  if (voice) utter.voice = voice
-  synth.speak(utter)
+  const text = word.trim()
+  if (!synth || text === '') return
+
+  const play = (fallback: boolean) => {
+    const utter = new SpeechSynthesisUtterance(text)
+    utter.rate = 0.9
+    utter.volume = 1
+    const voice = fallback ? undefined : englishVoice(synth)
+    if (voice) {
+      utter.voice = voice
+      utter.lang = voice.lang
+    } else {
+      utter.lang = 'en-US'
+    }
+    // Keep the utterance alive. Chrome drops speech that nothing still references.
+    speaking = utter
+    utter.onend = () => {
+      if (speaking === utter) speaking = null
+    }
+    utter.onerror = (event) => {
+      if (speaking === utter) speaking = null
+      if (!fallback && event.error !== 'interrupted' && event.error !== 'canceled') play(true)
+    }
+    synth.resume()
+    synth.speak(utter)
+  }
+
+  // Cancelling and speaking in the same turn makes Chrome stay silent.
+  if (synth.speaking || synth.pending) {
+    synth.cancel()
+    window.setTimeout(() => play(false), 80)
+    return
+  }
+  play(false)
 }
 
 export function Pronunciation({

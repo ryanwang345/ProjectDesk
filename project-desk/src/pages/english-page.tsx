@@ -1,5 +1,6 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Plus, RefreshCw } from 'lucide-react'
+import { BandNotes } from '@/components/band-notes'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,8 +9,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { LessonPath } from '@/components/lesson-path'
 import { Pronunciation } from '@/components/pronunciation'
+import { WordSenses } from '@/components/word-senses'
 import { LessonPlayer } from '@/components/lesson-player'
 import { useEnglish } from '@/hooks/use-english'
+import { ensureBand } from '@/lib/api'
 import { useI18n } from '@/i18n'
 import { loadProgress, recordCompletion } from '@/lib/lesson'
 import {
@@ -29,6 +32,12 @@ const PROBLEM_KEY = {
 } as const satisfies Record<StorageProblem, 'english.unreachable' | 'english.writeFailed'>
 
 const emptyInput: EnglishInput = { word: '', meaning: '', examples: emptyExamples() }
+const WORD_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+
+function wordLetter(word: string) {
+  const letter = word.trim().charAt(0).toUpperCase()
+  return letter >= 'A' && letter <= 'Z' ? letter : '#'
+}
 
 export function EnglishPage() {
   const { t } = useI18n()
@@ -73,7 +82,7 @@ export function EnglishPage() {
 
 function WordDesk({ onBack }: { onBack: () => void }) {
   const { t } = useI18n()
-  const { cards, ready, problem, addCard, saveCard, markReview, removeCard } = useEnglish()
+  const { cards, ready, problem, addCard, saveCard, markReview, removeCard, adoptCard } = useEnglish()
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<EnglishCard | null>(null)
   const [pendingDelete, setPendingDelete] = useState<EnglishCard | null>(null)
@@ -82,13 +91,52 @@ function WordDesk({ onBack }: { onBack: () => void }) {
   const [exampleAt, setExampleAt] = useState<Record<string, number>>({})
   const [exampleOpen, setExampleOpen] = useState<Record<string, boolean>>({})
   const [wordQuery, setWordQuery] = useState('')
+  const [letter, setLetter] = useState('A')
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [bandState, setBandState] = useState<'idle' | 'wait' | 'failed'>('idle')
+  const bandFlight = useRef<string | null>(null)
+  const bandFailed = useRef<string | null>(null)
   const current = cards.find((card) => card.id === shownId) ?? cards[0] ?? null
   const review = cards.filter((card) => card.inReview)
   const query = wordQuery.trim().toLowerCase()
   const catalog = [...cards].sort((a, b) => a.word.localeCompare(b.word))
-  const visibleWords = query
-    ? catalog.filter((card) => card.word.toLowerCase().includes(query) || card.meaning.toLowerCase().includes(query))
-    : catalog
+  const visibleWords = catalog.filter((card) => {
+    if (!query) return wordLetter(card.word) === letter
+    const senses = card.senses ?? []
+    return card.word.toLowerCase().includes(query)
+      || card.meaning.toLowerCase().includes(query)
+      || senses.some((sense) => sense.zh.includes(wordQuery.trim()))
+  })
+
+  useEffect(() => {
+    if (!openId) {
+      bandFailed.current = null
+      return
+    }
+    const card = cards.find((item) => item.id === openId)
+    if (!card || card.band?.writing) {
+      setBandState('idle')
+      return
+    }
+    if (bandFlight.current === openId || bandFailed.current === openId) return
+    const requested = openId
+    bandFlight.current = requested
+    setBandState('wait')
+    ensureBand(requested)
+      .then((saved) => {
+        if (bandFlight.current !== requested) return
+        adoptCard(saved)
+        setBandState('idle')
+      })
+      .catch(() => {
+        if (bandFlight.current !== requested) return
+        bandFailed.current = requested
+        setBandState('failed')
+      })
+      .finally(() => {
+        if (bandFlight.current === requested) bandFlight.current = null
+      })
+  }, [openId, cards, adoptCard])
 
   function refreshWord() {
     const pool = cards.filter((card) => card.id !== current?.id)
@@ -175,14 +223,19 @@ function WordDesk({ onBack }: { onBack: () => void }) {
                 <Pronunciation word={current.word} pronunciation={current.pronunciation} textClassName="text-lg" />
               </CardTitle>
               <p className="text-sm text-muted-foreground">{current.meaning}</p>
+              <WordSenses senses={current.senses} />
+              <BandNotes band={current.band} />
             </CardHeader>
             <CardContent>
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{t('english.how')}</p>
               {current.generated ? (
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-base leading-relaxed">
                 {current.examples.map((example, index) => (
-                  <li key={`${current.id}-${index}`}>
-                    <ExampleSentence word={current.word} example={example} />
+                  <li key={`${current.id}-${index}`} className="flex items-start gap-2">
+                    <span className="flex-1">
+                      <ExampleSentence word={current.word} example={example} />
+                    </span>
+                    <Pronunciation word={example} showText={false} />
                   </li>
                 ))}
               </ol>
@@ -240,32 +293,116 @@ function WordDesk({ onBack }: { onBack: () => void }) {
                   value={wordQuery}
                   autoComplete="off"
                   placeholder={t('english.searchPh')}
-                  onChange={(event) => setWordQuery(event.target.value)}
+                  onChange={(event) => {
+                    setWordQuery(event.target.value)
+                    setOpenId(null)
+                  }}
                 />
               </div>
+            </div>
+            <div className="sticky top-20 z-30 -mx-1 flex flex-wrap gap-1 rounded-2xl bg-background/80 px-1 py-2 backdrop-blur-md">
+              {WORD_LETTERS.map((item) => {
+                const available = catalog.some((card) => wordLetter(card.word) === item)
+                const selected = !query && letter === item
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    disabled={!available}
+                    aria-pressed={selected}
+                    aria-label={t('english.letter', { letter: item })}
+                    className={
+                      selected
+                        ? 'grid size-8 place-items-center rounded-lg bg-primary text-sm font-medium text-primary-foreground'
+                        : 'grid size-8 place-items-center rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30'
+                    }
+                    onClick={() => {
+                      setLetter(item)
+                      setWordQuery('')
+                      setOpenId(null)
+                    }}
+                  >
+                    {item}
+                  </button>
+                )
+              })}
             </div>
             {visibleWords.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t('english.noMatch')}</p>
             ) : (
-            <ul className="grid gap-2">
-              {visibleWords.map((card) => (
-                <WordRow
-                  key={card.id}
-                  card={card}
-                  example={exampleOpen[card.id] ? card.examples[exampleAt[card.id] ?? 0] : undefined}
-                  onShow={() => setShownId(card.id)}
-                  onExample={() => showExample(card.id)}
-                  onRefreshExample={() => refreshExample(card)}
-                >
-                  <Button type="button" size="sm" variant="outline" onClick={() => { setEditing(card); setAdding(false) }}>
-                    {t('english.edit')}
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setPendingDelete(card)}>
-                    {t('english.remove')}
-                  </Button>
-                </WordRow>
-              ))}
-            </ul>
+              <ul className="overflow-hidden rounded-2xl border border-border bg-card">
+                {visibleWords.map((card) => {
+                  const open = openId === card.id
+                  const example = card.generated ? card.examples[exampleAt[card.id] ?? 0] : undefined
+                  return (
+                    <li key={card.id} className="border-b border-border last:border-b-0">
+                      <div className="flex items-center gap-2 px-4 py-2.5">
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-left"
+                          aria-expanded={open}
+                          onClick={() => {
+                            setOpenId(open ? null : card.id)
+                            setShownId(card.id)
+                          }}
+                        >
+                          <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                            <span className="font-display text-xl tracking-tight">{card.word}</span>
+                            {card.pronunciation ? <span className="text-sm text-muted-foreground">{card.pronunciation}</span> : null}
+                            <span className="text-sm text-muted-foreground">{card.meaning}</span>
+                            {card.inReview ? <span className="text-xs font-medium text-primary">{t('english.inReview')}</span> : null}
+                          </span>
+                        </button>
+                        <Pronunciation word={card.word} pronunciation={card.pronunciation} showText={false} />
+                      </div>
+                      {open ? (
+                        <div className="px-4 pb-4">
+                          <WordSenses senses={card.senses} />
+                          <BandNotes band={card.band} />
+                          {open && bandState === 'wait' && !card.band?.writing ? (
+                            <p className="mt-3 text-sm text-muted-foreground">{t('english.bandWait')}</p>
+                          ) : null}
+                          {open && bandState === 'failed' && !card.band?.writing ? (
+                            <p className="mt-3 text-sm text-destructive">{t('english.bandFailed')}</p>
+                          ) : null}
+                          {card.generated ? null : <p className="mt-3 text-sm text-muted-foreground">{t('english.awaitAI')}</p>}
+                          {example ? (
+                            <p className="mt-3 flex items-start gap-2 text-sm leading-relaxed">
+                              <span className="flex-1">
+                                <ExampleSentence word={card.word} example={example} />
+                              </span>
+                              <Pronunciation word={example} showText={false} />
+                            </p>
+                          ) : null}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {card.generated ? (
+                              <Button type="button" size="sm" variant="outline" onClick={() => refreshExample(card)}>
+                                <RefreshCw data-icon="inline-start" />
+                                {t('english.refreshExample')}
+                              </Button>
+                            ) : null}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditing(card)
+                                setAdding(false)
+                                requestAnimationFrame(() => document.getElementById('english-word-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+                              }}
+                            >
+                              {t('english.edit')}
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" onClick={() => setPendingDelete(card)}>
+                              {t('english.remove')}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </li>
+                  )
+                })}
+              </ul>
             )}
           </section>
         </div>
@@ -311,7 +448,8 @@ function WordRow({
             <button type="button" className="font-display text-2xl tracking-tight" onClick={onShow}>{card.word}</button>
             <Pronunciation word={card.word} pronunciation={card.pronunciation} />
           </span>
-          <button type="button" className="mt-0.5 block text-sm text-muted-foreground" onClick={onShow}>{card.meaning}</button>
+          <button type="button" className="mt-0.5 block text-left text-sm text-muted-foreground" onClick={onShow}>{card.meaning}</button>
+          <WordSenses senses={card.senses} compact />
         </div>
         <div className="flex flex-wrap gap-2">
           {card.generated ? (
@@ -330,8 +468,11 @@ function WordRow({
       </div>
       {card.generated ? null : <p className="text-sm text-muted-foreground">{t('english.awaitAI')}</p>}
       {example && card.generated ? (
-        <p className="text-sm leading-relaxed">
-          <ExampleSentence word={card.word} example={example} />
+        <p className="flex items-start gap-2 text-sm leading-relaxed">
+          <span className="flex-1">
+            <ExampleSentence word={card.word} example={example} />
+          </span>
+          <Pronunciation word={example} showText={false} />
         </p>
       ) : null}
     </li>
@@ -388,7 +529,7 @@ function WordForm({
   }
 
   return (
-    <form className="grid gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5" onSubmit={submit}>
+    <form id="english-word-form" className="grid scroll-mt-24 gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5" onSubmit={submit}>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-1.5">
           <Label htmlFor="english-word">{t('english.word')}</Label>

@@ -127,14 +127,54 @@
   body {
     @apply bg-background text-foreground;
     background-image:
-      radial-gradient(ellipse 70% 45% at 0% -10%, oklch(0.9 0.045 165 / 0.4), transparent 60%),
-      radial-gradient(ellipse 55% 40% at 100% 0%, oklch(0.92 0.05 85 / 0.5), transparent 55%);
+      radial-gradient(ellipse 80% 50% at 8% -12%, oklch(0.86 0.07 165 / 0.45), transparent 58%),
+      radial-gradient(ellipse 55% 42% at 100% -8%, oklch(0.9 0.08 82 / 0.55), transparent 52%),
+      radial-gradient(ellipse 40% 30% at 70% 110%, oklch(0.88 0.04 165 / 0.28), transparent 50%);
     min-height: 100svh;
+    }
+  body::before {
+    content: '';
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.45;
+    background-image:
+      linear-gradient(oklch(0.35 0.02 70 / 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(0.35 0.02 70 / 0.035) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse at 50% 0%, black, transparent 78%);
+    }
+  ::selection {
+    background: oklch(0.78 0.07 163 / 0.45);
     }
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;
     }
   html {
     @apply font-sans;
+    }
+  [data-slot='card'] {
+    box-shadow: 0 18px 40px -30px oklch(0.32 0.04 160 / 0.55);
+    background-image: linear-gradient(180deg, oklch(1 0 0 / 0.55), transparent 42%);
+    }
+  main h1.font-display {
+    letter-spacing: -0.035em;
+    }
+  @media (prefers-reduced-motion: no-preference) {
+    main {
+      animation: desk-rise 0.5s ease both;
+      }
+    }
+}
+
+@keyframes desk-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    }
+  to {
+    opacity: 1;
+    transform: none;
     }
 }

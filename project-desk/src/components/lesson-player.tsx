@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Heart, X } from 'lucide-react'
+import { BandDrill, BandNotes } from '@/components/band-notes'
 import { Pronunciation } from '@/components/pronunciation'
+import { WordSenses } from '@/components/word-senses'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { ApiError, prepareLesson } from '@/lib/api'
@@ -34,6 +36,9 @@ export function LessonPlayer({
   const correctTotal = useRef(0)
   const resultRef = useRef<HTMLDivElement>(null)
   const [finished, setFinished] = useState<'done' | 'hearts' | null>(null)
+  const [bandStep, setBandStep] = useState(0)
+  const [bandPicked, setBandPicked] = useState<string | null>(null)
+  const [bandChecked, setBandChecked] = useState(false)
 
   useEffect(() => {
     let cancel = false
@@ -130,7 +135,14 @@ export function LessonPlayer({
                   </span>
                   <span className="text-sm text-muted-foreground">{card.meaning}</span>
                 </div>
-                {example ? <p className="mt-2 text-sm leading-relaxed">{example}</p> : null}
+                <WordSenses senses={card.senses} />
+                <BandNotes band={card.band} />
+                {example ? (
+                  <p className="mt-2 flex items-start gap-2 text-sm leading-relaxed">
+                    <span className="flex-1">{example}</span>
+                    <Pronunciation word={example} showText={false} />
+                  </p>
+                ) : null}
                 {chinese ? <p className="mt-1 text-sm leading-relaxed text-primary">{chinese}</p> : null}
               </li>
             )
@@ -138,6 +150,32 @@ export function LessonPlayer({
         </ol>
         <Button type="button" className="h-12 text-base" onClick={() => setStarted(true)}>{t('english.start')}</Button>
       </div>
+    )
+  }
+
+  const bandCards = words.filter((card) => Boolean(card.band?.writing && card.band?.weak))
+  const bandCard = started ? bandCards[bandStep] : undefined
+  if (bandCard) {
+    return (
+      <BandDrill
+        card={bandCard}
+        index={bandStep}
+        total={bandCards.length}
+        picked={bandPicked}
+        checked={bandChecked}
+        onPick={setBandPicked}
+        onCheck={() => setBandChecked(true)}
+        onContinue={() => {
+          if (bandStep + 1 >= bandCards.length) {
+            setBandStep(-1)
+            return
+          }
+          setBandStep((current) => current + 1)
+          setBandPicked(null)
+          setBandChecked(false)
+        }}
+        onExit={onExit}
+      />
     )
   }
 

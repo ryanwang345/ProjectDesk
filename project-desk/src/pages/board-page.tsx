@@ -196,7 +196,7 @@ export function BoardPage() {
 function EmptyDesk({ onAdd, onSamples }: { onAdd: () => void; onSamples: () => void }) {
   const { t } = useI18n()
   return (
-    <div className="rounded-2xl border border-dashed border-border bg-card/70 px-6 py-14 text-center">
+    <div className="rounded-3xl border border-dashed border-primary/30 bg-card/75 px-6 py-16 text-center shadow-[0_24px_50px_-36px_oklch(0.32_0.05_160/0.8)]">
       <h2 className="font-display text-3xl tracking-tight">{t('desk.emptyTitle')}</h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
         {t('desk.emptyBody')}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type ieltsEntry struct {
@@ -452,24 +454,15 @@ func (s *Store) seedIelts(ctx context.Context) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	for _, entry := range ieltsEntries {
-		if have[strings.ToLower(entry.Word)] {
-			continue
-		}
-		examples, err := ieltsExamples(entry.Word, entry.Kind)
-		if err != nil {
-			return err
-		}
-		input := NormalizeEnglish(EnglishInput{Word: entry.Word, Meaning: entry.Meaning, Examples: examples})
-		if err := ValidateEnglish(input); err != nil {
-			return fmt.Errorf("%s: %w", entry.Word, err)
-		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO english_cards (word, meaning, examples)
-			VALUES ($1, $2, $3)`,
-			input.Word, input.Meaning, input.Examples); err != nil {
-			return err
-		}
+	extra, err := extraVocab()
+	if err != nil {
+		return err
+	}
+	if err := insertVocab(ctx, tx, ieltsEntries, have, false); err != nil {
+		return err
+	}
+	if err := insertVocab(ctx, tx, extra, have, true); err != nil {
+		return err
 	}
 	for _, entry := range ieltsEntries {
 		if entry.Kind == "custom" || !have[strings.ToLower(entry.Word)] {
@@ -494,5 +487,42 @@ func (s *Store) seedIelts(ctx context.Context) error {
 			return err
 		}
 	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE english_cards
+		SET generated = true
+		WHERE generated = false AND cardinality(examples) = 10`); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
+}
+
+func insertVocab(ctx context.Context, tx pgx.Tx, entries []ieltsEntry, have map[string]bool, varied bool) error {
+	for _, entry := range entries {
+		key := strings.ToLower(entry.Word)
+		if have[key] {
+			continue
+		}
+		var examples []string
+		var err error
+		if varied {
+			examples, err = variedExamples(entry.Word, entry.Kind)
+		} else {
+			examples, err = ieltsExamples(entry.Word, entry.Kind)
+		}
+		if err != nil {
+			return err
+		}
+		input := NormalizeEnglish(EnglishInput{Word: entry.Word, Meaning: entry.Meaning, Examples: examples})
+		if err := ValidateEnglish(input); err != nil {
+			return fmt.Errorf("%s: %w", entry.Word, err)
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO english_cards (word, meaning, examples)
+			VALUES ($1, $2, $3)`,
+			input.Word, input.Meaning, input.Examples); err != nil {
+			return err
+		}
+		have[key] = true
+	}
+	return nil
 }

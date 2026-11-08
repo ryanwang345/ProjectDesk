@@ -30,19 +30,20 @@ export function useEnglish() {
     void load()
   }, [load])
 
-  const awaitingPronunciation = ready && cards.some((card) => !card.pronunciation)
+  const missingDetails = cards.reduce((count, card) => count + (!card.pronunciation || (card.senses ?? []).length === 0 ? 1 : 0), 0)
+  const awaitingDetail = ready && missingDetails > 0 && missingDetails <= 80
   useEffect(() => {
-    if (!awaitingPronunciation) return
+    if (!awaitingDetail) return
     const started = Date.now()
     const timer = window.setInterval(() => {
-      if (Date.now() - started > 180_000) {
+      if (Date.now() - started > 480_000) {
         window.clearInterval(timer)
         return
       }
       void listEnglish().then(setCards).catch(() => {})
     }, 4000)
     return () => window.clearInterval(timer)
-  }, [awaitingPronunciation])
+  }, [awaitingDetail])
 
   const addCard = useCallback(async (input: EnglishInput) => {
     try {
@@ -91,5 +92,9 @@ export function useEnglish() {
     }
   }, [cards])
 
-  return { cards, ready, problem, addCard, saveCard, markReview, removeCard }
+  const adoptCard = useCallback((saved: EnglishCard) => {
+    setCards((current) => current.map((card) => (card.id === saved.id ? saved : card)))
+  }, [])
+
+  return { cards, ready, problem, addCard, saveCard, markReview, removeCard, adoptCard }
 }

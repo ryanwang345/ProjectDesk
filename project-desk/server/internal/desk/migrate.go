@@ -234,6 +234,12 @@ CREATE TABLE IF NOT EXISTS english_quizzes (
 	{7, `
 ALTER TABLE english_cards ADD COLUMN IF NOT EXISTS pronunciation TEXT NOT NULL DEFAULT '';
 `},
+	{8, `
+ALTER TABLE english_cards ADD COLUMN IF NOT EXISTS senses JSONB NOT NULL DEFAULT '[]'::jsonb;
+`},
+	{9, `
+ALTER TABLE english_cards ADD COLUMN IF NOT EXISTS band JSONB NOT NULL DEFAULT '{}'::jsonb;
+`},
 }
 
 func migrate(ctx context.Context, s *Store) error {

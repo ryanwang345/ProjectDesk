@@ -1,5 +1,21 @@
 export const EXAMPLE_COUNT = 10
 
+export type WordSense = {
+  pos: string
+  en: string
+  zh: string
+}
+
+export type BandNote = {
+  collocations: string[]
+  writing: string
+  speaking: string
+  weak: string
+  fix: string
+  paraphrases: string[]
+  zh: string
+}
+
 export type EnglishCard = {
   id: string
   word: string
@@ -8,6 +24,8 @@ export type EnglishCard = {
   inReview: boolean
   generated: boolean
   pronunciation: string
+  senses: WordSense[]
+  band: BandNote
   updatedAt: string
 }
 

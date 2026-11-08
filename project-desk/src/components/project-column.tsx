@@ -22,7 +22,7 @@ export function ProjectColumn({
   const visible = projectsByStatus(projects, status)
 
   return (
-    <section aria-labelledby={`column-${status}`} className="flex min-w-0 flex-col gap-3">
+    <section aria-labelledby={`column-${status}`} className="flex min-w-0 flex-col gap-3 rounded-3xl border border-border/80 bg-card/45 p-3 shadow-[0_18px_40px_-32px_oklch(0.32_0.04_160/0.7)]">
       <div className="flex items-baseline justify-between gap-3 px-1">
         <div>
           <h2 id={`column-${status}`} className="flex items-center gap-2 text-sm font-medium">

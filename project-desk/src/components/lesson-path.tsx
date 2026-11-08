@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, ChevronLeft, ChevronRight, Flame, Lock, Star } from 'lucide-react'
 import { Pronunciation } from '@/components/pronunciation'
+import { WordSenses } from '@/components/word-senses'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import type { EnglishCard } from '@/lib/english'
@@ -86,10 +87,10 @@ export function LessonPath({
                   disabled={!open}
                   className={
                     done
-                      ? 'grid size-16 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm'
+                      ? 'grid size-16 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_14px_28px_-12px_oklch(0.35_0.08_163/0.9)] ring-4 ring-primary/15'
                       : current
-                        ? 'grid size-[4.5rem] place-items-center rounded-full border-4 border-primary bg-card text-primary shadow-md'
-                        : 'grid size-16 place-items-center rounded-full border border-border bg-muted text-muted-foreground'
+                        ? 'grid size-[4.5rem] place-items-center rounded-full border-4 border-primary bg-card text-primary shadow-[0_18px_36px_-14px_oklch(0.35_0.08_163/0.75)] ring-8 ring-primary/10'
+                        : 'grid size-16 place-items-center rounded-full border border-border bg-card/80 text-muted-foreground shadow-sm'
                   }
                   aria-label={t('english.lessonNode', { n: index + 1 })}
                   onClick={() => onStart(index)}
@@ -105,12 +106,15 @@ export function LessonPath({
         <p className="text-sm font-medium text-muted-foreground">{t('english.lessonNode', { n: preview + 1 })}</p>
         <ul className="flex flex-col">
         {previewWords.map((card) => (
-          <li key={card.id} className="flex items-baseline justify-between gap-4 border-b border-border py-2.5">
-            <span className="flex items-baseline gap-2">
-              <span className="font-display text-xl tracking-tight">{card.word}</span>
-              <Pronunciation word={card.word} pronunciation={card.pronunciation} />
-            </span>
-            <span className="text-sm text-muted-foreground">{card.meaning}</span>
+          <li key={card.id} className="border-b border-border py-2.5">
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="flex items-baseline gap-2">
+                <span className="font-display text-xl tracking-tight">{card.word}</span>
+                <Pronunciation word={card.word} pronunciation={card.pronunciation} />
+              </span>
+              <span className="text-sm text-muted-foreground">{card.meaning}</span>
+            </div>
+            <WordSenses senses={card.senses} compact />
           </li>
         ))}
         </ul>

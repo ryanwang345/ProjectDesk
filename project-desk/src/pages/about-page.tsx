@@ -35,8 +35,8 @@ export function AboutPage() {
         {steps.map((step, index) => (
           <Card key={step.title}>
             <CardHeader>
-              <CardDescription>0{index + 1}</CardDescription>
-              <CardTitle>{step.title}</CardTitle>
+              <CardDescription className="font-display text-2xl tracking-tight text-primary">0{index + 1}</CardDescription>
+              <CardTitle className="font-display text-2xl tracking-tight">{step.title}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">{step.body}</p>

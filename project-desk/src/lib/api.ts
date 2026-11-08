@@ -67,6 +67,10 @@ export function loadSampleProjects(): Promise<Project[]> {
   return request<Project[]>('/api/projects/samples', { method: 'POST' })
 }
 
+export function ensureBand(id: string): Promise<EnglishCard> {
+  return request<EnglishCard>(`/api/english/${id}/band`, { method: 'POST' })
+}
+
 export function prepareLesson(lesson: number): Promise<{ cards: EnglishCard[]; questions: Question[] }> {
   return request(`/api/english-lessons/${lesson}`, { method: 'POST' })
 }

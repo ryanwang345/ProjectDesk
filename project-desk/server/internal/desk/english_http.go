@@ -33,7 +33,37 @@ func (h *Handler) prepareEnglishLesson(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "the model could not write this lesson")
 		return
 	}
+	if next, bandErr := h.store.EnsureBand(r.Context(), provider, pack.Cards); bandErr == nil {
+		pack.Cards = next
+	}
 	writeJSON(w, http.StatusOK, pack)
+}
+
+func (h *Handler) writeEnglishBand(w http.ResponseWriter, r *http.Request) {
+	if h.platform == nil {
+		writeError(w, http.StatusServiceUnavailable, "AI is not configured")
+		return
+	}
+	card, err := h.store.English(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeEnglishError(w, err)
+		return
+	}
+	if card.Band.ready() {
+		writeJSON(w, http.StatusOK, card)
+		return
+	}
+	provider, _, err := h.store.ProviderForRole(r.Context(), "english", h.platform.Sealer)
+	if err != nil {
+		writeEnglishError(w, err)
+		return
+	}
+	cards, err := h.store.EnsureBand(r.Context(), provider, []EnglishCard{card})
+	if err != nil || len(cards) == 0 || !cards[0].Band.ready() {
+		writeError(w, http.StatusBadGateway, "the model could not write the band 9 notes")
+		return
+	}
+	writeJSON(w, http.StatusOK, cards[0])
 }
 
 func (h *Handler) listEnglish(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +85,7 @@ func (h *Handler) createEnglish(w http.ResponseWriter, r *http.Request) {
 		writeEnglishError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, h.withPronunciation(r.Context(), card))
+	writeJSON(w, http.StatusCreated, h.withDetails(r.Context(), card))
 }
 
 func (h *Handler) updateEnglish(w http.ResponseWriter, r *http.Request) {
@@ -68,22 +98,28 @@ func (h *Handler) updateEnglish(w http.ResponseWriter, r *http.Request) {
 		writeEnglishError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, h.withPronunciation(r.Context(), card))
+	writeJSON(w, http.StatusOK, h.withDetails(r.Context(), card))
 }
 
-func (h *Handler) withPronunciation(ctx context.Context, card EnglishCard) EnglishCard {
-	if card.Pronunciation != "" || h.platform == nil {
+func (h *Handler) withDetails(ctx context.Context, card EnglishCard) EnglishCard {
+	if h.platform == nil || (card.Pronunciation != "" && len(card.Senses) > 0) {
 		return card
 	}
 	provider, _, err := h.store.ProviderForRole(ctx, "english", h.platform.Sealer)
 	if err != nil {
 		return card
 	}
-	next, err := h.store.AttachPronunciation(ctx, provider, card)
-	if err != nil {
-		return card
+	if card.Pronunciation == "" {
+		if next, err := h.store.AttachPronunciation(ctx, provider, card); err == nil {
+			card = next
+		}
 	}
-	return next
+	if len(card.Senses) == 0 {
+		if next, err := h.store.AttachSenses(ctx, provider, card); err == nil {
+			card = next
+		}
+	}
+	return card
 }
 
 func (h *Handler) addEnglishReview(w http.ResponseWriter, r *http.Request) {
