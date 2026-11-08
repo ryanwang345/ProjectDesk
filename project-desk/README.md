@@ -34,11 +34,11 @@ npm run serve
 
 ## The AI loop
 
-The four stages (Discover, Deliver, Validate, Rediscover) can each hand work to an AI agent. Every proposal is reviewed by a person before anything is applied; nothing runs in the browser, and a background worker inside the Go API carries jobs through Postgres so a reload or restart never loses work. [`docs/ai-platform.md`](docs/ai-platform.md) covers the architecture, every environment variable, provider setup (OpenAI, Anthropic, Ollama, and the explicitly labeled demo mode), the sandbox runner, the state machine, security, rollback, and the prioritized list of what is not built yet.
+The four stages (Discover, Deliver, Validate, Rediscover) can each hand work to an AI agent. Every proposal is reviewed by a person before anything is applied; nothing runs in the browser, and a background worker inside the Go API carries jobs through Postgres so a reload or restart never loses work. [`docs/ai-platform.md`](docs/ai-platform.md) covers the architecture, every environment variable, provider setup (OpenAI, Google Gemini, Anthropic, Ollama, and the explicitly labeled demo mode), the sandbox runner, the state machine, security, rollback, and the prioritized list of what is not built yet.
 
 Quick start with no credentials: open `/ai/settings`, add a provider of kind **Demo (simulated)**, then open a cycle on `/loop` and press **Analyze with AI**. Everything the demo produces is labeled *Simulated*.
 
-The API needs `PROJECT_DESK_SECRET_KEY` set to store OpenAI or Anthropic keys (they are encrypted at rest). Without it, Ollama and demo providers still work.
+The API needs `PROJECT_DESK_SECRET_KEY` set to store OpenAI, Gemini, or Anthropic keys (they are encrypted at rest). Without it, Ollama and demo providers still work.
 
 For UI work with hot reload, keep the Go API running and use:
 

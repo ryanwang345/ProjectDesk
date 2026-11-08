@@ -20,13 +20,22 @@ type openAI struct {
 
 func newOpenAI(cfg Config) *openAI {
 	if cfg.BaseURL == "" {
-		cfg.BaseURL = Compatible["openai"]
+		if cfg.Kind == KindGemini {
+			cfg.BaseURL = Compatible["gemini"]
+		} else {
+			cfg.BaseURL = Compatible["openai"]
+		}
 	}
 	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
 	return &openAI{cfg: cfg, client: &http.Client{Timeout: cfg.Timeout}}
 }
 
-func (p *openAI) Kind() Kind { return KindOpenAI }
+func (p *openAI) Kind() Kind {
+	if p.cfg.Kind == KindGemini {
+		return KindGemini
+	}
+	return KindOpenAI
+}
 
 func (p *openAI) Capabilities() Capabilities {
 	return Capabilities{JSONMode: true, Streaming: true, Tools: true}
@@ -61,6 +70,15 @@ func (p *openAI) Generate(ctx context.Context, req Request) (Response, error) {
 	}
 	if req.JSON {
 		payload["response_format"] = map[string]string{"type": "json_object"}
+	}
+	if p.cfg.Kind == KindGemini {
+		// Gemini 3 spends part of a small limit on thinking and can return
+		// an empty reply. A low effort and a floor keep the connection
+		// check and short calls able to answer.
+		payload["reasoning_effort"] = "low"
+		if req.MaxTokens > 0 && req.MaxTokens < 64 {
+			payload["max_tokens"] = 64
+		}
 	}
 	var body struct {
 		Model   string `json:"model"`

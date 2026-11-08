@@ -2,6 +2,7 @@ package desk
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,9 @@ func TestStateMachine(t *testing.T) {
 		{StateMonitoring, StateCompleted, true},
 		{StateCompleted, StatePending, false},
 		{StateCancelled, StatePending, true},
+		{StateFailed, StateAnalyzing, true},
+		{StateCancelled, StateAnalyzing, true},
+		{StateFailed, StateCompleted, false},
 	}
 	for _, c := range cases {
 		if got := CanTransition(c.from, c.to); got != c.ok {
@@ -88,6 +92,19 @@ func TestSealerRoundTrip(t *testing.T) {
 	}
 	if plain, err := NewSealer("").Open(nil); err != nil || plain != "" {
 		t.Fatalf("empty sealed value should open to empty, got %q %v", plain, err)
+	}
+}
+
+func TestRedactJobErrorKeepsNoRetry(t *testing.T) {
+	err := redactJobError(noRetry(errors.New("provider said sk-proj-ABCDEFGHIJKLMNOP")))
+	if !errors.Is(err, errNoRetry) {
+		t.Fatalf("retry mark lost: %v", err)
+	}
+	if strings.Contains(err.Error(), "sk-proj") || strings.Count(err.Error(), "not retryable") != 1 {
+		t.Fatalf("redacted error = %q", err.Error())
+	}
+	if errors.Is(redactJobError(errors.New("temporary")), errNoRetry) {
+		t.Fatal("a normal error must stay retryable")
 	}
 }
 

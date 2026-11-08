@@ -17,18 +17,20 @@ type Kind string
 
 const (
 	KindOpenAI    Kind = "openai"    // OpenAI and any /v1/chat/completions compatible endpoint
+	KindGemini    Kind = "gemini"    // Google Gemini through its OpenAI-compatible endpoint
 	KindAnthropic Kind = "anthropic" // Anthropic Messages API
 	KindOllama    Kind = "ollama"    // Local Ollama
 	KindDemo      Kind = "demo"      // Deterministic, offline. Always labeled simulated.
 )
 
 // Kinds lists the adapters this build ships, in display order.
-var Kinds = []Kind{KindOpenAI, KindAnthropic, KindOllama, KindDemo}
+var Kinds = []Kind{KindOpenAI, KindGemini, KindAnthropic, KindOllama, KindDemo}
 
 // Compatible lists OpenAI-compatible vendors. They share the openai adapter
 // and differ only in base URL and model names.
 var Compatible = map[string]string{
 	"openai":   "https://api.openai.com/v1",
+	"gemini":   "https://generativelanguage.googleapis.com/v1beta/openai",
 	"deepseek": "https://api.deepseek.com/v1",
 	"xai":      "https://api.x.ai/v1",
 	"vllm":     "http://127.0.0.1:8000/v1",
@@ -118,7 +120,7 @@ func New(cfg Config) (Provider, error) {
 		cfg.Timeout = 90 * time.Second
 	}
 	switch cfg.Kind {
-	case KindOpenAI:
+	case KindOpenAI, KindGemini:
 		return newOpenAI(cfg), nil
 	case KindAnthropic:
 		return newAnthropic(cfg), nil

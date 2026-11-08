@@ -31,11 +31,12 @@ React (Vite / nginx)  ──/api──▶  Go API (net/http)
 
 ### AI gateway (`server/internal/ai`)
 
-One `Provider` interface (`Kind`, `Capabilities`, `Models`, `Generate`) with four adapters:
+One `Provider` interface (`Kind`, `Capabilities`, `Models`, `Generate`) with five adapters:
 
 | Kind | Covers | Key |
 | --- | --- | --- |
 | `openai` | OpenAI, and any `/v1/chat/completions` endpoint: DeepSeek, xAI, vLLM, Azure OpenAI (use the deployment URL as the endpoint) | yes |
+| `gemini` | Google Gemini through `https://generativelanguage.googleapis.com/v1beta/openai`. Use a key from [Google AI Studio](https://aistudio.google.com/apikey). The free tier has a daily limit. | yes |
 | `anthropic` | Claude via the Messages API | yes |
 | `ollama` | A local Ollama server | no |
 | `demo` | Deterministic offline replies. Every response is `Simulated: true`; the UI labels it. It never inspects code and is never presented as real analysis. | no |
@@ -132,6 +133,8 @@ cd .. && npm run dev                                       # Vite on 47311, prox
 ```
 
 Open `/ai/settings`, add a provider. With Docker running locally the *tests* gate executes for real against `server/samples/sample-shop` (`node test.mjs` in `node:22-alpine`).
+
+Gemini: kind `gemini`, endpoint `https://generativelanguage.googleapis.com/v1beta/openai` (filled in by the form), model e.g. `gemini-3.5-flash-lite`, and a Google AI Studio key.
 
 Ollama: kind `ollama`, endpoint `http://127.0.0.1:11434`, model e.g. `llama3.1`; no key. Pull the model first (`ollama pull llama3.1`). Small models may return malformed JSON; the job then fails with "the model reply was incomplete" and can be rerun.
 

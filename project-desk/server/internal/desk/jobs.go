@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -281,9 +282,7 @@ func (w *Worker) execute(parent context.Context, job Job) {
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	result, meta, err := exec(ctx, job)
-	if err != nil {
-		err = errors.New(Redact(err.Error()))
-	}
+	err = redactJobError(err)
 	retry := err != nil && job.Attempts < job.MaxAttempts && !errors.Is(err, errNoRetry)
 	if ferr := w.store.finish(parent, job, result, meta, err, retry); ferr != nil {
 		log.Printf("worker: finish job %s: %v", job.ID, ferr)
@@ -295,6 +294,21 @@ func (w *Worker) execute(parent context.Context, job Job) {
 var errNoRetry = errors.New("not retryable")
 
 func noRetry(err error) error { return fmt.Errorf("%w: %w", errNoRetry, err) }
+
+// redactJobError hides credentials in a job error without dropping the
+// no-retry mark. Rebuilding the error with errors.New would make a permanent
+// failure look temporary, and the worker would run it again.
+func redactJobError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := Redact(err.Error())
+	if errors.Is(err, errNoRetry) {
+		msg = strings.TrimPrefix(msg, errNoRetry.Error()+": ")
+		return fmt.Errorf("%w: %s", errNoRetry, msg)
+	}
+	return errors.New(msg)
+}
 
 func (s *Store) claim(ctx context.Context, by string) (Job, bool, error) {
 	job, err := scanJob(s.pool.QueryRow(ctx, `

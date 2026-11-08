@@ -71,7 +71,7 @@ func validateProvider(in ProviderInput) error {
 	case len([]rune(in.Name)) > 80:
 		return fmt.Errorf("%w: keep the provider name under 80 characters", ErrInvalid)
 	case !known:
-		return fmt.Errorf("%w: choose openai, anthropic, ollama, or demo", ErrInvalid)
+		return fmt.Errorf("%w: choose openai, gemini, anthropic, ollama, or demo", ErrInvalid)
 	case in.Kind != ai.KindDemo && strings.TrimSpace(in.Model) == "":
 		return fmt.Errorf("%w: enter a model name", ErrInvalid)
 	case in.BaseURL != "" && !strings.HasPrefix(in.BaseURL, "http://") && !strings.HasPrefix(in.BaseURL, "https://"):

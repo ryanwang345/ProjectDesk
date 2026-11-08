@@ -43,8 +43,9 @@ services:
     depends_on:
       - api
 
-# Public CA bundle for TLS interception, used only while apk installs git.
-# Empty on a network that does not intercept. Never a private key.
+# Public CA bundle for TLS interception. Used while apk installs git and
+# left in the API trust store so provider calls can verify. Empty on a
+# network that does not intercept. Never a private key.
 # Recreate it on a Netskope machine with:
 #   echo | openssl s_client -showcerts -connect dl-cdn.alpinelinux.org:443 -servername dl-cdn.alpinelinux.org 2>/dev/null | awk 'BEGIN{n=0} /BEGIN CERT/{n++; if(n==1) next} n>=2 && n<=4' > server/extra-ca.crt
 secrets:

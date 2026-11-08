@@ -16,7 +16,7 @@ var migrations = []struct {
 CREATE TABLE IF NOT EXISTS providers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),
-    kind TEXT NOT NULL CHECK (kind IN ('openai', 'anthropic', 'ollama', 'demo')),
+    kind TEXT NOT NULL CHECK (kind IN ('openai', 'gemini', 'anthropic', 'ollama', 'demo')),
     base_url TEXT NOT NULL DEFAULT '',
     model TEXT NOT NULL DEFAULT '',
     api_key BYTEA,
@@ -116,6 +116,10 @@ CREATE TABLE IF NOT EXISTS knowledge_entries (
     tags TEXT[] NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+`},
+	{2, `
+ALTER TABLE providers DROP CONSTRAINT IF EXISTS providers_kind_check;
+ALTER TABLE providers ADD CONSTRAINT providers_kind_check CHECK (kind IN ('openai', 'gemini', 'anthropic', 'ollama', 'demo'));
 `},
 }
 

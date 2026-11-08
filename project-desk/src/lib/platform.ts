@@ -4,7 +4,7 @@ import type { Cycle, Stage } from '@/lib/loop'
 // state machine, jobs, artifacts, and the knowledge base. The API is the
 // source of truth; this file only mirrors its shapes.
 
-export type ProviderKind = 'openai' | 'anthropic' | 'ollama' | 'demo'
+export type ProviderKind = 'openai' | 'gemini' | 'anthropic' | 'ollama' | 'demo'
 
 export type Capabilities = {
   jsonMode: boolean
@@ -52,30 +52,50 @@ export type Assignment = {
   model: string
 }
 
-export const PROVIDER_KIND_META: Record<ProviderKind, { label: string; hint: string; needsKey: boolean; defaultModel: string }> = {
+/** Shown in the model menu before a provider can be asked for its live list. */
+export const KNOWN_MODELS: Record<ProviderKind, string[]> = {
+  openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1', 'o4-mini'],
+  gemini: ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'],
+  anthropic: ['claude-3-5-haiku-latest', 'claude-3-5-sonnet-latest', 'claude-3-7-sonnet-latest', 'claude-sonnet-4-5', 'claude-opus-4-1'],
+  ollama: ['llama3.1', 'llama3.2', 'mistral', 'qwen2.5', 'gemma2'],
+  demo: ['demo-deterministic'],
+}
+
+export const PROVIDER_KIND_META: Record<ProviderKind, { label: string; hint: string; needsKey: boolean; defaultModel: string; defaultEndpoint: string }> = {
   openai: {
     label: 'OpenAI-compatible',
     hint: 'OpenAI, DeepSeek, xAI, vLLM, Azure OpenAI: any /v1/chat/completions endpoint.',
     needsKey: true,
     defaultModel: 'gpt-4o-mini',
+    defaultEndpoint: 'https://api.openai.com/v1',
+  },
+  gemini: {
+    label: 'Google Gemini',
+    hint: 'A key from Google AI Studio. The free tier has a daily limit. Get a key at aistudio.google.com/apikey.',
+    needsKey: true,
+    defaultModel: 'gemini-3.5-flash-lite',
+    defaultEndpoint: 'https://generativelanguage.googleapis.com/v1beta/openai',
   },
   anthropic: {
     label: 'Anthropic',
     hint: 'Claude models through the Messages API.',
     needsKey: true,
     defaultModel: 'claude-3-5-haiku-latest',
+    defaultEndpoint: 'https://api.anthropic.com/v1',
   },
   ollama: {
     label: 'Ollama (local)',
     hint: 'A model served by Ollama on this network. No key needed.',
     needsKey: false,
     defaultModel: 'llama3.1',
+    defaultEndpoint: 'http://127.0.0.1:11434',
   },
   demo: {
     label: 'Demo (simulated)',
     hint: 'Deterministic offline replies for trying the workflow. Everything it produces is labeled simulated and is not real analysis.',
     needsKey: false,
     defaultModel: 'demo-deterministic',
+    defaultEndpoint: '',
   },
 }
 

@@ -64,9 +64,11 @@ var allowed = map[string][]string{
 	StateReadyForDeployment: {StateDeployed, StateTesting, StateCancelled},
 	StateDeployed:           {StateMonitoring, StateCancelled},
 	StateMonitoring:         {StateAwaitingApproval, StateCompleted, StateCancelled},
-	StateFailed:             {StatePending, StatePlanning, StateImplementing, StateTesting, StateMonitoring, StateCancelled},
-	StateCompleted:          {},
-	StateCancelled:          {StatePending},
+	// A failed or cancelled cycle can be analyzed again. The button stays
+	// available, so the transition has to be available too.
+	StateFailed:    {StatePending, StateAnalyzing, StatePlanning, StateImplementing, StateTesting, StateMonitoring, StateCancelled},
+	StateCompleted: {},
+	StateCancelled: {StatePending, StateAnalyzing},
 }
 
 // ErrTransition is returned for a state change the machine does not allow.

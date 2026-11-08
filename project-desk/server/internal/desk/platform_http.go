@@ -138,7 +138,7 @@ func (h *Handler) providerKinds(w http.ResponseWriter, _ *http.Request) {
 		if p != nil {
 			caps = p.Capabilities()
 		}
-		kinds = append(kinds, map[string]any{"kind": k, "capabilities": caps, "needsKey": k == ai.KindOpenAI || k == ai.KindAnthropic})
+		kinds = append(kinds, map[string]any{"kind": k, "capabilities": caps, "needsKey": k == ai.KindOpenAI || k == ai.KindGemini || k == ai.KindAnthropic})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"kinds": kinds, "compatible": ai.Compatible})
 }

@@ -11,6 +11,7 @@ import {
   getAdminToken,
   getPlatformStatus,
   listAgents,
+  listProviderModels,
   listProviders,
   setAdminToken,
   setAgent,
@@ -18,6 +19,7 @@ import {
   updateProvider,
 } from '@/lib/api'
 import {
+  KNOWN_MODELS,
   PROVIDER_KIND_META,
   ROLE_META,
   type Assignment,
@@ -28,7 +30,32 @@ import {
   type ProviderTest,
 } from '@/lib/platform'
 
-const KINDS: ProviderKind[] = ['openai', 'anthropic', 'ollama', 'demo']
+const KINDS: ProviderKind[] = ['openai', 'gemini', 'anthropic', 'ollama', 'demo']
+const selectClass = 'h-8 w-full rounded-lg border border-border bg-background px-2.5 text-sm'
+
+function modelChoices(kind: ProviderKind, live: string[], current: string): string[] {
+  const base = live.length > 0 ? [...live] : [...KNOWN_MODELS[kind]]
+  const foreign = (Object.keys(KNOWN_MODELS) as ProviderKind[]).some((other) => other !== kind && KNOWN_MODELS[other].includes(current))
+  if (current && !foreign && !base.includes(current)) base.unshift(current)
+  return base
+}
+
+function kindForEndpoint(baseUrl: string): ProviderKind | null {
+  const url = baseUrl.trim().replace(/\/+$/, '')
+  if (!url) return null
+  const match = (Object.keys(PROVIDER_KIND_META) as ProviderKind[]).find((kind) => {
+    const endpoint = PROVIDER_KIND_META[kind].defaultEndpoint.replace(/\/+$/, '')
+    return endpoint !== '' && endpoint === url
+  })
+  return match ?? null
+}
+
+function applyEndpoint(current: ProviderInput, baseUrl: string): ProviderInput {
+  const inferred = kindForEndpoint(baseUrl)
+  if (!inferred || inferred === current.kind) return { ...current, baseUrl }
+  const choices = KNOWN_MODELS[inferred]
+  return { ...current, baseUrl, kind: inferred, model: choices.includes(current.model) ? current.model : choices[0] }
+}
 
 function emptyProvider(): ProviderInput {
   return { name: '', kind: 'openai', baseUrl: '', model: PROVIDER_KIND_META.openai.defaultModel, apiKey: '', isDefault: false }
@@ -123,7 +150,7 @@ export function AiSettingsPage() {
         <h2 className="font-display text-2xl tracking-tight">Providers</h2>
         {providers.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border bg-card/70 px-6 py-10 text-center text-sm text-muted-foreground">
-            No providers yet. Add OpenAI, Anthropic, a local Ollama, or the simulated demo provider to try the workflow offline.
+            No providers yet. Add OpenAI, Google Gemini, Anthropic, a local Ollama, or the simulated demo provider to try the workflow offline.
           </p>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">
@@ -244,10 +271,46 @@ function ProviderForm({
   const [test, setTest] = useState<ProviderTest | null>(null)
   const [pending, setPending] = useState<'save' | 'test' | null>(null)
   const [error, setError] = useState('')
+  const [liveModels, setLiveModels] = useState<string[]>([])
+  const [modelsNote, setModelsNote] = useState('')
   const kindMeta = PROVIDER_KIND_META[input.kind]
+  const listedKind = kindForEndpoint(input.baseUrl) ?? input.kind
+  const models = modelChoices(listedKind, listedKind === existing?.kind ? liveModels : [], input.model)
+  const selectedModel = models.includes(input.model) ? input.model : models[0]
+
+  useEffect(() => {
+    setInput((current) => {
+      const next = applyEndpoint(current, current.baseUrl)
+      return next.kind === current.kind && next.model === current.model && next.baseUrl === current.baseUrl ? current : next
+    })
+  }, [input.baseUrl])
+
+  useEffect(() => {
+    if (!existing || input.kind !== existing.kind) {
+      setLiveModels([])
+      setModelsNote('')
+      return
+    }
+    let cancel = false
+    listProviderModels(existing.id)
+      .then((result) => {
+        if (cancel) return
+        setLiveModels(result.models.map((model) => model.id).filter(Boolean).sort())
+        setModelsNote(result.error ? 'The provider did not list its models, so these are the usual names.' : '')
+      })
+      .catch(() => {
+        if (cancel) return
+        setLiveModels([])
+        setModelsNote('The provider did not list its models, so these are the usual names.')
+      })
+    return () => {
+      cancel = true
+    }
+  }, [existing, input.kind])
 
   function payload(): ProviderInput {
-    const base: ProviderInput = { name: input.name, kind: input.kind, baseUrl: input.baseUrl, model: input.model, isDefault: input.isDefault }
+    const next = applyEndpoint(input, input.baseUrl)
+    const base: ProviderInput = { name: next.name, kind: next.kind, baseUrl: next.baseUrl, model: next.model, isDefault: next.isDefault }
     if (apiKey !== '') base.apiKey = apiKey
     if (!existing && apiKey === '') base.apiKey = ''
     return base
@@ -295,10 +358,16 @@ function ProviderForm({
           <select
             id="provider-kind"
             value={input.kind}
-            className="h-8 rounded-lg border border-border bg-background px-2.5 text-sm"
+            className={selectClass}
             onChange={(event) => {
               const kind = event.target.value as ProviderKind
-              setInput((c) => ({ ...c, kind, model: c.model || PROVIDER_KIND_META[kind].defaultModel }))
+              setInput((current) => {
+                const choices = KNOWN_MODELS[kind]
+                const previousEndpoint = PROVIDER_KIND_META[current.kind].defaultEndpoint
+                const nextEndpoint = PROVIDER_KIND_META[kind].defaultEndpoint
+                const baseUrl = current.baseUrl === '' || current.baseUrl === previousEndpoint ? nextEndpoint : current.baseUrl
+                return { ...current, kind, baseUrl, model: choices.includes(current.model) ? current.model : choices[0] }
+              })
             }}
           >
             {KINDS.map((kind) => (
@@ -308,11 +377,21 @@ function ProviderForm({
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="provider-model">Model</Label>
-          <Input id="provider-model" value={input.model} autoComplete="off" placeholder={kindMeta.defaultModel} onChange={(event) => setInput((c) => ({ ...c, model: event.target.value }))} />
+          <select
+            id="provider-model"
+            value={selectedModel}
+            className={selectClass}
+            onChange={(event) => setInput((current) => ({ ...current, model: event.target.value }))}
+          >
+            {models.map((model) => (
+              <option key={model} value={model}>{model}</option>
+            ))}
+          </select>
+          {modelsNote && listedKind === input.kind ? <p className="text-xs text-muted-foreground">{modelsNote}</p> : null}
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="provider-url">Endpoint (optional)</Label>
-          <Input id="provider-url" value={input.baseUrl} autoComplete="off" placeholder={input.kind === 'ollama' ? 'http://127.0.0.1:11434' : 'https://api.openai.com/v1'} onChange={(event) => setInput((c) => ({ ...c, baseUrl: event.target.value }))} />
+          <Input id="provider-url" value={input.baseUrl} autoComplete="off" placeholder={kindMeta.defaultEndpoint || 'https://api.openai.com/v1'} onChange={(event) => setInput((current) => applyEndpoint(current, event.target.value))} />
         </div>
         {kindMeta.needsKey ? (
           <div className="grid gap-1.5 sm:col-span-2">
@@ -352,9 +431,28 @@ function RoleRow({
   onChange: (next: { providerId: string | null; model: string }) => Promise<void>
 }) {
   const meta = ROLE_META[assignment.role] ?? { label: assignment.role, does: '' }
-  const [model, setModel] = useState(assignment.model)
+  const provider = providers.find((item) => item.id === assignment.providerId) ?? providers.find((item) => item.isDefault)
+  const providerId = provider?.id ?? ''
+  const [liveModels, setLiveModels] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!providerId) return
+    let cancel = false
+    listProviderModels(providerId)
+      .then((result) => {
+        if (!cancel) setLiveModels(result.models.map((model) => model.id).filter(Boolean).sort())
+      })
+      .catch(() => {
+        if (!cancel) setLiveModels([])
+      })
+    return () => {
+      cancel = true
+    }
+  }, [providerId])
+
+  const models = provider ? modelChoices(provider.kind, liveModels, assignment.model) : []
   return (
-    <li className="grid gap-2 rounded-xl border border-border bg-card px-4 py-3 sm:grid-cols-[10rem_1fr_12rem_8rem] sm:items-center">
+    <li className="grid gap-2 rounded-xl border border-border bg-card px-4 py-3 sm:grid-cols-[10rem_1fr_14rem_14rem] sm:items-center">
       <div>
         <p className="text-sm font-medium">{meta.label}</p>
       </div>
@@ -362,23 +460,26 @@ function RoleRow({
       <select
         aria-label={`${meta.label} provider`}
         value={assignment.providerId ?? ''}
-        className="h-8 rounded-lg border border-border bg-background px-2.5 text-sm"
-        onChange={(event) => void onChange({ providerId: event.target.value || null, model })}
+        className={selectClass}
+        onChange={(event) => void onChange({ providerId: event.target.value || null, model: '' })}
       >
         <option value="">Default provider</option>
-        {providers.map((provider) => (
-          <option key={provider.id} value={provider.id}>{provider.name}</option>
+        {providers.map((item) => (
+          <option key={item.id} value={item.id}>{item.name}</option>
         ))}
       </select>
-      <Input
-        aria-label={`${meta.label} model override`}
-        placeholder="model"
-        value={model}
-        onChange={(event) => setModel(event.target.value)}
-        onBlur={() => {
-          if (model !== assignment.model) void onChange({ providerId: assignment.providerId, model })
-        }}
-      />
+      <select
+        aria-label={`${meta.label} model`}
+        value={assignment.model && assignment.model !== provider?.model ? assignment.model : ''}
+        className={selectClass}
+        disabled={!provider}
+        onChange={(event) => void onChange({ providerId: assignment.providerId, model: event.target.value })}
+      >
+        <option value="">{provider ? `Provider model (${provider.model})` : 'No provider'}</option>
+        {models.filter((model) => model !== provider?.model).map((model) => (
+          <option key={model} value={model}>{model}</option>
+        ))}
+      </select>
     </li>
   )
 }

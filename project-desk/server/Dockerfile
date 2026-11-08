@@ -6,12 +6,15 @@ RUN CGO_ENABLED=0 go build -mod=vendor -o /server ./cmd/server
 FROM alpine:3.20
 # git lets the development agent check and apply proposed diffs in a
 # throwaway workspace. Nothing from a repository is executed on this host.
-# extra-ca is optional. On networks that intercept TLS (Netskope), Alpine
-# will not trust the package mirror unless that CA is appended first.
-# The secret is not copied into the image.
+# extra-ca is an optional public CA for networks that intercept TLS.
+# Append it before apk so the package mirror verifies, then again after
+# ca-certificates rewrites the bundle. The second copy is what the API
+# process uses for outbound calls such as api.openai.com. The file is a
+# certificate, never a private key, and it is not in git.
 RUN --mount=type=secret,id=extra-ca,required=false \
     sh -c 'if [ -s /run/secrets/extra-ca ]; then cat /run/secrets/extra-ca >> /etc/ssl/certs/ca-certificates.crt; fi' \
  && apk add --no-cache git ca-certificates \
+ && sh -c 'if [ -s /run/secrets/extra-ca ]; then cat /run/secrets/extra-ca >> /etc/ssl/certs/ca-certificates.crt; fi' \
  && adduser -D -H app
 USER app
 COPY --from=build /server /server

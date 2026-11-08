@@ -62,6 +62,47 @@ func TestOpenAICompatibleGenerate(t *testing.T) {
 	}
 }
 
+func TestGeminiUsesOpenAICompatibility(t *testing.T) {
+	var gotPath, gotAuth, gotEffort string
+	var gotMax float64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		var payload map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		gotEffort, _ = payload["reasoning_effort"].(string)
+		gotMax, _ = payload["max_tokens"].(float64)
+		_, _ = w.Write([]byte(`{"model":"gemini-3.5-flash-lite","choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+	}))
+	defer server.Close()
+
+	p, err := New(Config{Kind: KindGemini, BaseURL: server.URL, Model: "gemini-3.5-flash-lite", APIKey: "g"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Kind() != KindGemini {
+		t.Fatalf("kind = %s", p.Kind())
+	}
+	resp, err := p.Generate(context.Background(), Request{Messages: []Message{{Role: "user", Content: "ping"}}, MaxTokens: 8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/chat/completions" || gotAuth != "Bearer g" || gotEffort != "low" || gotMax != 64 {
+		t.Fatalf("gemini request path=%s auth=%s effort=%s max=%v", gotPath, gotAuth, gotEffort, gotMax)
+	}
+	if resp.Text != "ok" {
+		t.Fatalf("text = %q", resp.Text)
+	}
+	bare, err := New(Config{Kind: KindGemini, Model: "gemini-3.5-flash-lite", APIKey: "g"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gemini, ok := bare.(*openAI)
+	if !ok || gemini.cfg.BaseURL != Compatible["gemini"] {
+		t.Fatalf("default endpoint = %#v", bare)
+	}
+}
+
 func TestAnthropicPromptsForJSONWithoutJSONMode(t *testing.T) {
 	var system string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
