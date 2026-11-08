@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Heart, X } from 'lucide-react'
+import { Pronunciation } from '@/components/pronunciation'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { ApiError, prepareLesson } from '@/lib/api'
@@ -123,7 +124,10 @@ export function LessonPlayer({
             return (
               <li key={card.id} className="rounded-2xl border border-border bg-card px-4 py-3">
                 <div className="flex items-baseline justify-between gap-4">
-                  <span className="font-display text-2xl tracking-tight">{card.word}</span>
+                  <span className="flex items-baseline gap-2">
+                    <span className="font-display text-2xl tracking-tight">{card.word}</span>
+                    <Pronunciation word={card.word} pronunciation={card.pronunciation} />
+                  </span>
                   <span className="text-sm text-muted-foreground">{card.meaning}</span>
                 </div>
                 {example ? <p className="mt-2 text-sm leading-relaxed">{example}</p> : null}
@@ -175,33 +179,40 @@ export function LessonPlayer({
         <p className="text-sm font-medium tracking-wide text-muted-foreground uppercase">
           {question.kind === 'meaning' ? t('english.promptMeaning') : t('english.promptCloze')}
         </p>
-        <Prompt question={question} picked={picked} checked={checked} />
+        <Prompt question={question} words={words} picked={picked} checked={checked} />
         <div className="grid gap-3">
           {question.choices.map((choice) => {
             const selected = picked === choice
             const showCorrect = checked && choice === question.answer
             const showWrong = checked && selected && choice !== question.answer
-            const gloss = question.kind === 'cloze' ? words.find((card) => card.word.toLowerCase() === choice.toLowerCase())?.meaning : ''
+            const card = words.find((item) => item.word.toLowerCase() === choice.toLowerCase())
+            const gloss = question.kind === 'cloze' ? card?.meaning : ''
+            const ipa = question.kind === 'cloze' ? card?.pronunciation : ''
             return (
-              <button
-                key={choice}
-                type="button"
-                disabled={checked}
-                aria-pressed={selected}
-                className={
-                  showCorrect
-                    ? 'rounded-2xl border-2 border-primary bg-primary/10 px-4 py-3 text-left'
-                    : showWrong
-                      ? 'rounded-2xl border-2 border-destructive bg-destructive/10 px-4 py-3 text-left'
-                      : selected
-                        ? 'rounded-2xl border-2 border-primary bg-card px-4 py-3 text-left'
-                        : 'rounded-2xl border-2 border-border bg-card px-4 py-3 text-left hover:bg-muted'
-                }
-                onClick={() => setPicked(choice)}
-              >
-                <span className="block text-base font-medium">{choice}</span>
-                {checked && gloss ? <span className="mt-0.5 block text-sm text-muted-foreground">{gloss}</span> : null}
-              </button>
+              <div key={choice} className="flex items-stretch gap-2">
+                <button
+                  type="button"
+                  disabled={checked}
+                  aria-pressed={selected}
+                  className={
+                    showCorrect
+                      ? 'flex-1 rounded-2xl border-2 border-primary bg-primary/10 px-4 py-3 text-left'
+                      : showWrong
+                        ? 'flex-1 rounded-2xl border-2 border-destructive bg-destructive/10 px-4 py-3 text-left'
+                        : selected
+                          ? 'flex-1 rounded-2xl border-2 border-primary bg-card px-4 py-3 text-left'
+                          : 'flex-1 rounded-2xl border-2 border-border bg-card px-4 py-3 text-left hover:bg-muted'
+                  }
+                  onClick={() => setPicked(choice)}
+                >
+                  <span className="flex items-baseline gap-2 text-base font-medium">
+                    <span>{choice}</span>
+                    {ipa ? <span className="text-sm font-normal text-muted-foreground">{ipa}</span> : null}
+                  </span>
+                  {checked && gloss ? <span className="mt-0.5 block text-sm text-muted-foreground">{gloss}</span> : null}
+                </button>
+                {question.kind === 'cloze' ? <Pronunciation word={choice} pronunciation={ipa} showText={false} /> : null}
+              </div>
             )
           })}
         </div>
@@ -230,18 +241,30 @@ function Result({ question, correct }: { question: Question; correct: boolean })
   )
 }
 
-function Prompt({ question, picked, checked }: { question: Question; picked: string | null; checked: boolean }) {
+function wordPronunciation(words: EnglishCard[], word: string) {
+  return words.find((card) => card.word.toLowerCase() === word.toLowerCase())?.pronunciation ?? ''
+}
+
+function Prompt({ question, words, picked, checked }: { question: Question; words: EnglishCard[]; picked: string | null; checked: boolean }) {
   if (question.kind === 'meaning') {
-    return <h1 className="font-display text-5xl tracking-tight">{question.prompt}</h1>
+    return (
+      <h1 className="flex items-baseline gap-3 font-display text-5xl tracking-tight">
+        <span>{question.prompt}</span>
+        <Pronunciation word={question.prompt} pronunciation={wordPronunciation(words, question.prompt)} textClassName="text-lg" />
+      </h1>
+    )
   }
   const filled = checked ? question.answer : picked
   return (
-    <p className="text-2xl leading-relaxed">
-      {question.before}
-      <span className={`mx-1 inline-block min-w-20 border-b-2 px-1 text-center font-display ${filled ? 'border-primary text-primary' : 'border-muted-foreground/40'}`}>
-        {filled || '\u00a0'}
-      </span>
-      {question.after}
-    </p>
+    <div>
+      <p className="text-2xl leading-relaxed">
+        {question.before}
+        <span className={`mx-1 inline-block min-w-20 border-b-2 px-1 text-center font-display ${filled ? 'border-primary text-primary' : 'border-muted-foreground/40'}`}>
+          {filled || '\u00a0'}
+        </span>
+        {question.after}
+      </p>
+      {filled ? <div className="mt-2"><Pronunciation word={filled} pronunciation={wordPronunciation(words, filled)} /></div> : null}
+    </div>
   )
 }

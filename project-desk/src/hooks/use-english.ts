@@ -30,6 +30,20 @@ export function useEnglish() {
     void load()
   }, [load])
 
+  const awaitingPronunciation = ready && cards.some((card) => !card.pronunciation)
+  useEffect(() => {
+    if (!awaitingPronunciation) return
+    const started = Date.now()
+    const timer = window.setInterval(() => {
+      if (Date.now() - started > 180_000) {
+        window.clearInterval(timer)
+        return
+      }
+      void listEnglish().then(setCards).catch(() => {})
+    }, 4000)
+    return () => window.clearInterval(timer)
+  }, [awaitingPronunciation])
+
   const addCard = useCallback(async (input: EnglishInput) => {
     try {
       const created = await createEnglish(input)

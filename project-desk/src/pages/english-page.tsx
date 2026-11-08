@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { LessonPath } from '@/components/lesson-path'
+import { Pronunciation } from '@/components/pronunciation'
 import { LessonPlayer } from '@/components/lesson-player'
 import { useEnglish } from '@/hooks/use-english'
 import { useI18n } from '@/i18n'
@@ -169,7 +170,10 @@ function WordDesk({ onBack }: { onBack: () => void }) {
           <Card>
             <CardHeader>
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{t('english.current')}</p>
-              <CardTitle className="font-display text-4xl tracking-tight">{current.word}</CardTitle>
+              <CardTitle className="flex items-baseline gap-3 font-display text-4xl tracking-tight">
+                <span>{current.word}</span>
+                <Pronunciation word={current.word} pronunciation={current.pronunciation} textClassName="text-lg" />
+              </CardTitle>
               <p className="text-sm text-muted-foreground">{current.meaning}</p>
             </CardHeader>
             <CardContent>
@@ -302,10 +306,13 @@ function WordRow({
   return (
     <li className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <button type="button" className="text-left" onClick={onShow}>
-          <span className="font-display text-2xl tracking-tight">{card.word}</span>
-          <span className="mt-0.5 block text-sm text-muted-foreground">{card.meaning}</span>
-        </button>
+        <div className="text-left">
+          <span className="flex items-baseline gap-2">
+            <button type="button" className="font-display text-2xl tracking-tight" onClick={onShow}>{card.word}</button>
+            <Pronunciation word={card.word} pronunciation={card.pronunciation} />
+          </span>
+          <button type="button" className="mt-0.5 block text-sm text-muted-foreground" onClick={onShow}>{card.meaning}</button>
+        </div>
         <div className="flex flex-wrap gap-2">
           {card.generated ? (
             <>

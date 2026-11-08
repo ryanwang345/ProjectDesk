@@ -231,6 +231,9 @@ CREATE TABLE IF NOT EXISTS english_quizzes (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 `},
+	{7, `
+ALTER TABLE english_cards ADD COLUMN IF NOT EXISTS pronunciation TEXT NOT NULL DEFAULT '';
+`},
 }
 
 func migrate(ctx context.Context, s *Store) error {

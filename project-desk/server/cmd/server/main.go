@@ -66,6 +66,8 @@ func main() {
 		close(workerDone)
 	}
 
+	go store.WritePronunciations(ctx, platform.Sealer)
+
 	if os.Getenv("PROJECT_DESK_WORKER_ONLY") == "1" {
 		<-ctx.Done()
 		cancelWorker()

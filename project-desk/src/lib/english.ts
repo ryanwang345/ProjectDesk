@@ -7,6 +7,7 @@ export type EnglishCard = {
   examples: string[]
   inReview: boolean
   generated: boolean
+  pronunciation: string
   updatedAt: string
 }
 

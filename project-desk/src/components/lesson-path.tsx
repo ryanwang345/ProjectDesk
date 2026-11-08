@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Check, ChevronLeft, ChevronRight, Flame, Lock, Star } from 'lucide-react'
+import { Pronunciation } from '@/components/pronunciation'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import type { EnglishCard } from '@/lib/english'
@@ -105,7 +106,10 @@ export function LessonPath({
         <ul className="flex flex-col">
         {previewWords.map((card) => (
           <li key={card.id} className="flex items-baseline justify-between gap-4 border-b border-border py-2.5">
-            <span className="font-display text-xl tracking-tight">{card.word}</span>
+            <span className="flex items-baseline gap-2">
+              <span className="font-display text-xl tracking-tight">{card.word}</span>
+              <Pronunciation word={card.word} pronunciation={card.pronunciation} />
+            </span>
             <span className="text-sm text-muted-foreground">{card.meaning}</span>
           </li>
         ))}

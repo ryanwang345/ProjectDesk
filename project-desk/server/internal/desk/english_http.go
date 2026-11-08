@@ -1,6 +1,7 @@
 package desk
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -54,7 +55,7 @@ func (h *Handler) createEnglish(w http.ResponseWriter, r *http.Request) {
 		writeEnglishError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, card)
+	writeJSON(w, http.StatusCreated, h.withPronunciation(r.Context(), card))
 }
 
 func (h *Handler) updateEnglish(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +68,22 @@ func (h *Handler) updateEnglish(w http.ResponseWriter, r *http.Request) {
 		writeEnglishError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, card)
+	writeJSON(w, http.StatusOK, h.withPronunciation(r.Context(), card))
+}
+
+func (h *Handler) withPronunciation(ctx context.Context, card EnglishCard) EnglishCard {
+	if card.Pronunciation != "" || h.platform == nil {
+		return card
+	}
+	provider, _, err := h.store.ProviderForRole(ctx, "english", h.platform.Sealer)
+	if err != nil {
+		return card
+	}
+	next, err := h.store.AttachPronunciation(ctx, provider, card)
+	if err != nil {
+		return card
+	}
+	return next
 }
 
 func (h *Handler) addEnglishReview(w http.ResponseWriter, r *http.Request) {

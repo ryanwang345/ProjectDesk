@@ -12,16 +12,17 @@ import (
 
 const ExampleCount = 10
 
-const englishColumns = `id::text, word, meaning, examples, in_review, updated_at, generated`
+const englishColumns = `id::text, word, meaning, examples, in_review, updated_at, generated, pronunciation`
 
 type EnglishCard struct {
-	ID        string    `json:"id"`
-	Word      string    `json:"word"`
-	Meaning   string    `json:"meaning"`
-	Examples  []string  `json:"examples"`
-	InReview  bool      `json:"inReview"`
-	Generated bool      `json:"generated"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID            string    `json:"id"`
+	Word          string    `json:"word"`
+	Meaning       string    `json:"meaning"`
+	Examples      []string  `json:"examples"`
+	InReview      bool      `json:"inReview"`
+	Generated     bool      `json:"generated"`
+	Pronunciation string    `json:"pronunciation"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 type EnglishInput struct {
@@ -71,7 +72,8 @@ func (s *Store) UpdateEnglish(ctx context.Context, id string, input EnglishInput
 	}
 	row := s.pool.QueryRow(ctx, `
 		UPDATE english_cards
-		SET word = $2, meaning = $3, examples = $4, generated = true, updated_at = now()
+		SET word = $2, meaning = $3, examples = $4, generated = true, updated_at = now(),
+			pronunciation = CASE WHEN lower(word) = lower($2) THEN pronunciation ELSE '' END
 		WHERE id = $1
 		RETURNING `+englishColumns,
 		id, input.Word, input.Meaning, input.Examples)
@@ -151,7 +153,7 @@ func ValidateEnglish(input EnglishInput) error {
 
 func scanEnglish(row scanner) (EnglishCard, error) {
 	var card EnglishCard
-	err := row.Scan(&card.ID, &card.Word, &card.Meaning, &card.Examples, &card.InReview, &card.UpdatedAt, &card.Generated)
+	err := row.Scan(&card.ID, &card.Word, &card.Meaning, &card.Examples, &card.InReview, &card.UpdatedAt, &card.Generated, &card.Pronunciation)
 	if card.Examples == nil {
 		card.Examples = []string{}
 	}
