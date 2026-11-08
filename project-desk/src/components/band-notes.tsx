@@ -10,34 +10,34 @@ export function BandNotes({ band }: { band?: BandNote | null }) {
   const paraphrases = band.paraphrases ?? []
 
   return (
-    <section className="mt-4 rounded-2xl border border-primary/25 bg-primary/5 p-4">
-      <h3 className="font-display text-lg tracking-tight text-primary">{t('english.bandTitle')}</h3>
-      {band.zh ? <p className="mt-1 text-sm leading-relaxed">{band.zh}</p> : null}
+    <section className="mt-4 rounded-3xl border border-primary/25 bg-primary/5 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-medium text-primary">{t('english.bandTitle')}</h3>
+        <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-medium tracking-wide text-primary-foreground uppercase">{t('english.highBand')}</span>
+      </div>
+      {band.zh ? <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{band.zh}</p> : null}
       {collocations.length > 0 ? (
-        <div className="mt-3">
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{t('english.bandCollocations')}</p>
-          <ul className="mt-2 flex flex-wrap gap-2">
-            {collocations.map((phrase) => (
-              <li key={phrase} className="rounded-full bg-card px-3 py-1 text-sm">{phrase}</li>
-            ))}
-          </ul>
-        </div>
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {collocations.map((phrase) => (
+            <li key={phrase} className="rounded-full border border-primary/30 px-3 py-1 text-sm text-primary">{phrase}</li>
+          ))}
+        </ul>
       ) : null}
       <BandLine label={t('english.bandWriting')} text={band.writing} />
       <BandLine label={t('english.bandSpeaking')} text={band.speaking} />
-      <BandLine label={t('english.bandWeak')} text={band.weak} />
-      {band.fix ? (
-        <p className="mt-3 text-sm leading-relaxed">
-          <span className="font-medium">{t('english.bandFix')}. </span>
-          {band.fix}
-        </p>
+      {band.weak || band.fix ? (
+        <div className="mt-3 rounded-2xl border border-border bg-background/40 p-3 text-sm leading-relaxed">
+          <p className="text-xs font-medium text-primary">{t('english.bandFix')}</p>
+          {band.weak ? <p className="mt-2 text-muted-foreground line-through decoration-destructive/70">{band.weak}</p> : null}
+          {band.fix ? <p className="mt-2">{band.fix}</p> : null}
+        </div>
       ) : null}
       {paraphrases.length > 0 ? (
         <div className="mt-3">
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{t('english.bandParaphrase')}</p>
+          <p className="text-xs text-muted-foreground">{t('english.bandParaphrase')}</p>
           <ul className="mt-2 flex flex-wrap gap-2">
             {paraphrases.map((phrase) => (
-              <li key={phrase} className="rounded-full border border-border px-3 py-1 text-sm">{phrase}</li>
+              <li key={phrase} className="rounded-full bg-card px-3 py-1 text-sm">{phrase}</li>
             ))}
           </ul>
         </div>

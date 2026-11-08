@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { ThemePicker } from '@/components/theme-picker'
 import { LOCALES, useI18n, type MessageKey } from '@/i18n'
 import { cn } from '@/lib/utils'
 
@@ -37,6 +38,7 @@ export function SiteHeader() {
               </NavLink>
             ))}
           </nav>
+          <ThemePicker showName />
           <label className="sr-only" htmlFor="locale">{t('lang')}</label>
           <select
             id="locale"

@@ -61,29 +61,35 @@ export function Pronunciation({
   pronunciation,
   showText = true,
   textClassName = 'text-sm',
+  orb = false,
 }: {
   word: string
   pronunciation?: string
   showText?: boolean
   textClassName?: string
+  orb?: boolean
 }) {
   const { t } = useI18n()
   const ipa = pronunciation?.trim() ?? ''
   return (
-    <span className="inline-flex items-center gap-1 align-middle">
+    <span className="inline-flex items-center gap-1.5 align-middle">
       {showText && ipa ? (
         <span className={`font-sans font-normal tracking-normal text-muted-foreground ${textClassName}`}>{ipa}</span>
       ) : null}
       <button
         type="button"
-        className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        className={
+          orb
+            ? 'inline-flex size-10 items-center justify-center rounded-full bg-primary/15 text-primary hover:bg-primary/25'
+            : 'inline-flex size-7 items-center justify-center rounded-full text-primary hover:bg-primary/10'
+        }
         aria-label={t('english.pronounce', { word })}
         onClick={(event) => {
           event.stopPropagation()
           speakWord(word)
         }}
       >
-        <Volume2 className="size-4" aria-hidden="true" />
+        <Volume2 className={orb ? 'size-5' : 'size-4'} aria-hidden="true" />
       </button>
     </span>
   )

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Heart, X } from 'lucide-react'
-import { BandDrill, BandNotes } from '@/components/band-notes'
+import { Heart, Star, X } from 'lucide-react'
+import { BandDrill } from '@/components/band-notes'
 import { Pronunciation } from '@/components/pronunciation'
-import { WordSenses } from '@/components/word-senses'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { ApiError, prepareLesson } from '@/lib/api'
@@ -36,7 +35,7 @@ export function LessonPlayer({
   const correctTotal = useRef(0)
   const resultRef = useRef<HTMLDivElement>(null)
   const [finished, setFinished] = useState<'done' | 'hearts' | null>(null)
-  const [bandStep, setBandStep] = useState(0)
+  const [bandStep, setBandStep] = useState(-1)
   const [bandPicked, setBandPicked] = useState<string | null>(null)
   const [bandChecked, setBandChecked] = useState(false)
 
@@ -85,6 +84,11 @@ export function LessonPlayer({
       return
     }
     if (step + 1 >= questions.length) {
+      const drills = words.filter((card) => Boolean(card.band?.writing && card.band?.weak))
+      if (drills.length > 0 && bandStep < 0) {
+        setBandStep(0)
+        return
+      }
       onComplete(correctTotal.current)
       setFinished('done')
       return
@@ -113,12 +117,18 @@ export function LessonPlayer({
 
   if (!started) {
     return (
-      <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
+      <div className="flex flex-col gap-4 pb-4">
         <div className="flex items-center gap-3">
           <Button type="button" size="icon" variant="ghost" aria-label={t('english.quit')} onClick={onExit}>
             <X />
           </Button>
-          <h1 className="font-display text-3xl tracking-tight">{t('english.lessonNode', { n: lesson + 1 })}</h1>
+          <h1 className="flex-1 text-xl font-medium">{t('english.lessonNode', { n: lesson + 1 })}</h1>
+          <span className="inline-flex items-center gap-1 text-primary" aria-hidden="true">
+            {Array.from({ length: words.length }, (_, index) => (
+              <Star key={index} className="size-3.5 fill-primary" />
+            ))}
+          </span>
+          <span className="text-xs text-muted-foreground tabular-nums">{words.length}/{words.length}</span>
         </div>
         <p className="text-sm text-muted-foreground">{t('english.learnThese')}</p>
         <ol className="flex flex-col gap-3">
@@ -126,29 +136,47 @@ export function LessonPlayer({
             const cloze = questions.find((item) => item.kind === 'cloze' && item.answer.toLowerCase() === card.word.toLowerCase())
             const example = cloze && cloze.kind === 'cloze' ? `${cloze.before}${cloze.answer}${cloze.after}` : (card.examples[0] ?? '')
             const chinese = cloze?.chinese ?? ''
+            const senses = card.senses ?? []
             return (
-              <li key={card.id} className="rounded-2xl border border-border bg-card px-4 py-3">
-                <div className="flex items-baseline justify-between gap-4">
-                  <span className="flex items-baseline gap-2">
-                    <span className="font-display text-2xl tracking-tight">{card.word}</span>
+              <li key={card.id} className="rounded-3xl border border-border bg-card px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-2xl font-medium">{card.word}</p>
                     <Pronunciation word={card.word} pronunciation={card.pronunciation} />
-                  </span>
-                  <span className="text-sm text-muted-foreground">{card.meaning}</span>
+                  </div>
+                  <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{card.meaning}</span>
                 </div>
-                <WordSenses senses={card.senses} />
-                <BandNotes band={card.band} />
+                {senses.length > 0 ? (
+                  <ul className="mt-3 flex flex-col gap-2">
+                    {senses.map((sense, index) => (
+                      <li key={`${sense.pos}-${index}`}>
+                        <p className="text-sm">
+                          <span className="mr-2 rounded-md bg-primary/15 px-1.5 py-0.5 text-[11px] text-primary">{sense.pos}</span>
+                          <span>{sense.zh}</span>
+                        </p>
+                        {sense.en ? <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{sense.en}</p> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 text-sm text-muted-foreground">{card.meaning}</p>
+                )}
                 {example ? (
-                  <p className="mt-2 flex items-start gap-2 text-sm leading-relaxed">
-                    <span className="flex-1">{example}</span>
-                    <Pronunciation word={example} showText={false} />
-                  </p>
+                  <div className="mt-3 rounded-2xl bg-background/50 px-3 py-2">
+                    <p className="flex items-start gap-2 text-sm leading-relaxed">
+                      <span className="flex-1"><Highlighted word={card.word} example={example} /></span>
+                      <Pronunciation word={example} showText={false} />
+                    </p>
+                    {chinese ? <p className="mt-1 text-sm text-primary">{chinese}</p> : null}
+                  </div>
                 ) : null}
-                {chinese ? <p className="mt-1 text-sm leading-relaxed text-primary">{chinese}</p> : null}
               </li>
             )
           })}
         </ol>
-        <Button type="button" className="h-12 text-base" onClick={() => setStarted(true)}>{t('english.start')}</Button>
+        <Button type="button" className="h-12 w-full rounded-full text-base" onClick={() => setStarted(true)}>
+          {t('english.startPractice', { n: words.length })}
+        </Button>
       </div>
     )
   }
@@ -167,7 +195,8 @@ export function LessonPlayer({
         onCheck={() => setBandChecked(true)}
         onContinue={() => {
           if (bandStep + 1 >= bandCards.length) {
-            setBandStep(-1)
+            onComplete(correctTotal.current)
+            setFinished('done')
             return
           }
           setBandStep((current) => current + 1)
@@ -192,90 +221,121 @@ export function LessonPlayer({
     )
   }
 
+  const promptCard = question.kind === 'meaning'
+    ? words.find((card) => card.word.toLowerCase() === question.prompt.toLowerCase())
+    : words.find((card) => card.word.toLowerCase() === question.answer.toLowerCase())
+
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col">
+    <div className="flex flex-col gap-5">
       <div className="flex items-center gap-3">
         <Button type="button" size="icon" variant="ghost" aria-label={t('english.quit')} onClick={onExit}>
           <X />
         </Button>
-        <div className="h-3 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
           <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
         </div>
-        <p className="text-xs font-medium text-muted-foreground tabular-nums">{t('english.questionOf', { n: step + 1, total: questions.length })}</p>
+        <p className="text-xs text-muted-foreground tabular-nums">{t('english.questionOf', { n: step + 1, total: questions.length })}</p>
         <p className="flex items-center gap-0.5" aria-label={t('english.hearts', { n: hearts })}>
           {Array.from({ length: HEARTS }, (_, index) => (
             <Heart
               key={index}
-              className={index < hearts ? 'size-4 fill-destructive text-destructive' : 'size-4 text-muted-foreground/35'}
+              className={index < hearts ? 'size-4 fill-rose-400 text-rose-400' : 'size-4 text-muted-foreground/35'}
               aria-hidden="true"
             />
           ))}
         </p>
       </div>
-
-      <div className="flex flex-col gap-6 py-8">
-        <p className="text-sm font-medium tracking-wide text-muted-foreground uppercase">
-          {question.kind === 'meaning' ? t('english.promptMeaning') : t('english.promptCloze')}
-        </p>
-        <Prompt question={question} words={words} picked={picked} checked={checked} />
-        <div className="grid gap-3">
-          {question.choices.map((choice) => {
-            const selected = picked === choice
-            const showCorrect = checked && choice === question.answer
-            const showWrong = checked && selected && choice !== question.answer
-            const card = words.find((item) => item.word.toLowerCase() === choice.toLowerCase())
-            const gloss = question.kind === 'cloze' ? card?.meaning : ''
-            const ipa = question.kind === 'cloze' ? card?.pronunciation : ''
-            return (
-              <div key={choice} className="flex items-stretch gap-2">
-                <button
-                  type="button"
-                  disabled={checked}
-                  aria-pressed={selected}
-                  className={
-                    showCorrect
-                      ? 'flex-1 rounded-2xl border-2 border-primary bg-primary/10 px-4 py-3 text-left'
-                      : showWrong
-                        ? 'flex-1 rounded-2xl border-2 border-destructive bg-destructive/10 px-4 py-3 text-left'
-                        : selected
-                          ? 'flex-1 rounded-2xl border-2 border-primary bg-card px-4 py-3 text-left'
-                          : 'flex-1 rounded-2xl border-2 border-border bg-card px-4 py-3 text-left hover:bg-muted'
-                  }
-                  onClick={() => setPicked(choice)}
-                >
-                  <span className="flex items-baseline gap-2 text-base font-medium">
-                    <span>{choice}</span>
-                    {ipa ? <span className="text-sm font-normal text-muted-foreground">{ipa}</span> : null}
-                  </span>
-                  {checked && gloss ? <span className="mt-0.5 block text-sm text-muted-foreground">{gloss}</span> : null}
-                </button>
-                {question.kind === 'cloze' ? <Pronunciation word={choice} pronunciation={ipa} showText={false} /> : null}
-              </div>
-            )
-          })}
-        </div>
+      <div className="flex items-center justify-end text-xs text-muted-foreground">
+        <p className="rounded-full border border-border px-2 py-0.5">{t('english.choiceKind')}</p>
       </div>
-
-      <div ref={resultRef} className={`rounded-2xl px-4 py-4 ${correct ? 'bg-primary/10' : checked ? 'bg-destructive/10' : ''}`}>
-        {checked && picked ? <Result question={question} correct={correct} /> : null}
+      <h1 className="text-xl font-medium">{question.kind === 'meaning' ? t('english.promptMeaning') : t('english.promptCloze')}</h1>
+      {question.kind === 'meaning' && promptCard ? (
+        <div className="flex items-center justify-between rounded-3xl border border-primary/30 bg-card px-4 py-4">
+          <div>
+            <p className="text-3xl font-medium">{promptCard.word}</p>
+            <Pronunciation word={promptCard.word} pronunciation={promptCard.pronunciation} />
+          </div>
+          <Pronunciation word={promptCard.word} showText={false} orb />
+        </div>
+      ) : (
+        <Prompt question={question} words={words} picked={picked} checked={checked} />
+      )}
+      <div className="grid gap-2">
+        {question.choices.map((choice, index) => {
+          const selected = picked === choice
+          const showCorrect = checked && choice === question.answer
+          const showWrong = checked && selected && choice !== question.answer
+          const letter = 'ABCD'[index] ?? ''
+          return (
+            <button
+              key={`${choice}-${index}`}
+              type="button"
+              disabled={checked}
+              aria-pressed={selected}
+              className={
+                showCorrect
+                  ? 'flex items-center gap-3 rounded-2xl border border-primary bg-primary/15 px-3 py-3 text-left'
+                  : showWrong
+                    ? 'flex items-center gap-3 rounded-2xl border border-destructive bg-destructive/10 px-3 py-3 text-left'
+                    : selected
+                      ? 'flex items-center gap-3 rounded-2xl border border-primary bg-card px-3 py-3 text-left'
+                      : 'flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-3 text-left'
+              }
+              onClick={() => setPicked(choice)}
+            >
+              <span className={`grid size-7 place-items-center rounded-full text-xs font-medium ${showCorrect ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>{letter}</span>
+              <span className="flex-1 text-sm">{choice}</span>
+              {showCorrect ? <span className="text-xs text-primary">{t('english.correct')}</span> : null}
+            </button>
+          )
+        })}
+      </div>
+      <div ref={resultRef}>
+        {checked && picked ? <Result question={question} correct={correct} card={promptCard} /> : null}
         {checked ? (
-          <Button type="button" className="h-12 w-full text-base" onClick={continueLesson}>{t('english.continue')}</Button>
+          <Button type="button" className="mt-3 h-12 w-full rounded-full text-base" onClick={continueLesson}>{t('english.continueNext')}</Button>
         ) : (
-          <Button type="button" className="h-12 w-full text-base" disabled={picked === null} onClick={check}>{t('english.check')}</Button>
+          <Button type="button" className="h-12 w-full rounded-full text-base" disabled={picked === null} onClick={check}>{t('english.check')}</Button>
         )}
       </div>
+      <p className="text-center text-xs text-muted-foreground">{t('footer')}</p>
     </div>
   )
 }
 
-function Result({ question, correct }: { question: Question; correct: boolean }) {
+function Result({ question, correct, card }: { question: Question; correct: boolean; card?: EnglishCard }) {
   const { t } = useI18n()
   return (
-    <div className="mb-3 flex flex-col gap-2">
-      <p className="font-display text-2xl">{correct ? t('english.correct') : t('english.wrong')}</p>
-      {question.why ? <p className="text-sm leading-relaxed">{question.why}</p> : null}
-      {question.chinese ? <p className="text-base leading-relaxed text-primary">{question.chinese}</p> : null}
+    <div className={`rounded-3xl border px-4 py-4 ${correct ? 'border-primary/40 bg-primary/10' : 'border-destructive/40 bg-destructive/10'}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="inline-flex items-center gap-2 font-medium">
+          <span className={`grid size-5 place-items-center rounded-full text-xs ${correct ? 'bg-primary text-primary-foreground' : 'bg-destructive text-white'}`}>{correct ? '✓' : '×'}</span>
+          {correct ? t('english.answeredRight') : t('english.wrong')}
+        </p>
+        {correct ? <span className="text-sm text-primary">{t('english.points', { n: XP_PER_CORRECT })}</span> : null}
+      </div>
+      {question.why ? <p className="mt-3 text-sm leading-relaxed">{question.why}</p> : null}
+      {question.chinese ? <p className="mt-2 text-sm text-primary">{question.chinese}</p> : null}
+      {card ? (
+        <p className="mt-3 text-sm">
+          <span className="text-muted-foreground">{t('english.standard')}: </span>
+          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-primary">{card.meaning}</span>
+        </p>
+      ) : null}
     </div>
+  )
+}
+
+function Highlighted({ word, example }: { word: string; example: string }) {
+  const match = example.toLowerCase().indexOf(word.trim().toLowerCase())
+  if (match < 0 || word.trim() === '') return example
+  const end = match + word.trim().length
+  return (
+    <>
+      {example.slice(0, match)}
+      <strong className="font-semibold text-primary">{example.slice(match, end)}</strong>
+      {example.slice(end)}
+    </>
   )
 }
 
