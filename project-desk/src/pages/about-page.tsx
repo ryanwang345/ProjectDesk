@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useI18n } from '@/i18n'
 
 const steps = [
   {
@@ -15,18 +16,19 @@ const steps = [
     body: 'Creating, editing, moving, or removing a project is a request to the Go API. Postgres stores the name, note, status, and updated time.',
   },
   {
-    title: 'The loop keeps a change moving',
-    body: 'A cycle records a signal, the ship inside 48 hours, the measurements, and the lesson that becomes the next signal. Postgres stores each lap.',
+    title: 'English cards keep a word and ten sentences',
+    body: 'Each card stores one English word, its meaning, and ten sentences that use the word. Postgres keeps the set.',
   },
 ]
 
 export function AboutPage() {
+  const { t } = useI18n()
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
       <div>
-        <h1 className="font-display text-4xl tracking-tight sm:text-5xl">How it runs</h1>
+        <h1 className="font-display text-4xl tracking-tight sm:text-5xl">{t('about.title')}</h1>
         <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
-          Project Desk is a React board, a Go API, and Postgres. nginx sits in front and sends each piece to the right place.
+          {t('about.lead')}
         </p>
       </div>
       <div className="grid gap-3">
@@ -63,8 +65,8 @@ export function AboutPage() {
               Back to the desk
             </Link>
             <span className="px-2 text-muted-foreground">·</span>
-            <Link className="text-sm underline underline-offset-4" to="/loop">
-              Open the loop
+            <Link className="text-sm underline underline-offset-4" to="/english">
+              Open English cards
             </Link>
           </p>
         </CardContent>

@@ -71,22 +71,23 @@ export function projectsByStatus(projects: Project[], status: Status): Project[]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
-export function formatUpdated(iso: string, now = Date.now()): string {
+export function formatUpdated(iso: string, now = Date.now(), locale: 'en' | 'zh' = 'en'): string {
   const then = new Date(iso).getTime()
-  if (Number.isNaN(then)) return 'Updated date unknown'
+  if (Number.isNaN(then)) return locale === 'zh' ? '更新时间未知' : 'Updated date unknown'
 
   const delta = then - now
   const minute = 60_000
   const hour = 60 * minute
   const day = 24 * hour
-  const relative = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+  const relative = new Intl.RelativeTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', { numeric: 'auto' })
 
-  if (Math.abs(delta) < minute) return 'Updated just now'
+  if (Math.abs(delta) < minute) return locale === 'zh' ? '刚刚更新' : 'Updated just now'
+  const prefix = locale === 'zh' ? '更新于 ' : 'Updated '
   if (Math.abs(delta) < hour) {
-    return `Updated ${relative.format(Math.round(delta / minute), 'minute')}`
+    return `${prefix}${relative.format(Math.round(delta / minute), 'minute')}`
   }
   if (Math.abs(delta) < day) {
-    return `Updated ${relative.format(Math.round(delta / hour), 'hour')}`
+    return `${prefix}${relative.format(Math.round(delta / hour), 'hour')}`
   }
-  return `Updated ${relative.format(Math.round(delta / day), 'day')}`
+  return `${prefix}${relative.format(Math.round(delta / day), 'day')}`
 }

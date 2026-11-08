@@ -16,9 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useI18n, type MessageKey } from '@/i18n'
 import {
   STATUSES,
-  STATUS_META,
   formatUpdated,
   type Project,
   type Status,
@@ -32,6 +32,7 @@ type ProjectCardProps = {
 }
 
 export function ProjectCard({ project, onEdit, onDelete, onStatus }: ProjectCardProps) {
+  const { t, locale } = useI18n()
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -48,7 +49,7 @@ export function ProjectCard({ project, onEdit, onDelete, onStatus }: ProjectCard
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={`Edit ${project.name}`}
+            aria-label={t('project.editName', { name: project.name })}
             onClick={() => onEdit(project)}
           >
             <Pencil />
@@ -57,7 +58,7 @@ export function ProjectCard({ project, onEdit, onDelete, onStatus }: ProjectCard
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={`Remove ${project.name}`}
+            aria-label={t('project.removeName', { name: project.name })}
             onClick={() => onDelete(project)}
           >
             <Trash2 />
@@ -66,7 +67,7 @@ export function ProjectCard({ project, onEdit, onDelete, onStatus }: ProjectCard
       </CardHeader>
       <CardContent>
         <p className={project.note ? 'break-words text-muted-foreground' : 'text-muted-foreground italic'}>
-          {project.note || 'No note yet.'}
+          {project.note || t('project.noNote')}
         </p>
       </CardContent>
       <CardFooter className="flex-wrap items-center justify-between gap-2">
@@ -74,18 +75,18 @@ export function ProjectCard({ project, onEdit, onDelete, onStatus }: ProjectCard
           value={project.status}
           onValueChange={(value) => onStatus(project, value as Status)}
         >
-          <SelectTrigger aria-label={`Status for ${project.name}`} className="w-[9.5rem]">
+          <SelectTrigger aria-label={t('project.statusFor', { name: project.name })} className="w-[9.5rem]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {STATUSES.map((status) => (
               <SelectItem key={status} value={status}>
-                {STATUS_META[status].label}
+                {t(`status.${status}` as MessageKey)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">{formatUpdated(project.updatedAt, now)}</p>
+        <p className="text-xs text-muted-foreground">{formatUpdated(project.updatedAt, now, locale)}</p>
       </CardFooter>
     </Card>
   )

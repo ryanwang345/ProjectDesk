@@ -1,14 +1,13 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { SiteHeader } from '@/components/site-header'
+import { useI18n } from '@/i18n'
 import { AboutPage } from '@/pages/about-page'
-import { AiControlPage } from '@/pages/ai-control-page'
-import { AiSettingsPage } from '@/pages/ai-settings-page'
 import { BoardPage } from '@/pages/board-page'
-import { KnowledgePage } from '@/pages/knowledge-page'
-import { LoopPage } from '@/pages/loop-page'
+import { EnglishPage } from '@/pages/english-page'
 import { NotFoundPage } from '@/pages/not-found-page'
 
 export default function App() {
+  const { t } = useI18n()
   return (
     <BrowserRouter>
       <div className="flex min-h-svh flex-col">
@@ -16,16 +15,13 @@ export default function App() {
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
           <Routes>
             <Route index element={<BoardPage />} />
-            <Route path="loop" element={<LoopPage />} />
-            <Route path="ai" element={<AiControlPage />} />
-            <Route path="ai/settings" element={<AiSettingsPage />} />
-            <Route path="knowledge" element={<KnowledgePage />} />
+            <Route path="english" element={<EnglishPage />} />
             <Route path="about" element={<AboutPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </main>
         <footer className="mx-auto w-full max-w-6xl px-4 pb-8 text-xs text-muted-foreground sm:px-6">
-          Saved in Postgres. nginx serves the page and forwards /api to Go.
+          {t('footer')}
         </footer>
       </div>
     </BrowserRouter>

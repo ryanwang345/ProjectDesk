@@ -18,9 +18,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { useI18n, type MessageKey } from '@/i18n'
 import {
   STATUSES,
-  STATUS_META,
   validateProject,
   type Project,
   type ProjectInput,
@@ -48,6 +48,7 @@ export function ProjectDialog({
   onOpenChange,
   onSubmit,
 }: ProjectDialogProps) {
+  const { t, localize } = useI18n()
   const [input, setInput] = useState<ProjectInput>(() =>
     draft ? { name: draft.name, note: draft.note, status: draft.status } : emptyInput,
   )
@@ -71,20 +72,20 @@ export function ProjectDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{draft ? 'Edit project' : 'Add a project'}</DialogTitle>
+          <DialogTitle>{draft ? t('project.edit') : t('project.add')}</DialogTitle>
           <DialogDescription>
-            A name is enough. The note is for the detail you will forget by Friday.
+            {t('project.help')}
           </DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <div className="grid gap-1.5">
-            <Label htmlFor={`project-name-${session}`}>Name</Label>
+            <Label htmlFor={`project-name-${session}`}>{t('project.name')}</Label>
             <Input
               id={`project-name-${session}`}
               name={`project-name-${session}`}
               value={input.name}
               autoComplete="off"
-              placeholder="What are you making?"
+              placeholder={t('project.namePh')}
               aria-invalid={Boolean(errors.name)}
               aria-describedby={errors.name ? `project-name-${session}-error` : undefined}
               onChange={(event) =>
@@ -93,13 +94,13 @@ export function ProjectDialog({
             />
             {errors.name ? (
               <p id={`project-name-${session}-error`} className="text-sm text-destructive">
-                {errors.name}
+                {localize(errors.name)}
               </p>
             ) : null}
           </div>
           <div className="grid gap-1.5">
             <div className="flex items-baseline justify-between gap-3">
-              <Label htmlFor={`project-note-${session}`}>Note</Label>
+              <Label htmlFor={`project-note-${session}`}>{t('project.note')}</Label>
               <span className="text-xs text-muted-foreground">{input.note.trim().length}/280</span>
             </div>
             <Textarea
@@ -107,7 +108,7 @@ export function ProjectDialog({
               name={`project-note-${session}`}
               value={input.note}
               autoComplete="off"
-              placeholder="One or two lines so future you remembers why."
+              placeholder={t('project.notePh')}
               aria-invalid={Boolean(errors.note)}
               aria-describedby={errors.note ? `project-note-${session}-error` : undefined}
               onChange={(event) =>
@@ -116,12 +117,12 @@ export function ProjectDialog({
             />
             {errors.note ? (
               <p id={`project-note-${session}-error`} className="text-sm text-destructive">
-                {errors.note}
+                {localize(errors.note)}
               </p>
             ) : null}
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="project-status">Status</Label>
+            <Label htmlFor="project-status">{t('project.status')}</Label>
             <Select
               value={input.status}
               onValueChange={(value) =>
@@ -134,7 +135,7 @@ export function ProjectDialog({
               <SelectContent>
                 {STATUSES.map((status) => (
                   <SelectItem key={status} value={status}>
-                    {STATUS_META[status].label}
+                    {t(`status.${status}` as MessageKey)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -142,9 +143,9 @@ export function ProjectDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('project.cancel')}
             </Button>
-            <Button type="submit">{draft ? 'Save changes' : 'Add project'}</Button>
+            <Button type="submit">{draft ? t('project.save') : t('project.addButton')}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

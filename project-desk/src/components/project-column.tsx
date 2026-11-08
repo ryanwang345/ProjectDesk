@@ -1,4 +1,5 @@
 import { ProjectCard } from '@/components/project-card'
+import { useI18n, type MessageKey } from '@/i18n'
 import { STATUS_META, projectsByStatus, type Project, type Status } from '@/lib/projects'
 
 type ProjectColumnProps = {
@@ -16,6 +17,7 @@ export function ProjectColumn({
   onDelete,
   onStatus,
 }: ProjectColumnProps) {
+  const { t } = useI18n()
   const meta = STATUS_META[status]
   const visible = projectsByStatus(projects, status)
 
@@ -25,15 +27,15 @@ export function ProjectColumn({
         <div>
           <h2 id={`column-${status}`} className="flex items-center gap-2 text-sm font-medium">
             <span className={`size-2 rounded-full ${meta.dot}`} aria-hidden />
-            {meta.label}
+            {t(`status.${status}` as MessageKey)}
           </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">{meta.hint}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t(`status.${status}.hint` as MessageKey)}</p>
         </div>
         <p className="text-xs text-muted-foreground tabular-nums">{visible.length}</p>
       </div>
       {visible.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border px-3 py-10 text-center text-sm text-muted-foreground">
-          {meta.empty}
+          {t(`status.${status}.empty` as MessageKey)}
         </p>
       ) : (
         <div className="flex flex-col gap-3">

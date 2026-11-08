@@ -80,6 +80,10 @@ func Connect(ctx context.Context, databaseURL string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("migrate platform: %w", err)
 	}
+	if err := store.seedIelts(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ielts words: %w", err)
+	}
 	return store, nil
 }
 

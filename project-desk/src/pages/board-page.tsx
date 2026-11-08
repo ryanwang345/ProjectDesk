@@ -6,14 +6,13 @@ import { ProjectDialog } from '@/components/project-dialog'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useProjects } from '@/hooks/use-projects'
+import { useI18n } from '@/i18n'
 import {
   STATUSES,
-  STATUS_META,
   projectsByStatus,
   type Project,
   type ProjectInput,
   type Status,
-  type StorageProblem,
 } from '@/lib/projects'
 
 function useDesktopBoard() {
@@ -29,12 +28,13 @@ function useDesktopBoard() {
   return desktop
 }
 
-const PROBLEM_COPY: Record<StorageProblem, string> = {
-  unavailable: 'The desk could not reach the Go API. Start the API and Postgres, then reload.',
-  'write-failed': 'The last change did not save in Postgres. Try again.',
-}
+const PROBLEM_KEY = {
+  unavailable: 'desk.unreachable',
+  'write-failed': 'desk.writeFailed',
+} as const
 
 export function BoardPage() {
+  const { t } = useI18n()
   const {
     projects,
     ready,
@@ -83,21 +83,21 @@ export function BoardPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="max-w-xl">
           <h1 className="font-display text-4xl tracking-tight text-foreground sm:text-5xl">
-            The desk
+            {t('desk.title')}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-            Projects you are actually working on. The Go API saves each card in Postgres.
+            {t('desk.lead')}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {projects.length > 0 ? (
             <Button type="button" variant="outline" onClick={() => setClearOpen(true)}>
-              Clear desk
+              {t('desk.clear')}
             </Button>
           ) : null}
           <Button type="button" onClick={openCreate}>
             <Plus data-icon="inline-start" />
-            Add a project
+            {t('desk.add')}
           </Button>
         </div>
       </div>
@@ -107,7 +107,7 @@ export function BoardPage() {
           role="status"
           className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
         >
-          {PROBLEM_COPY[problem]}
+          {t(PROBLEM_KEY[problem])}
         </p>
       ) : null}
 
@@ -139,7 +139,7 @@ export function BoardPage() {
             <TabsList className="w-full">
               {STATUSES.map((status) => (
                 <TabsTrigger key={status} value={status} className="flex-1">
-                  {STATUS_META[status].label}
+                  {t(`status.${status}`)}
                   <span className="text-xs text-muted-foreground tabular-nums">
                     {projectsByStatus(projects, status).length}
                   </span>
@@ -171,13 +171,9 @@ export function BoardPage() {
       />
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Remove this project?"
-        description={
-          pendingDelete
-            ? `"${pendingDelete.name}" will be deleted from Postgres. There is no undo.`
-            : ''
-        }
-        confirmLabel="Remove"
+        title={t('desk.removeTitle')}
+        description={pendingDelete ? t('desk.removeBody', { name: pendingDelete.name }) : ''}
+        confirmLabel={t('desk.remove')}
         onOpenChange={(open) => {
           if (!open) setPendingDelete(null)
         }}
@@ -187,9 +183,9 @@ export function BoardPage() {
       />
       <ConfirmDialog
         open={clearOpen}
-        title="Clear the desk?"
-        description="Every project saved in Postgres will be removed."
-        confirmLabel="Clear desk"
+        title={t('desk.clearTitle')}
+        description={t('desk.clearBody')}
+        confirmLabel={t('desk.clearConfirm')}
         onOpenChange={setClearOpen}
         onConfirm={clearProjects}
       />
@@ -198,19 +194,20 @@ export function BoardPage() {
 }
 
 function EmptyDesk({ onAdd, onSamples }: { onAdd: () => void; onSamples: () => void }) {
+  const { t } = useI18n()
   return (
     <div className="rounded-2xl border border-dashed border-border bg-card/70 px-6 py-14 text-center">
-      <h2 className="font-display text-3xl tracking-tight">Nothing on the desk</h2>
+      <h2 className="font-display text-3xl tracking-tight">{t('desk.emptyTitle')}</h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-        Add the next thing you mean to finish. A name is enough, and Postgres keeps the card.
+        {t('desk.emptyBody')}
       </p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
         <Button type="button" onClick={onAdd}>
           <Plus data-icon="inline-start" />
-          Add a project
+          {t('desk.add')}
         </Button>
         <Button type="button" variant="outline" onClick={onSamples}>
-          Load three examples
+          {t('desk.examples')}
         </Button>
       </div>
     </div>
