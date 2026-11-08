@@ -1,8 +1,6 @@
 package desk
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -75,53 +73,6 @@ func (h *Handler) listEnglish(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, cards)
 }
 
-func (h *Handler) createEnglish(w http.ResponseWriter, r *http.Request) {
-	input, ok := decodeEnglish(w, r)
-	if !ok {
-		return
-	}
-	card, err := h.store.CreateEnglish(r.Context(), input)
-	if err != nil {
-		writeEnglishError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, h.withDetails(r.Context(), card))
-}
-
-func (h *Handler) updateEnglish(w http.ResponseWriter, r *http.Request) {
-	input, ok := decodeEnglish(w, r)
-	if !ok {
-		return
-	}
-	card, err := h.store.UpdateEnglish(r.Context(), r.PathValue("id"), input)
-	if err != nil {
-		writeEnglishError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, h.withDetails(r.Context(), card))
-}
-
-func (h *Handler) withDetails(ctx context.Context, card EnglishCard) EnglishCard {
-	if h.platform == nil || (card.Pronunciation != "" && len(card.Senses) > 0) {
-		return card
-	}
-	provider, _, err := h.store.ProviderForRole(ctx, "english", h.platform.Sealer)
-	if err != nil {
-		return card
-	}
-	if card.Pronunciation == "" {
-		if next, err := h.store.AttachPronunciation(ctx, provider, card); err == nil {
-			card = next
-		}
-	}
-	if len(card.Senses) == 0 {
-		if next, err := h.store.AttachSenses(ctx, provider, card); err == nil {
-			card = next
-		}
-	}
-	return card
-}
-
 func (h *Handler) addEnglishReview(w http.ResponseWriter, r *http.Request) {
 	h.writeEnglishReview(w, r, true)
 }
@@ -145,23 +96,6 @@ func (h *Handler) deleteEnglish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-type englishBody struct {
-	Word     string   `json:"word"`
-	Meaning  string   `json:"meaning"`
-	Examples []string `json:"examples"`
-}
-
-func decodeEnglish(w http.ResponseWriter, r *http.Request) (EnglishInput, bool) {
-	var body englishBody
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "send an English card as JSON")
-		return EnglishInput{}, false
-	}
-	return NormalizeEnglish(EnglishInput{Word: body.Word, Meaning: body.Meaning, Examples: body.Examples}), true
 }
 
 func writeEnglishError(w http.ResponseWriter, err error) {

@@ -75,40 +75,6 @@ func (s *Store) ListEnglish(ctx context.Context) ([]EnglishCard, error) {
 	return cards, rows.Err()
 }
 
-func (s *Store) CreateEnglish(ctx context.Context, input EnglishInput) (EnglishCard, error) {
-	input = NormalizeEnglish(input)
-	if err := ValidateEnglish(input); err != nil {
-		return EnglishCard{}, err
-	}
-	row := s.pool.QueryRow(ctx, `
-		INSERT INTO english_cards (word, meaning, examples, generated)
-		VALUES ($1, $2, $3, true)
-		RETURNING `+englishColumns,
-		input.Word, input.Meaning, input.Examples)
-	return scanEnglish(row)
-}
-
-func (s *Store) UpdateEnglish(ctx context.Context, id string, input EnglishInput) (EnglishCard, error) {
-	input = NormalizeEnglish(input)
-	if err := ValidateEnglish(input); err != nil {
-		return EnglishCard{}, err
-	}
-	row := s.pool.QueryRow(ctx, `
-		UPDATE english_cards
-		SET word = $2, meaning = $3, examples = $4, generated = true, updated_at = now(),
-			pronunciation = CASE WHEN lower(word) = lower($2) THEN pronunciation ELSE '' END,
-			senses = CASE WHEN lower(word) = lower($2) THEN senses ELSE '[]'::jsonb END,
-			band = CASE WHEN lower(word) = lower($2) THEN band ELSE '{}'::jsonb END
-		WHERE id = $1
-		RETURNING `+englishColumns,
-		id, input.Word, input.Meaning, input.Examples)
-	card, err := scanEnglish(row)
-	if errors.Is(err, pgx.ErrNoRows) || isInvalidUUID(err) {
-		return EnglishCard{}, ErrNotFound
-	}
-	return card, err
-}
-
 func (s *Store) DeleteEnglish(ctx context.Context, id string) error {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM english_cards WHERE id = $1`, id)
 	if err != nil {

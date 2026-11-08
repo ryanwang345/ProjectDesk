@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  createEnglish,
   deleteEnglish,
   listEnglish,
   setEnglishReview,
-  updateEnglish,
 } from '@/lib/api'
-import type { EnglishCard, EnglishInput } from '@/lib/english'
+import type { EnglishCard } from '@/lib/english'
 import type { StorageProblem } from '@/lib/projects'
 
 export function useEnglish() {
@@ -45,29 +43,6 @@ export function useEnglish() {
     return () => window.clearInterval(timer)
   }, [awaitingDetail])
 
-  const addCard = useCallback(async (input: EnglishInput) => {
-    try {
-      const created = await createEnglish(input)
-      setCards((current) => [created, ...current])
-      setProblem(null)
-      return created
-    } catch (error) {
-      setProblem('write-failed')
-      throw error
-    }
-  }, [])
-
-  const saveCard = useCallback(async (id: string, input: EnglishInput) => {
-    try {
-      const saved = await updateEnglish(id, input)
-      setCards((current) => current.map((card) => (card.id === id ? saved : card)))
-      setProblem(null)
-    } catch (error) {
-      setProblem('write-failed')
-      throw error
-    }
-  }, [])
-
   const markReview = useCallback(async (id: string, inReview: boolean) => {
     try {
       const saved = await setEnglishReview(id, inReview)
@@ -96,5 +71,5 @@ export function useEnglish() {
     setCards((current) => current.map((card) => (card.id === saved.id ? saved : card)))
   }, [])
 
-  return { cards, ready, problem, addCard, saveCard, markReview, removeCard, adoptCard }
+  return { cards, ready, problem, markReview, removeCard, adoptCard }
 }

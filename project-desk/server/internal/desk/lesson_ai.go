@@ -13,8 +13,8 @@ import (
 	"projectdesk/internal/ai"
 )
 
-// LessonQuestion is one saved quiz item. The model writes the sentence,
-// the choices, the reason, and the Chinese line. Nothing here is a template.
+// LessonQuestion is one saved quiz item. The cloze uses a sentence already
+// stored on the card. The model writes the choices, the reason, and the Chinese line.
 type LessonQuestion struct {
 	ID      string   `json:"id"`
 	Kind    string   `json:"kind"`
@@ -96,25 +96,26 @@ func (s *Store) saveQuiz(ctx context.Context, lesson int, ids []string, question
 	return err
 }
 
-func (s *Store) saveGeneratedExamples(ctx context.Context, id string, examples []string) (EnglishCard, error) {
-	row := s.pool.QueryRow(ctx, `
-		UPDATE english_cards
-		SET examples = $2, generated = true, updated_at = now()
-		WHERE id = $1
-		RETURNING `+englishColumns, id, examples)
-	card, err := scanEnglish(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return EnglishCard{}, ErrNotFound
-	}
-	return card, err
-}
-
-// PrepareLesson returns a lesson whose sentences and quiz were written by the
-// model and stored. A later visit uses the saved copy.
+// PrepareLesson returns a lesson whose sentences are already stored on the
+// cards. The model may write the quiz once; it never writes words or sentences.
 func (s *Store) PrepareLesson(ctx context.Context, index int, provider ai.Provider) (LessonPack, error) {
 	cards, err := s.lessonCards(ctx, index)
 	if err != nil {
 		return LessonPack{}, err
+	}
+	for _, card := range cards {
+		if len(card.Examples) != ExampleCount {
+			return LessonPack{}, fmt.Errorf("%w: %s has no saved sentences", ErrInvalid, card.Word)
+		}
+	}
+	ids := make([]string, len(cards))
+	for i, card := range cards {
+		ids[i] = card.ID
+	}
+	if saved, ok, err := s.loadQuiz(ctx, index, ids); err != nil {
+		return LessonPack{}, err
+	} else if ok {
+		return LessonPack{Cards: cards, Questions: saved}, nil
 	}
 	if provider == nil {
 		return LessonPack{}, fmt.Errorf("%w: no AI provider is configured; add one under AI settings", ErrInvalid)
@@ -122,44 +123,18 @@ func (s *Store) PrepareLesson(ctx context.Context, index int, provider ai.Provid
 	if provider.Kind() == ai.KindDemo || provider.Capabilities().Simulated {
 		return LessonPack{}, fmt.Errorf("%w: choose a real model under AI settings", ErrInvalid)
 	}
-	ids := make([]string, len(cards))
-	pending := map[string]bool{}
-	for i, card := range cards {
-		ids[i] = card.ID
-		if !card.Generated {
-			pending[strings.ToLower(card.Word)] = true
-		}
-	}
-	if len(pending) == 0 {
-		if saved, ok, err := s.loadQuiz(ctx, index, ids); err != nil {
-			return LessonPack{}, err
-		} else if ok {
-			return LessonPack{Cards: cards, Questions: saved}, nil
-		}
-	}
 
 	var last error
 	for attempt := 0; attempt < 2; attempt++ {
-		draft, err := requestLesson(ctx, provider, cards, pending, last)
+		draft, err := requestLesson(ctx, provider, cards, last)
 		if err != nil {
 			last = err
 			continue
 		}
-		examples, questions, err := acceptLesson(cards, pending, draft)
+		_, questions, err := acceptLesson(cards, map[string]bool{}, draft)
 		if err != nil {
 			last = err
 			continue
-		}
-		for i, card := range cards {
-			sentences, ok := examples[strings.ToLower(card.Word)]
-			if !ok {
-				continue
-			}
-			saved, err := s.saveGeneratedExamples(ctx, card.ID, sentences)
-			if err != nil {
-				return LessonPack{}, err
-			}
-			cards[i] = saved
 		}
 		if err := s.saveQuiz(ctx, index, ids, questions); err != nil {
 			return LessonPack{}, err
@@ -169,12 +144,12 @@ func (s *Store) PrepareLesson(ctx context.Context, index int, provider ai.Provid
 	return LessonPack{}, fmt.Errorf("%w: the model could not write this lesson", ErrInvalid)
 }
 
-func requestLesson(ctx context.Context, provider ai.Provider, cards []EnglishCard, pending map[string]bool, previous error) (lessonDraft, error) {
+func requestLesson(ctx context.Context, provider ai.Provider, cards []EnglishCard, previous error) (lessonDraft, error) {
 	var draft lessonDraft
 	req := ai.Request{
 		Messages: []ai.Message{
 			{Role: "system", Content: lessonSystem},
-			{Role: "user", Content: lessonUser(cards, pending, previous)},
+			{Role: "user", Content: lessonUser(cards, previous)},
 		},
 		MaxTokens:   7000,
 		Temperature: 0.4,
@@ -185,40 +160,30 @@ func requestLesson(ctx context.Context, provider ai.Provider, cards []EnglishCar
 	return draft, nil
 }
 
-const lessonSystem = `You write everyday English for a learner. Reply with one JSON object and nothing else.
-Each example is a sentence a person could actually say. Vary the situations. Do not reuse one sentence pattern.
-Every example must contain the given word. Write exactly ten examples for each word that needs them.
+const lessonSystem = `You write a quiz for a learner. Reply with one JSON object and nothing else.
+The sentences are already saved. Do not write, replace, or return example sentences.
 Write two questions for every word in the lesson: one "meaning" question and one "cloze" question.
 A meaning question asks what the English word means. Its answer is the Chinese meaning you were given, exactly. Its four choices are Chinese meanings, and one of them is the answer.
-A cloze question hides the word in one of the examples. "before" is the text before the word and "after" is the text after it. The four choices are English words from this lesson, and one of them is the answer.
+A cloze question hides the word in one of the saved sentences. "before" is the text before the word and "after" is the text after it. The four choices are English words from this lesson, and one of them is the answer.
 "why" is one or two plain sentences about how the word is used in real life, and why a different choice would not fit.
 "chinese" is a natural Chinese translation of the full sentence for a cloze question, or the Chinese meaning for a meaning question.`
 
-func lessonUser(cards []EnglishCard, pending map[string]bool, previous error) string {
+func lessonUser(cards []EnglishCard, previous error) string {
 	var b strings.Builder
 	if previous != nil {
 		fmt.Fprintf(&b, "Your last reply was rejected: %s\nRewrite the whole JSON object.\n\n", previous.Error())
 	}
-	b.WriteString("Words that need ten new sentences:\n")
+	b.WriteString("Saved sentences. Use these for the cloze. Do not rewrite them:\n")
 	for _, card := range cards {
-		if pending[strings.ToLower(card.Word)] {
-			fmt.Fprintf(&b, "- %s | %s\n", card.Word, card.Meaning)
-		}
-	}
-	b.WriteString("\nWords that already have sentences. Use these sentences for the cloze. Do not rewrite them:\n")
-	for _, card := range cards {
-		if pending[strings.ToLower(card.Word)] {
-			continue
-		}
 		fmt.Fprintf(&b, "- %s | %s\n", card.Word, card.Meaning)
 		for i, sentence := range card.Examples {
 			fmt.Fprintf(&b, "  %d. %s\n", i+1, sentence)
 		}
 	}
 	b.WriteString(`
-Return JSON with this shape:
-{"words":[{"word":"...","examples":["...ten sentences..."]}],"questions":[{"id":"word-meaning","kind":"meaning","prompt":"word","answer":"中文","choices":["中文","..."],"why":"...","chinese":"中文"},{"id":"word-cloze","kind":"cloze","before":"...","after":"...","answer":"word","choices":["word","..."],"why":"...","chinese":"..."}]}
-Include a words entry only for words that need new sentences. Include both questions for every word.`)
+Return JSON with this shape and an empty words array:
+{"words":[],"questions":[{"id":"word-meaning","kind":"meaning","prompt":"word","answer":"中文","choices":["中文","..."],"why":"...","chinese":"中文"},{"id":"word-cloze","kind":"cloze","before":"...","after":"...","answer":"word","choices":["word","..."],"why":"...","chinese":"..."}]}
+Include both questions for every word.`)
 	return b.String()
 }
 

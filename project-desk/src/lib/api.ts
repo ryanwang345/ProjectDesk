@@ -1,4 +1,4 @@
-import type { EnglishCard, EnglishInput } from '@/lib/english'
+import type { EnglishCard } from '@/lib/english'
 import type { Question } from '@/lib/lesson'
 import type { Project, ProjectInput } from '@/lib/projects'
 
@@ -77,20 +77,6 @@ export function prepareLesson(lesson: number): Promise<{ cards: EnglishCard[]; q
 
 export function listEnglish(): Promise<EnglishCard[]> {
   return request<EnglishCard[]>('/api/english')
-}
-
-export function createEnglish(input: EnglishInput): Promise<EnglishCard> {
-  return request<EnglishCard>('/api/english', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })
-}
-
-export function updateEnglish(id: string, input: EnglishInput): Promise<EnglishCard> {
-  return request<EnglishCard>(`/api/english/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(input),
-  })
 }
 
 export function deleteEnglish(id: string): Promise<void> {

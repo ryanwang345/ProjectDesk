@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Plus, RefreshCw } from 'lucide-react'
 import { BandNotes } from '@/components/band-notes'
 import { ConfirmDialog } from '@/components/confirm-dialog'
@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { LessonPath } from '@/components/lesson-path'
 import { Pronunciation } from '@/components/pronunciation'
 import { WordSenses } from '@/components/word-senses'
@@ -15,15 +14,7 @@ import { useEnglish } from '@/hooks/use-english'
 import { ensureBand } from '@/lib/api'
 import { useI18n } from '@/i18n'
 import { loadProgress, recordCompletion } from '@/lib/lesson'
-import {
-  EXAMPLE_COUNT,
-  emptyExamples,
-  hasEnglishErrors,
-  validateEnglish,
-  type EnglishCard,
-  type EnglishErrors,
-  type EnglishInput,
-} from '@/lib/english'
+import type { EnglishCard } from '@/lib/english'
 import type { StorageProblem } from '@/lib/projects'
 
 const PROBLEM_KEY = {
@@ -31,7 +22,6 @@ const PROBLEM_KEY = {
   'write-failed': 'english.writeFailed',
 } as const satisfies Record<StorageProblem, 'english.unreachable' | 'english.writeFailed'>
 
-const emptyInput: EnglishInput = { word: '', meaning: '', examples: emptyExamples() }
 const WORD_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
 function wordLetter(word: string) {
@@ -82,9 +72,7 @@ export function EnglishPage() {
 
 function WordDesk({ onBack }: { onBack: () => void }) {
   const { t } = useI18n()
-  const { cards, ready, problem, addCard, saveCard, markReview, removeCard, adoptCard } = useEnglish()
-  const [adding, setAdding] = useState(false)
-  const [editing, setEditing] = useState<EnglishCard | null>(null)
+  const { cards, ready, problem, markReview, removeCard, adoptCard } = useEnglish()
   const [pendingDelete, setPendingDelete] = useState<EnglishCard | null>(null)
   const [shownId, setShownId] = useState<string | null>(null)
   const [reviewing, setReviewing] = useState(false)
@@ -172,10 +160,6 @@ function WordDesk({ onBack }: { onBack: () => void }) {
             <RefreshCw data-icon="inline-start" />
             {t('english.refresh')}
           </Button>
-          <Button type="button" onClick={() => { setAdding(true); setEditing(null) }}>
-            <Plus data-icon="inline-start" />
-            {t('english.add')}
-          </Button>
         </div>
       </div>
 
@@ -183,25 +167,6 @@ function WordDesk({ onBack }: { onBack: () => void }) {
         <p role="status" className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {t(PROBLEM_KEY[problem])}
         </p>
-      ) : null}
-
-      {adding || editing ? (
-        <WordForm
-          key={editing?.id ?? 'new'}
-          initial={
-            editing
-              ? { word: editing.word, meaning: editing.meaning, examples: [...editing.examples, ...emptyExamples()].slice(0, EXAMPLE_COUNT) }
-              : emptyInput
-          }
-          submitLabel={editing ? t('english.save') : t('english.add')}
-          onCancel={() => { setAdding(false); setEditing(null) }}
-          onSubmit={async (input) => {
-            if (editing) await saveCard(editing.id, input)
-            else await addCard(input)
-            setAdding(false)
-            setEditing(null)
-          }}
-        />
       ) : null}
 
       {!ready ? (
@@ -228,7 +193,6 @@ function WordDesk({ onBack }: { onBack: () => void }) {
             </CardHeader>
             <CardContent>
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{t('english.how')}</p>
-              {current.generated ? (
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-base leading-relaxed">
                 {current.examples.map((example, index) => (
                   <li key={`${current.id}-${index}`} className="flex items-start gap-2">
@@ -239,7 +203,6 @@ function WordDesk({ onBack }: { onBack: () => void }) {
                   </li>
                 ))}
               </ol>
-              ) : <p className="mt-3 text-sm text-muted-foreground">{t('english.awaitAI')}</p>}
             </CardContent>
             <CardFooter className="gap-2">
               <Button
@@ -333,7 +296,7 @@ function WordDesk({ onBack }: { onBack: () => void }) {
               <ul className="overflow-hidden rounded-2xl border border-border bg-card">
                 {visibleWords.map((card) => {
                   const open = openId === card.id
-                  const example = card.generated ? card.examples[exampleAt[card.id] ?? 0] : undefined
+                  const example = card.examples[exampleAt[card.id] ?? 0]
                   return (
                     <li key={card.id} className="border-b border-border last:border-b-0">
                       <div className="flex items-center gap-2 px-4 py-2.5">
@@ -365,7 +328,6 @@ function WordDesk({ onBack }: { onBack: () => void }) {
                           {open && bandState === 'failed' && !card.band?.writing ? (
                             <p className="mt-3 text-sm text-destructive">{t('english.bandFailed')}</p>
                           ) : null}
-                          {card.generated ? null : <p className="mt-3 text-sm text-muted-foreground">{t('english.awaitAI')}</p>}
                           {example ? (
                             <p className="mt-3 flex items-start gap-2 text-sm leading-relaxed">
                               <span className="flex-1">
@@ -375,24 +337,12 @@ function WordDesk({ onBack }: { onBack: () => void }) {
                             </p>
                           ) : null}
                           <div className="mt-3 flex flex-wrap gap-2">
-                            {card.generated ? (
+                            {card.examples.length > 0 ? (
                               <Button type="button" size="sm" variant="outline" onClick={() => refreshExample(card)}>
                                 <RefreshCw data-icon="inline-start" />
                                 {t('english.refreshExample')}
                               </Button>
                             ) : null}
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditing(card)
-                                setAdding(false)
-                                requestAnimationFrame(() => document.getElementById('english-word-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-                              }}
-                            >
-                              {t('english.edit')}
-                            </Button>
                             <Button type="button" size="sm" variant="ghost" onClick={() => setPendingDelete(card)}>
                               {t('english.remove')}
                             </Button>
@@ -452,7 +402,7 @@ function WordRow({
           <WordSenses senses={card.senses} compact />
         </div>
         <div className="flex flex-wrap gap-2">
-          {card.generated ? (
+          {card.examples.length > 0 ? (
             <>
               <Button type="button" size="sm" variant="outline" onClick={onExample}>
                 {t('english.showExample')}
@@ -466,8 +416,7 @@ function WordRow({
           {children}
         </div>
       </div>
-      {card.generated ? null : <p className="text-sm text-muted-foreground">{t('english.awaitAI')}</p>}
-      {example && card.generated ? (
+      {example ? (
         <p className="flex items-start gap-2 text-sm leading-relaxed">
           <span className="flex-1">
             <ExampleSentence word={card.word} example={example} />
@@ -489,104 +438,5 @@ function ExampleSentence({ word, example }: { word: string; example: string }) {
       <strong className="font-semibold text-primary">{example.slice(match, end)}</strong>
       {example.slice(end)}
     </>
-  )
-}
-
-function WordForm({
-  initial,
-  submitLabel,
-  onSubmit,
-  onCancel,
-}: {
-  initial: EnglishInput
-  submitLabel: string
-  onSubmit: (input: EnglishInput) => Promise<void>
-  onCancel: () => void
-}) {
-  const { t, localize } = useI18n()
-  const [input, setInput] = useState(initial)
-  const [errors, setErrors] = useState<EnglishErrors>({})
-  const [pending, setPending] = useState(false)
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const next = validateEnglish(input)
-    setErrors(next)
-    if (hasEnglishErrors(next)) return
-    setPending(true)
-    try {
-      await onSubmit({
-        word: input.word.trim(),
-        meaning: input.meaning.trim(),
-        examples: input.examples.map((sentence) => sentence.trim()),
-      })
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : t('english.writeFailed')
-      setErrors({ form: message })
-    } finally {
-      setPending(false)
-    }
-  }
-
-  return (
-    <form id="english-word-form" className="grid scroll-mt-24 gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5" onSubmit={submit}>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-1.5">
-          <Label htmlFor="english-word">{t('english.word')}</Label>
-          <Input
-            id="english-word"
-            value={input.word}
-            autoComplete="off"
-            placeholder={t('english.wordPh')}
-            aria-invalid={Boolean(errors.word)}
-            onChange={(event) => setInput((current) => ({ ...current, word: event.target.value }))}
-          />
-          {errors.word ? <p className="text-sm text-destructive">{localize(errors.word)}</p> : null}
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="english-meaning">{t('english.meaning')}</Label>
-          <Input
-            id="english-meaning"
-            value={input.meaning}
-            autoComplete="off"
-            placeholder={t('english.meaningPh')}
-            aria-invalid={Boolean(errors.meaning)}
-            onChange={(event) => setInput((current) => ({ ...current, meaning: event.target.value }))}
-          />
-          {errors.meaning ? <p className="text-sm text-destructive">{localize(errors.meaning)}</p> : null}
-        </div>
-      </div>
-      <div className="grid gap-3">
-        <p className="text-sm font-medium">{t('english.example')}</p>
-        <p className="text-xs text-muted-foreground">{t('english.exampleHelp')}</p>
-        {input.examples.map((sentence, index) => (
-          <div key={index} className="grid gap-1.5">
-            <Label htmlFor={`english-example-${index}`}>{t('english.exampleItem', { n: index + 1 })}</Label>
-            <Textarea
-              id={`english-example-${index}`}
-              rows={2}
-              value={sentence}
-              placeholder={index === 0 ? t('english.examplePh') : t('english.exampleMorePh')}
-              aria-invalid={Boolean(errors.examples?.[index])}
-              onChange={(event) => {
-                const value = event.target.value
-                setInput((current) => ({
-                  ...current,
-                  examples: current.examples.map((item, itemIndex) => (itemIndex === index ? value : item)),
-                }))
-              }}
-            />
-            {errors.examples?.[index] ? (
-              <p className="text-sm text-destructive">{localize(errors.examples[index])}</p>
-            ) : null}
-          </div>
-        ))}
-        {errors.form ? <p className="text-sm text-destructive">{localize(errors.form)}</p> : null}
-      </div>
-      <div className="flex gap-2">
-        <Button type="submit" disabled={pending}>{submitLabel}</Button>
-        <Button type="button" variant="outline" onClick={onCancel}>{t('english.cancel')}</Button>
-      </div>
-    </form>
   )
 }

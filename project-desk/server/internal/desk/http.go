@@ -28,8 +28,6 @@ func NewHandler(store *Store, platform *Platform) http.Handler {
 	mux.HandleFunc("DELETE /api/cycles/{id}", h.deleteCycle)
 	mux.HandleFunc("GET /api/english", h.listEnglish)
 	mux.HandleFunc("POST /api/english-lessons/{n}", h.prepareEnglishLesson)
-	mux.HandleFunc("POST /api/english", h.createEnglish)
-	mux.HandleFunc("PATCH /api/english/{id}", h.updateEnglish)
 	mux.HandleFunc("POST /api/english/{id}/review", h.addEnglishReview)
 	mux.HandleFunc("POST /api/english/{id}/band", h.writeEnglishBand)
 	mux.HandleFunc("DELETE /api/english/{id}/review", h.removeEnglishReview)

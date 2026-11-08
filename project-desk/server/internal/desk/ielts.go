@@ -517,8 +517,8 @@ func insertVocab(ctx context.Context, tx pgx.Tx, entries []ieltsEntry, have map[
 			return fmt.Errorf("%s: %w", entry.Word, err)
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO english_cards (word, meaning, examples)
-			VALUES ($1, $2, $3)`,
+			INSERT INTO english_cards (word, meaning, examples, generated)
+			VALUES ($1, $2, $3, true)`,
 			input.Word, input.Meaning, input.Examples); err != nil {
 			return err
 		}
