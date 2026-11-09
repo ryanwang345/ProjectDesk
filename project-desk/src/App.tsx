@@ -5,6 +5,7 @@ import { AboutPage } from '@/pages/about-page'
 import { BoardPage } from '@/pages/board-page'
 import { EnglishPage } from '@/pages/english-page'
 import { NotFoundPage } from '@/pages/not-found-page'
+import { ReadingPage } from '@/pages/reading-page'
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ function Frame() {
       <main className="w-full flex-1 px-4 py-8 sm:px-6 sm:py-10">
         <Routes>
           <Route index element={<BoardPage />} />
+          <Route path="reading" element={<ReadingPage />} />
           <Route path="about" element={<AboutPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

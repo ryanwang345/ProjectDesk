@@ -24,18 +24,24 @@ export function BandNotes({ band }: { band?: BandNote | null }) {
           ))}
         </ul>
       ) : null}
-      <BandLine label={t('english.bandWriting')} text={band.writing} />
-      <BandLine label={t('english.bandSpeaking')} text={band.speaking} />
+      <BandLine label={t('english.bandWriting')} text={band.writing} zh={band.writingZh} />
+      <BandLine label={t('english.bandSpeaking')} text={band.speaking} zh={band.speakingZh} />
       {examples.length > 0 ? (
         <div className="mt-3">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{t('english.bandExamples')}</p>
-          <ul className="mt-1.5 flex flex-col gap-2">
-            {examples.map((sentence) => (
-              <li key={sentence} className="flex items-start gap-2 text-sm leading-relaxed">
-                <span className="flex-1">{sentence}</span>
-                <Pronunciation word={sentence} showText={false} />
-              </li>
-            ))}
+          <ul className="mt-1.5 flex flex-col gap-2.5">
+            {examples.map((sentence, index) => {
+              const sentenceZh = band.examplesZh?.[index]?.trim()
+              return (
+                <li key={sentence} className="flex items-start gap-2 text-sm leading-relaxed">
+                  <div className="min-w-0 flex-1">
+                    <p>{sentence}</p>
+                    {sentenceZh ? <p className="mt-0.5 text-muted-foreground">{sentenceZh}</p> : null}
+                  </div>
+                  <Pronunciation word={sentence} showText={false} />
+                </li>
+              )
+            })}
           </ul>
         </div>
       ) : null}
@@ -44,6 +50,7 @@ export function BandNotes({ band }: { band?: BandNote | null }) {
           <p className="text-xs font-medium text-primary">{t('english.bandFix')}</p>
           {band.weak ? <p className="mt-2 text-muted-foreground line-through decoration-destructive/70">{band.weak}</p> : null}
           {band.fix ? <p className="mt-2">{band.fix}</p> : null}
+          {band.fixZh ? <p className="mt-1 text-muted-foreground">{band.fixZh}</p> : null}
         </div>
       ) : null}
       {paraphrases.length > 0 ? (
@@ -124,7 +131,9 @@ export function BandDrill({
       {checked ? (
         <div className="rounded-2xl border border-border bg-card px-4 py-3 text-sm leading-relaxed">
           <p className="font-medium text-primary">{card.band.writing}</p>
+          {card.band.writingZh ? <p className="mt-1 text-muted-foreground">{card.band.writingZh}</p> : null}
           <p className="mt-2">{card.band.fix}</p>
+          {card.band.fixZh ? <p className="mt-1 text-muted-foreground">{card.band.fixZh}</p> : null}
           {card.band.zh ? <p className="mt-2 text-primary">{card.band.zh}</p> : null}
         </div>
       ) : null}
@@ -140,15 +149,18 @@ export function BandDrill({
   )
 }
 
-function BandLine({ label, text }: { label: string; text?: string }) {
+function BandLine({ label, text, zh }: { label: string; text?: string; zh?: string }) {
   if (!text) return null
   return (
     <div className="mt-3">
       <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
-      <p className="mt-1 flex items-start gap-2 text-sm leading-relaxed">
-        <span className="flex-1">{text}</span>
+      <div className="mt-1 flex items-start gap-2 text-sm leading-relaxed">
+        <div className="min-w-0 flex-1">
+          <p>{text}</p>
+          {zh ? <p className="mt-0.5 text-muted-foreground">{zh}</p> : null}
+        </div>
         <Pronunciation word={text} showText={false} />
-      </p>
+      </div>
     </div>
   )
 }

@@ -267,7 +267,9 @@ SET
             "administrative costs"
         ],
         "writing": "Reducing the administrative burden on teachers allows them to dedicate more time to classroom instruction.",
+        "writingZh": "减轻教师的行政负担，能让他们把更多时间投入到课堂教学中。",
         "speaking": "I spend far too much of my working week dealing with tedious administrative tasks rather than teaching.",
+        "speakingZh": "我每周工作中有太多时间都花在处理繁琐的行政事务上，而不是教学上。",
         "examples": [
             "Automating the invoicing workflow significantly reduced our monthly administrative overhead.",
             "The hospital apologized after a patient record was misplaced due to an administrative error.",
@@ -276,8 +278,17 @@ SET
             "She was promoted to department head, a role that carries substantial administrative duties.",
             "The official was placed on paid administrative leave pending the outcome of the investigation."
         ],
+        "examplesZh": [
+            "将发票流程自动化，显著降低了我们每月的行政管理开销。",
+            "病历因行政失误而放错地方后，医院公开致歉。",
+            "高校因在冻结教学岗位的同时增加行政人员开支而受到批评。",
+            "小企业往往缺乏足够的资源来应对合规带来的高昂行政成本。",
+            "她晋升为部门主管，这一职位承担着大量的行政职责。",
+            "在调查结果出来之前，该官员被安排带薪行政休假。"
+        ],
         "weak": "The administrative is very difficult in this company.",
         "fix": "Use administrative as an adjective before a noun such as burden, tasks, overhead, or error.",
+        "fixZh": "将 administrative 作为形容词放在 burden、tasks、overhead 或 error 等名词前使用。",
         "paraphrases": [
             "managerial",
             "bureaucratic",
@@ -287,6 +298,84 @@ SET
         "zh": "将 administrative 作为前置形容词修饰具体名词（如 burden、tasks、overhead、error），切勿单独当作名词使用。"
     }'::jsonb
 WHERE lower(word) = 'administrative';
+`},
+	{11, `
+UPDATE english_cards
+SET
+    band = '{
+        "collocations": [
+            "add weight to",
+            "add fuel to the fire",
+            "add a new dimension",
+            "add value to",
+            "add momentum to",
+            "add significantly to"
+        ],
+        "writing": "These recent findings add considerable weight to the argument that urban green spaces reduce stress.",
+        "writingZh": "这些最新研究结果为“城市绿地能缓解压力”这一论点增添了很有力的分量。",
+        "speaking": "I think working abroad really adds a new dimension to your CV.",
+        "speakingZh": "我认为海外工作经历确实能为你的简历增添新的亮点。",
+        "examples": [
+            "The new features add significant value to the existing software suite.",
+            "The policy changes risk adding fuel to the fire during an already volatile economic period.",
+            "Successful marketing campaigns add momentum to brand growth.",
+            "Increased regulation will add substantially to the operational costs of small businesses."
+        ],
+        "examplesZh": [
+            "这些新功能为现有的软件套件增添了可观的价值。",
+            "在经济本就动荡的时期，这些政策变动恐有火上浇油的风险。",
+            "成功的营销活动会为品牌增长注入动力。",
+            "监管力度的加大将大幅增加小企业的运营成本。"
+        ],
+        "weak": "We need to add to the problem.",
+        "fix": "Use add in a clear collocation like add to the problem''s complexity or add weight to an argument.",
+        "fixZh": "把 add 放在明确的搭配中使用，例如 add to the problem''s complexity（增加问题的复杂性）或 add weight to an argument（为论点增加分量）。",
+        "paraphrases": [
+            "contribute to",
+            "augment",
+            "supplement",
+            "incorporate"
+        ],
+        "zh": "多用高级搭配如 add weight to 或 add value to，避免单用 add。"
+    }'::jsonb
+WHERE lower(word) = 'add';
+`},
+	{12, `
+CREATE TABLE IF NOT EXISTS reading_tests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    subtitle TEXT NOT NULL DEFAULT '',
+    module TEXT NOT NULL CHECK (module IN ('academic', 'general')),
+    category TEXT NOT NULL CHECK (category IN ('full', 'passage', 'question_type')),
+    difficulty TEXT NOT NULL DEFAULT 'Band 7.0–8.5',
+    duration_seconds INT NOT NULL DEFAULT 3600,
+    passages JSONB NOT NULL DEFAULT '[]'::jsonb,
+    questions JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS reading_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    test_id UUID NOT NULL REFERENCES reading_tests(id) ON DELETE CASCADE,
+    mode TEXT NOT NULL CHECK (mode IN ('practice', 'exam')),
+    module TEXT NOT NULL CHECK (module IN ('academic', 'general')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'submitted')),
+    duration_seconds INT NOT NULL DEFAULT 3600,
+    elapsed_seconds INT NOT NULL DEFAULT 0,
+    answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+    flags JSONB NOT NULL DEFAULT '{}'::jsonb,
+    bookmarks JSONB NOT NULL DEFAULT '{}'::jsonb,
+    highlights JSONB NOT NULL DEFAULT '[]'::jsonb,
+    score INT NOT NULL DEFAULT 0,
+    total INT NOT NULL DEFAULT 0,
+    band NUMERIC(3,1) NOT NULL DEFAULT 0.0,
+    results JSONB NOT NULL DEFAULT '{}'::jsonb,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    submitted_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS reading_sessions_status_idx ON reading_sessions (status, submitted_at DESC);
 `},
 }
 

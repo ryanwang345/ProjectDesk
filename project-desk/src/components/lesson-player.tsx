@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { ApiError, prepareLesson } from '@/lib/api'
 import type { EnglishCard } from '@/lib/english'
+import { translateExample } from '@/lib/example-zh'
 import {
   HEARTS,
   XP_PER_CORRECT,
@@ -135,7 +136,7 @@ export function LessonPlayer({
           {words.map((card) => {
             const cloze = questions.find((item) => item.kind === 'cloze' && item.answer.toLowerCase() === card.word.toLowerCase())
             const example = cloze && cloze.kind === 'cloze' ? `${cloze.before}${cloze.answer}${cloze.after}` : (card.examples[0] ?? '')
-            const chinese = cloze?.chinese ?? ''
+            const chinese = cloze?.chinese || translateExample(example, card.word, card.meaning)
             const senses = card.senses ?? []
             return (
               <li key={card.id} className="rounded-3xl border border-border bg-card px-4 py-4">

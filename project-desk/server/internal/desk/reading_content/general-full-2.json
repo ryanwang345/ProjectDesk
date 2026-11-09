@@ -1,0 +1,811 @@
+{
+  "slug": "general-full-2",
+  "title": "General Training Reading Test 2: Community Services, Staff Policies & Walking Maps",
+  "subtitle": "Original, unofficial full-length mock · 3 parts · 40 questions · 60 minutes",
+  "module": "general",
+  "category": "full",
+  "difficulty": "Exam standard · increasing difficulty",
+  "durationSeconds": 3600,
+  "questionCount": 40,
+  "passages": [
+    {
+      "id": "gt2-p1",
+      "index": 1,
+      "title": "Section 1: Westbridge community notices",
+      "wordCount": 698,
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "Westbridge Adult Learning: Spring courses. Our six-week evening courses begin on Monday 8 April. Beginners' pottery meets on Mondays from 18:30 to 20:30; bring an apron, but clay and tools are included in the course fee of £96. The Tuesday photography course costs £72 and requires a camera with manual controls; a phone camera is not suitable. For either course, you must be at least sixteen on the first day. Places are allocated when payment is received, not when the application form is submitted. Concession prices are available to registered full-time students, who must show current identification at reception before paying. Tutors cannot offer concessions in class. Please check your availability before booking, since courses cannot be transferred to another person."
+        },
+        {
+          "label": "B",
+          "text": "Booking and cancellations. Book online or visit reception between 09:00 and 17:00 on weekdays. Telephone staff can answer questions but cannot accept payments. If you cancel at least seven days before your course begins, we refund the course fee minus a £10 administration charge. No refunds are available after that point unless the centre cancels the course. If there are too few bookings, the centre will contact you at least forty-eight hours before the first session and offer either a full refund or a place on a different course. Students who miss an individual session will receive the tutor's handout by email, but we cannot arrange a replacement lesson. Tell reception if your email address changes."
+        },
+        {
+          "label": "C",
+          "text": "Getting to the learning centre. The main entrance faces King Street, but the step-free entrance is on Mill Lane, beside the cycle stands. Parking behind the centre is reserved for permit holders until 18:00. After that time students may use any unmarked bay without charge, although spaces cannot be guaranteed. The number 14 bus stops opposite the main entrance. During the spring term, the last bus towards the railway station leaves at 21:10 on weekdays. A small kitchen is available for students to make hot drinks; please bring your own mug. Food may be eaten in the lounge but must not be taken into the pottery studio or computer room."
+        },
+        {
+          "label": "D",
+          "text": "Westbridge Library of Things. Why buy equipment you use only once? Adult residents can borrow household tools and leisure equipment from the library annex. Membership costs £12 per year and is separate from an ordinary library card. Bring proof of address issued within the previous three months and photo identification when joining. Most items may be borrowed for seven days. Carpet cleaners have a shorter loan period of three days because demand is high. A refundable deposit is required for power tools and carpet cleaners, but not for board games. Deposits are paid by bank card and returned to that card after staff have checked the item. We cannot return a deposit in cash."
+        },
+        {
+          "label": "E",
+          "text": "Collecting and returning equipment. Reservations open fourteen days before your chosen collection date. Collect items from the annex between 10:00 and 16:00, Tuesday to Saturday; the main library desk cannot issue them. Before leaving, check that all accessories listed on the inventory card are in the case. Return equipment to the same annex, clean and dry, during its opening hours. Items must not be placed in the book-return box, even if they fit. A late fee of £2 per item is charged for each day the annex is open after the due date. If you cannot return an item on time, call the annex before the deadline to discuss options; an extension depends on whether another member has reserved it."
+        },
+        {
+          "label": "F",
+          "text": "Safety and support. Borrowers must attend a short safety demonstration before their first power-tool loan. Demonstrations run at 11:00 on Saturdays and must be booked in advance. They explain safe handling and basic checks; they do not qualify a borrower to carry out electrical repairs. If an item stops working, switch it off and contact staff rather than trying to dismantle it. Faulty equipment will be inspected without a late fee while the problem is investigated. Members may suggest additions to the collection using the request form in the annex. Staff review requests every month, taking account of storage space and likely use. We welcome donations, but please email details before bringing any equipment to the building."
+        }
+      ],
+      "subtitle": "Section 1 · Questions 1–14 · Spend about 20 minutes on this part."
+    },
+    {
+      "id": "gt2-p2",
+      "index": 2,
+      "title": "Section 2: Alder Services staff handbook",
+      "wordCount": 690,
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "Joining Alder Services. During your first week, your line manager will arrange a meeting with a named buddy who can answer everyday questions about the workplace. The buddy is not responsible for approving leave or assessing your performance. You should complete the online induction modules within ten working days of starting. A link is sent to your work email account, and time to complete the modules should be included in your working hours. If you cannot log in, contact the service desk rather than creating another account. Your manager must confirm that the modules are complete before you may work alone at a customer site. Experienced recruits must complete them too, even if they have worked in a similar role elsewhere."
+        },
+        {
+          "label": "B",
+          "text": "Access and emergencies. Your identity badge allows entry to your assigned building during normal opening hours. To work outside those hours, obtain written approval from the duty manager at least one working day in advance. Do not lend your badge to a colleague or allow an unknown visitor to follow you through a secure door. Visitors must report to reception. If a badge is lost, notify security immediately so that it can be disabled. When the fire alarm sounds, leave by the nearest safe exit and go to the assembly point in the north car park. Do not stop to retrieve personal belongings or use the lifts. Report to the fire marshal so that your presence can be recorded."
+        },
+        {
+          "label": "C",
+          "text": "Planning business travel. Before booking an overnight trip, submit a travel request through the staff portal and wait for approval from your budget holder. Booking first does not guarantee that the cost will be reimbursed. For journeys under three hours, employees should normally travel by train unless they need to transport bulky equipment or the destination cannot reasonably be reached by public transport. Choose a standard-class ticket and use the company's booking service. If a customer changes a meeting after a ticket has been issued, contact the travel coordinator before purchasing another ticket. The coordinator can check whether the original booking can be amended and help avoid duplicate charges."
+        },
+        {
+          "label": "D",
+          "text": "Accommodation and meals. The booking service lists hotels within the company's nightly rate limit. If no listed hotel is available near the work location, ask your budget holder to approve an exception before making an alternative reservation. Breakfast included in a hotel rate must not be claimed again as a separate meal. Reasonable evening meal costs may be claimed when an employee is required to stay away overnight; alcoholic drinks are excluded. Employees who have specific dietary requirements should tell the travel coordinator when the trip is approved. Keeping a brief note of the business purpose and the names of colleagues present will help Finance review a shared meal claim without requesting further information."
+        },
+        {
+          "label": "E",
+          "text": "Submitting an expense claim. Upload itemised receipts through the staff portal within thirty days of returning from a trip. A bank statement alone is not sufficient because it does not show what was purchased. If a receipt is lost, complete a missing-receipt declaration and obtain your manager's signature. Finance reviews such declarations individually, and repayment is not automatic. Approved claims received by the twentieth of the month are normally included in that month's salary payment. Later claims are processed the following month. Check the account details in your staff profile before submitting your first claim. Changes to bank details must be made through the secure payroll process, not sent by ordinary email."
+        },
+        {
+          "label": "F",
+          "text": "Learning and development. Every employee has a development discussion with their line manager twice a year. An agreed development plan can include shadowing a colleague, attending an internal workshop or applying for an external course. External course fees require approval before enrolment, even where a course was mentioned during the discussion. An employee who cannot attend a booked course should notify the learning team promptly so that another employee may take the place. Do not send a substitute without checking first: some courses require prior study. The learning team also keeps a list of volunteer mentors. Mentors offer guidance on career goals, while formal decisions about promotion remain with managers and the relevant selection panel."
+        }
+      ],
+      "subtitle": "Section 2 · Questions 15–27 · Spend about 20 minutes on this part."
+    },
+    {
+      "id": "gt2-p3",
+      "index": 3,
+      "title": "Section 3: The map beyond the screen",
+      "wordCount": 915,
+      "paragraphs": [
+        {
+          "label": "A",
+          "text": "When the fictional town of Northmere redesigned its walking map, the first proposal was to copy the display of a popular navigation app. A small group of residents challenged that idea. The app was useful for finding the quickest route between two addresses, they said, but a walking map had a different job. It needed to show where a path became steep, where someone could rest and which landmarks helped a visitor remain oriented. The resulting project brought together a cartographer, access volunteers and local historians. Their disagreements revealed that a map is not simply a smaller version of a landscape. It is a set of choices about what a particular reader needs to see."
+        },
+        {
+          "label": "B",
+          "text": "The earliest draft included every recorded street name, building outline and footpath. Its accuracy impressed the project committee until volunteers tried reading a printout at the size intended for visitors. Labels overlapped, the river was difficult to distinguish from minor roads, and symbols obscured junctions. Cartographer Jo Mercer removed some detail and increased the contrast between major and minor features. The revised map contained less information but made important relationships easier to recognise. Mercer called this process generalisation. It did not mean carelessly omitting inconvenient facts; it meant selecting and simplifying information so that a map could be read at a particular scale. A detailed survey and a pocket guide could both be accurate while looking very different."
+        },
+        {
+          "label": "C",
+          "text": "Access volunteers then tested the draft by following each route. A path described in an older record as flat turned out to include a short flight of steps beside a bridge. Elsewhere, a wide track became muddy after rain, although its surface looked suitable in photographs taken during summer. The volunteers recorded these conditions and asked the team to distinguish permanent barriers from seasonal difficulties. They also found that the phrase accessible route was too vague. A route manageable for one visitor might present problems for another, depending on mobility equipment, stamina or the need for a companion. The team decided to publish specific observations instead of giving every path a single universal rating."
+        },
+        {
+          "label": "D",
+          "text": "Local historians were concerned about what the map's place names communicated. A former mill appeared in records under several names, while residents usually referred to it by the name of a nearby cafe. Using only the historical name would make the map unfamiliar to many people; using only the cafe name would hide an important part of the site's identity and might become misleading if the business closed. The compromise was to print the established site name with the local name in brackets. Brief notes on the reverse of the map explained selected landmarks. These notes were deliberately separate from route instructions, allowing walkers to choose whether to pause for historical information without making directions harder to follow."
+        },
+        {
+          "label": "E",
+          "text": "A further problem concerned distance. On a paper map, two routes of equal length may look equally demanding, yet a steep climb can change a walk dramatically. The team added estimated walking times, together with a statement explaining the assumptions behind them. These estimates included ordinary pauses at crossings but not long stops at attractions, and they assumed a moderate pace on dry surfaces. Visitors were advised to allow extra time for hills and poor weather. The team resisted requests to promise an exact arrival time. A useful estimate should help someone plan while making clear that individual circumstances can change the result. Precision in the printed number would not remove uncertainty in the journey."
+        },
+        {
+          "label": "F",
+          "text": "Digital navigation still had advantages. It could suggest a new route after a closure and show a user's approximate current location. Yet several test walkers found that following turn-by-turn instructions left them unable to describe the wider area afterwards. In contrast, walkers who occasionally checked a whole-area map more often remembered how the river, station and market related to one another. This was an observation from the project, not proof that screens necessarily prevent learning. The way a map is used matters: a person can study an overview on a phone, just as another can follow a paper route without paying attention to the surroundings. The team therefore encouraged both overview and local detail in its final design."
+        },
+        {
+          "label": "G",
+          "text": "Keeping the map useful required work after printing. Volunteers proposed a short web address where visitors could report broken signs, closures and changes in path conditions. Reports would be checked by the parks team before revisions were published. Each printed edition would carry a revision date, helping users judge whether it might have missed recent changes. The committee considered adding more advertising to pay for frequent reprints, but rejected placements that would obscure route information. Income mattered, yet a guide that visitors could not read would fail its central purpose. The final scheme combined a modest print run with an online version that could be updated more regularly."
+        },
+        {
+          "label": "H",
+          "text": "Northmere's experience did not settle the question of which kind of map is best. It showed why that question needs a purpose attached to it. A commuter, a visitor exploring slowly and a surveyor checking property boundaries require different kinds of detail. The project succeeded by asking users to test assumptions that had seemed obvious in an office. Neither technical expertise nor local knowledge was sufficient by itself. The strongest map emerged when each informed the other, and when the designers accepted that a clear representation must be selective. Readers were offered enough information to make decisions, together with practical ways to discover where the picture might need updating."
+        }
+      ],
+      "subtitle": "Section 3 · Questions 28–40 · Spend about 20 minutes on this part."
+    }
+  ],
+  "questions": [
+    {
+      "passageId": "gt2-p1",
+      "type": "matching_information",
+      "prompt": "Where to enter the learning centre without using steps",
+      "correctAnswer": "C",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "the step-free entrance is on Mill Lane",
+      "explanation": "The access information appears in notice C.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 1–6: The notices have six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q1",
+      "number": 1
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "matching_information",
+      "prompt": "A requirement to receive instruction before borrowing certain equipment",
+      "correctAnswer": "F",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "attend a short safety demonstration before their first power-tool loan",
+      "explanation": "Notice F gives the instruction requirement.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 1–6: The notices have six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q2",
+      "number": 2
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "matching_information",
+      "prompt": "An item that must be brought to a photography course",
+      "correctAnswer": "A",
+      "evidenceParagraph": "A",
+      "evidenceQuote": "requires a camera with manual controls",
+      "explanation": "The course requirements are in notice A.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 1–6: The notices have six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q3",
+      "number": 3
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "matching_information",
+      "prompt": "An opportunity to recommend new items for a shared collection",
+      "correctAnswer": "F",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "suggest additions to the collection",
+      "explanation": "Notice F describes the request form for suggestions.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 1–6: The notices have six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q4",
+      "number": 4
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "matching_information",
+      "prompt": "The consequences of having insufficient enrolments for a course",
+      "correctAnswer": "B",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "If there are too few bookings",
+      "explanation": "Notice B explains refunds or alternative courses when enrolments are insufficient.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 1–6: The notices have six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q5",
+      "number": 5
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "matching_information",
+      "prompt": "A place where borrowed items must not be left",
+      "correctAnswer": "E",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "must not be placed in the book-return box",
+      "explanation": "Notice E prohibits using the book-return box for equipment.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 1–6: The notices have six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q6",
+      "number": 6
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "tfng",
+      "prompt": "Submitting a course application without paying guarantees a place.",
+      "correctAnswer": "FALSE",
+      "evidenceParagraph": "A",
+      "evidenceQuote": "Places are allocated when payment is received",
+      "explanation": "Payment, rather than submission of the form, secures a place.",
+      "options": [
+        "TRUE",
+        "FALSE",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 7–10: Do the statements agree with the information in Section 1? Write TRUE, FALSE or NOT GIVEN.",
+      "id": "general-full-2-q7",
+      "number": 7
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "tfng",
+      "prompt": "Students can attend a replacement lesson if they miss one session.",
+      "correctAnswer": "FALSE",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "we cannot arrange a replacement lesson",
+      "explanation": "A handout is offered, but the notice explicitly rules out a replacement lesson.",
+      "options": [
+        "TRUE",
+        "FALSE",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 7–10: Do the statements agree with the information in Section 1? Write TRUE, FALSE or NOT GIVEN.",
+      "id": "general-full-2-q8",
+      "number": 8
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "tfng",
+      "prompt": "The last weekday bus to the railway station departs at 21:10 during the spring term.",
+      "correctAnswer": "TRUE",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "the last bus towards the railway station leaves at 21:10 on weekdays",
+      "explanation": "The statement repeats the time and the relevant conditions.",
+      "options": [
+        "TRUE",
+        "FALSE",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 7–10: Do the statements agree with the information in Section 1? Write TRUE, FALSE or NOT GIVEN.",
+      "id": "general-full-2-q9",
+      "number": 9
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "tfng",
+      "prompt": "The library limits the number of board games one member may borrow at a time.",
+      "correctAnswer": "NOT GIVEN",
+      "evidenceParagraph": "D",
+      "evidenceQuote": "but not for board games",
+      "explanation": "The notice discusses deposits for board games but gives no borrowing quantity limit.",
+      "options": [
+        "TRUE",
+        "FALSE",
+        "NOT GIVEN"
+      ],
+      "groupInstruction": "Questions 7–10: Do the statements agree with the information in Section 1? Write TRUE, FALSE or NOT GIVEN.",
+      "id": "general-full-2-q10",
+      "number": 10
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "sentence_completion",
+      "prompt": "Equipment loans are issued at the library ________.",
+      "correctAnswer": "annex",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "Collect items from the annex",
+      "explanation": "Loans are issued at the annex, not at the main library desk.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 11–14: Complete the sentences. Choose NO MORE THAN TWO WORDS from Section 1 for each answer.",
+      "id": "general-full-2-q11",
+      "number": 11
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "sentence_completion",
+      "prompt": "Before leaving, compare the accessories with the ________.",
+      "correctAnswer": "inventory card",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "all accessories listed on the inventory card",
+      "explanation": "The inventory card lists the accessories that should be present.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 11–14: Complete the sentences. Choose NO MORE THAN TWO WORDS from Section 1 for each answer.",
+      "id": "general-full-2-q12",
+      "number": 12
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "sentence_completion",
+      "prompt": "Deposits are refunded to the same ________ used for payment.",
+      "correctAnswer": "bank card",
+      "evidenceParagraph": "D",
+      "evidenceQuote": "paid by bank card and returned to that card",
+      "explanation": "The notice specifies a refund to the payment card, rather than cash.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 11–14: Complete the sentences. Choose NO MORE THAN TWO WORDS from Section 1 for each answer.",
+      "id": "general-full-2-q13",
+      "number": 13
+    },
+    {
+      "passageId": "gt2-p1",
+      "type": "sentence_completion",
+      "prompt": "Before donating equipment, members should send details by ________.",
+      "correctAnswer": "email",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "please email details",
+      "explanation": "The library asks for an email before equipment is brought in.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 11–14: Complete the sentences. Choose NO MORE THAN TWO WORDS from Section 1 for each answer.",
+      "id": "general-full-2-q14",
+      "number": 14
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "table_completion",
+      "prompt": "The online induction must be completed within ________ working days.",
+      "correctAnswer": "ten",
+      "evidenceParagraph": "A",
+      "evidenceQuote": "within ten working days",
+      "explanation": "The deadline is ten working days, including for experienced recruits.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 15–21: Complete the staff induction and travel notes. Choose NO MORE THAN TWO WORDS AND/OR A NUMBER from Section 2 for each answer.",
+      "id": "general-full-2-q15",
+      "number": 15
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "table_completion",
+      "prompt": "Problems accessing the induction account should be reported to the ________.",
+      "correctAnswer": "service desk",
+      "evidenceParagraph": "A",
+      "evidenceQuote": "contact the service desk",
+      "explanation": "Staff should contact the service desk rather than create another account.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 15–21: Complete the staff induction and travel notes. Choose NO MORE THAN TWO WORDS AND/OR A NUMBER from Section 2 for each answer.",
+      "id": "general-full-2-q16",
+      "number": 16
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "table_completion",
+      "prompt": "Approval for building access outside normal hours comes from the ________.",
+      "correctAnswer": "duty manager",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "approval from the duty manager",
+      "explanation": "The duty manager approves access; the line manager has other responsibilities.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 15–21: Complete the staff induction and travel notes. Choose NO MORE THAN TWO WORDS AND/OR A NUMBER from Section 2 for each answer.",
+      "id": "general-full-2-q17",
+      "number": 17
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "table_completion",
+      "prompt": "After leaving during a fire alarm, staff gather in the north ________.",
+      "correctAnswer": "car park",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "the north car park",
+      "explanation": "The assembly point is in the north car park.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 15–21: Complete the staff induction and travel notes. Choose NO MORE THAN TWO WORDS AND/OR A NUMBER from Section 2 for each answer.",
+      "id": "general-full-2-q18",
+      "number": 18
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "table_completion",
+      "prompt": "A request for overnight travel must be approved by the employee's ________.",
+      "correctAnswer": "budget holder",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "approval from your budget holder",
+      "explanation": "The budget holder approves the travel request before booking.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 15–21: Complete the staff induction and travel notes. Choose NO MORE THAN TWO WORDS AND/OR A NUMBER from Section 2 for each answer.",
+      "id": "general-full-2-q19",
+      "number": 19
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "table_completion",
+      "prompt": "Receipts must be uploaded within ________ days after returning.",
+      "correctAnswer": "thirty",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "within thirty days of returning",
+      "explanation": "The claim deadline is thirty days after returning, not after the first booking.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 15–21: Complete the staff induction and travel notes. Choose NO MORE THAN TWO WORDS AND/OR A NUMBER from Section 2 for each answer.",
+      "id": "general-full-2-q20",
+      "number": 20
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "table_completion",
+      "prompt": "A claim without its original receipt needs a missing-receipt ________.",
+      "correctAnswer": "declaration",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "a missing-receipt declaration",
+      "explanation": "The declaration also needs a manager signature; approval is not automatic.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 15–21: Complete the staff induction and travel notes. Choose NO MORE THAN TWO WORDS AND/OR A NUMBER from Section 2 for each answer.",
+      "id": "general-full-2-q21",
+      "number": 21
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "matching_information",
+      "prompt": "An alternative to attending a formal training course",
+      "correctAnswer": "F",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "shadowing a colleague",
+      "explanation": "Section F lists shadowing and workshops as development options.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 22–27: The handbook has six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q22",
+      "number": 22
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "matching_information",
+      "prompt": "An instruction not to claim a particular hotel benefit twice",
+      "correctAnswer": "D",
+      "evidenceParagraph": "D",
+      "evidenceQuote": "must not be claimed again as a separate meal",
+      "explanation": "Section D prevents claiming an included breakfast a second time.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 22–27: The handbook has six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q23",
+      "number": 23
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "matching_information",
+      "prompt": "A warning that booking before permission does not ensure repayment",
+      "correctAnswer": "C",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "Booking first does not guarantee that the cost will be reimbursed.",
+      "explanation": "Section C distinguishes booking from approved reimbursable travel.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 22–27: The handbook has six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q24",
+      "number": 24
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "matching_information",
+      "prompt": "The date affecting which salary payment will include a claim",
+      "correctAnswer": "E",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "received by the twentieth of the month",
+      "explanation": "Section E gives the monthly processing cut-off.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 22–27: The handbook has six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q25",
+      "number": 25
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "matching_information",
+      "prompt": "A requirement to make a lost access pass unusable",
+      "correctAnswer": "B",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "notify security immediately so that it can be disabled",
+      "explanation": "Section B tells employees to report a lost badge for deactivation.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 22–27: The handbook has six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q26",
+      "number": 26
+    },
+    {
+      "passageId": "gt2-p2",
+      "type": "matching_information",
+      "prompt": "A condition that must be met before unsupervised work at a customer location",
+      "correctAnswer": "A",
+      "evidenceParagraph": "A",
+      "evidenceQuote": "confirm that the modules are complete before you may work alone at a customer site",
+      "explanation": "Section A requires the induction modules to be completed and confirmed.",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "groupInstruction": "Questions 22–27: The handbook has six sections, A–F. Which section contains the following information? Write the correct letter, A–F. You may use any letter more than once.",
+      "id": "general-full-2-q27",
+      "number": 27
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "matching_headings",
+      "prompt": "Paragraph A",
+      "correctAnswer": "iii",
+      "evidenceParagraph": "A",
+      "evidenceQuote": "a walking map had a different job",
+      "explanation": "The opening explains why a walking map serves a different purpose from fast address-to-address navigation.",
+      "options": [
+        "i. Giving local identity a place alongside the official name",
+        "ii. Replacing estimates with a guaranteed schedule",
+        "iii. Choosing a map according to its purpose",
+        "iv. Why fewer details can create a clearer picture",
+        "v. Discovering barriers through direct experience",
+        "vi. Showing the assumptions behind a planning aid",
+        "vii. Proving that electronic maps always prevent learning",
+        "viii. Selling all available space to advertisers",
+        "ix. Establishing a single rating for all visitors"
+      ],
+      "groupInstruction": "Questions 28–32: Section 3 has eight paragraphs, A–H. Choose the correct heading for paragraphs A–E from the list i–ix.",
+      "id": "general-full-2-q28",
+      "number": 28
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "matching_headings",
+      "prompt": "Paragraph B",
+      "correctAnswer": "iv",
+      "evidenceParagraph": "B",
+      "evidenceQuote": "contained less information but made important relationships easier to recognise",
+      "explanation": "Simplification improved legibility without making the map careless.",
+      "options": [
+        "i. Giving local identity a place alongside the official name",
+        "ii. Replacing estimates with a guaranteed schedule",
+        "iii. Choosing a map according to its purpose",
+        "iv. Why fewer details can create a clearer picture",
+        "v. Discovering barriers through direct experience",
+        "vi. Showing the assumptions behind a planning aid",
+        "vii. Proving that electronic maps always prevent learning",
+        "viii. Selling all available space to advertisers",
+        "ix. Establishing a single rating for all visitors"
+      ],
+      "groupInstruction": "Questions 28–32: Section 3 has eight paragraphs, A–H. Choose the correct heading for paragraphs A–E from the list i–ix.",
+      "id": "general-full-2-q29",
+      "number": 29
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "matching_headings",
+      "prompt": "Paragraph C",
+      "correctAnswer": "v",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "tested the draft by following each route",
+      "explanation": "Field testing revealed steps and weather-related barriers omitted by older records or photographs.",
+      "options": [
+        "i. Giving local identity a place alongside the official name",
+        "ii. Replacing estimates with a guaranteed schedule",
+        "iii. Choosing a map according to its purpose",
+        "iv. Why fewer details can create a clearer picture",
+        "v. Discovering barriers through direct experience",
+        "vi. Showing the assumptions behind a planning aid",
+        "vii. Proving that electronic maps always prevent learning",
+        "viii. Selling all available space to advertisers",
+        "ix. Establishing a single rating for all visitors"
+      ],
+      "groupInstruction": "Questions 28–32: Section 3 has eight paragraphs, A–H. Choose the correct heading for paragraphs A–E from the list i–ix.",
+      "id": "general-full-2-q30",
+      "number": 30
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "matching_headings",
+      "prompt": "Paragraph D",
+      "correctAnswer": "i",
+      "evidenceParagraph": "D",
+      "evidenceQuote": "the established site name with the local name in brackets",
+      "explanation": "The team combined established and local names to balance recognition and history.",
+      "options": [
+        "i. Giving local identity a place alongside the official name",
+        "ii. Replacing estimates with a guaranteed schedule",
+        "iii. Choosing a map according to its purpose",
+        "iv. Why fewer details can create a clearer picture",
+        "v. Discovering barriers through direct experience",
+        "vi. Showing the assumptions behind a planning aid",
+        "vii. Proving that electronic maps always prevent learning",
+        "viii. Selling all available space to advertisers",
+        "ix. Establishing a single rating for all visitors"
+      ],
+      "groupInstruction": "Questions 28–32: Section 3 has eight paragraphs, A–H. Choose the correct heading for paragraphs A–E from the list i–ix.",
+      "id": "general-full-2-q31",
+      "number": 31
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "matching_headings",
+      "prompt": "Paragraph E",
+      "correctAnswer": "vi",
+      "evidenceParagraph": "E",
+      "evidenceQuote": "a statement explaining the assumptions behind them",
+      "explanation": "Walking-time estimates came with assumptions and limits, rather than guaranteed arrival times.",
+      "options": [
+        "i. Giving local identity a place alongside the official name",
+        "ii. Replacing estimates with a guaranteed schedule",
+        "iii. Choosing a map according to its purpose",
+        "iv. Why fewer details can create a clearer picture",
+        "v. Discovering barriers through direct experience",
+        "vi. Showing the assumptions behind a planning aid",
+        "vii. Proving that electronic maps always prevent learning",
+        "viii. Selling all available space to advertisers",
+        "ix. Establishing a single rating for all visitors"
+      ],
+      "groupInstruction": "Questions 28–32: Section 3 has eight paragraphs, A–H. Choose the correct heading for paragraphs A–E from the list i–ix.",
+      "id": "general-full-2-q32",
+      "number": 32
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "multiple_choice",
+      "prompt": "Why did the team avoid describing every path with one accessibility rating?",
+      "correctAnswer": "B",
+      "evidenceParagraph": "C",
+      "evidenceQuote": "A route manageable for one visitor might present problems for another",
+      "explanation": "A single rating could not express differences in individual requirements.",
+      "options": [
+        "A. Visitors were uninterested in surface conditions.",
+        "B. People using the routes could have different requirements.",
+        "C. All the available paths had identical obstacles.",
+        "D. Volunteers had refused to inspect the routes."
+      ],
+      "groupInstruction": "Questions 33–36: Choose the correct letter, A, B, C or D.",
+      "id": "general-full-2-q33",
+      "number": 33
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "multiple_choice",
+      "prompt": "What does the comparison between map users suggest?",
+      "correctAnswer": "D",
+      "evidenceParagraph": "F",
+      "evidenceQuote": "The way a map is used matters",
+      "explanation": "The author qualifies the project observation and stresses how users engage with the map.",
+      "options": [
+        "A. A phone cannot show an overview of an area.",
+        "B. Paper maps guarantee a strong memory of the landscape.",
+        "C. Test walkers proved that all digital guidance is harmful.",
+        "D. Learning may depend on the way people consult a map."
+      ],
+      "groupInstruction": "Questions 33–36: Choose the correct letter, A, B, C or D.",
+      "id": "general-full-2-q34",
+      "number": 34
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "multiple_choice",
+      "prompt": "What will happen before visitors' reports change the published map?",
+      "correctAnswer": "A",
+      "evidenceParagraph": "G",
+      "evidenceQuote": "Reports would be checked by the parks team",
+      "explanation": "The parks team verifies reported changes before publication.",
+      "options": [
+        "A. The parks team will verify the reports.",
+        "B. All printed maps will immediately be withdrawn.",
+        "C. The visitors will buy a new edition.",
+        "D. The original committee will conduct a public vote."
+      ],
+      "groupInstruction": "Questions 33–36: Choose the correct letter, A, B, C or D.",
+      "id": "general-full-2-q35",
+      "number": 35
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "multiple_choice",
+      "prompt": "What is the main conclusion of the final paragraph?",
+      "correctAnswer": "C",
+      "evidenceParagraph": "H",
+      "evidenceQuote": "Neither technical expertise nor local knowledge was sufficient by itself.",
+      "explanation": "The successful map combined technical knowledge with user experience.",
+      "options": [
+        "A. A survey map is suitable for every walker.",
+        "B. Clear maps should contain every known detail.",
+        "C. Technical skill and user knowledge need to inform each other.",
+        "D. Printed maps should never be revised."
+      ],
+      "groupInstruction": "Questions 33–36: Choose the correct letter, A, B, C or D.",
+      "id": "general-full-2-q36",
+      "number": 36
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "summary_completion",
+      "prompt": "Visitors can send information about problems using a short ________.",
+      "correctAnswer": "web address",
+      "evidenceParagraph": "G",
+      "evidenceQuote": "a short web address",
+      "explanation": "The web address provides a way to submit reports.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 37–40: Complete the summary of the map update scheme. Choose NO MORE THAN TWO WORDS from Section 3 for each answer.",
+      "id": "general-full-2-q37",
+      "number": 37
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "summary_completion",
+      "prompt": "Reports of changed conditions are checked by the ________.",
+      "correctAnswer": "parks team",
+      "evidenceParagraph": "G",
+      "evidenceQuote": "checked by the parks team",
+      "explanation": "The parks team verifies reports before revisions appear.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 37–40: Complete the summary of the map update scheme. Choose NO MORE THAN TWO WORDS from Section 3 for each answer.",
+      "id": "general-full-2-q38",
+      "number": 38
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "summary_completion",
+      "prompt": "Every printed edition shows a ________ so readers can judge its age.",
+      "correctAnswer": "revision date",
+      "evidenceParagraph": "G",
+      "evidenceQuote": "carry a revision date",
+      "explanation": "The revision date helps readers assess how current a printed copy is.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 37–40: Complete the summary of the map update scheme. Choose NO MORE THAN TWO WORDS from Section 3 for each answer.",
+      "id": "general-full-2-q39",
+      "number": 39
+    },
+    {
+      "passageId": "gt2-p3",
+      "type": "summary_completion",
+      "prompt": "The team refused to put advertisements where they would cover ________.",
+      "correctAnswer": "route information",
+      "evidenceParagraph": "G",
+      "evidenceQuote": "obscure route information",
+      "explanation": "Advertising was rejected where it would obscure route information.",
+      "wordLimit": 2,
+      "groupInstruction": "Questions 37–40: Complete the summary of the map update scheme. Choose NO MORE THAN TWO WORDS from Section 3 for each answer.",
+      "id": "general-full-2-q40",
+      "number": 40
+    }
+  ]
+}

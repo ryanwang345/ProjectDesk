@@ -5,6 +5,7 @@ import { EnglishTabs, EnglishTop } from '@/components/english-chrome'
 import { LessonPath } from '@/components/lesson-path'
 import { LessonPlayer } from '@/components/lesson-player'
 import { WordCard } from '@/components/word-card'
+import { ReadingPage } from '@/pages/reading-page'
 import { Button } from '@/components/ui/button'
 import { useEnglish } from '@/hooks/use-english'
 import { ensureBand } from '@/lib/api'
@@ -29,7 +30,7 @@ export function EnglishPage() {
   const { t } = useI18n()
   const desk = useEnglish()
   const { cards, ready, problem } = desk
-  const [tab, setTab] = useState<'learn' | 'words' | 'me'>('learn')
+  const [tab, setTab] = useState<'learn' | 'words' | 'reading' | 'me'>('learn')
   const [lesson, setLesson] = useState<number | null>(null)
   const [progress, setProgress] = useState(loadProgress)
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -63,6 +64,8 @@ export function EnglishPage() {
     )
   } else if (tab === 'words') {
     body = <WordDesk desk={desk} />
+  } else if (tab === 'reading') {
+    body = <ReadingPage embedded />
   } else if (tab === 'me') {
     body = <MePanel desk={desk} progress={progress} />
   } else {
@@ -75,7 +78,7 @@ export function EnglishPage() {
     )
   }
 
-  function changeTab(next: 'learn' | 'words' | 'me' | 'practice') {
+  function changeTab(next: 'learn' | 'words' | 'reading' | 'me' | 'practice') {
     if (next === 'practice') openPractice()
     else setTab(next)
   }
@@ -127,7 +130,12 @@ function WordDesk({
   useEffect(() => {
     if (!current) return
     const card = current
-    if (card.band?.writing && (card.band.examples?.length ?? 0) > 0) {
+    if (
+      card.band?.writing &&
+      card.band.writingZh &&
+      (card.band.examples?.length ?? 0) > 0 &&
+      (card.band.examplesZh?.length ?? 0) === (card.band.examples?.length ?? 0)
+    ) {
       setBandState('idle')
       return
     }

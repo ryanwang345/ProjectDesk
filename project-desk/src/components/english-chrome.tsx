@@ -1,4 +1,4 @@
-import { BookOpen, Dumbbell, Flame, Library, Star, UserRound } from 'lucide-react'
+import { BookOpen, Dumbbell, FileText, Flame, Library, Star, UserRound } from 'lucide-react'
 import { ThemePicker } from '@/components/theme-picker'
 import { useI18n } from '@/i18n'
 import type { MessageKey } from '@/i18n'
@@ -42,6 +42,7 @@ export function EnglishTop({
 const tabs = [
   { id: 'learn', icon: BookOpen, label: 'english.tabLearn' },
   { id: 'words', icon: Library, label: 'english.tabWords' },
+  { id: 'reading', icon: FileText, label: 'english.tabReading' },
   { id: 'practice', icon: Dumbbell, label: 'english.tabPractice' },
   { id: 'me', icon: UserRound, label: 'english.tabMe' },
 ] as const satisfies ReadonlyArray<{ id: string; icon: typeof BookOpen; label: MessageKey }>
@@ -51,8 +52,8 @@ export function EnglishTabs({
   onChange,
   variant,
 }: {
-  tab: 'learn' | 'words' | 'me'
-  onChange: (tab: 'learn' | 'words' | 'me' | 'practice') => void
+  tab: 'learn' | 'words' | 'reading' | 'me'
+  onChange: (tab: 'learn' | 'words' | 'reading' | 'me' | 'practice') => void
   variant: 'bar' | 'rail'
 }) {
   const { t } = useI18n()
@@ -87,7 +88,7 @@ export function EnglishTabs({
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" aria-label={t('nav.primary')}>
-      <div className="grid w-full grid-cols-4 px-2 py-2">
+      <div className="grid w-full grid-cols-5 px-2 py-2">
         {buttons}
       </div>
     </nav>

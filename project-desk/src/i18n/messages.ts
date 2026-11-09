@@ -310,6 +310,7 @@ export const en = {
   'kind.demo': 'Demo (simulated)',
 
   'nav.english': 'English',
+  'nav.reading': 'IELTS Reading',
   'english.title': 'Learn English',
   'english.lead': 'One card is one word, with ten sentences that show how to use it. More than 4,500 words are included, from everyday English through the IELTS academic list. Add an unfamiliar word to the review list, or refresh to see another.',
   'english.pathLead': 'Finish a lesson to open the next one. Five hearts. One question at a time.',
@@ -439,6 +440,7 @@ export const en = {
   'english.startPractice': 'Start practice ({n} words)',
   'english.tabLearn': 'Learn',
   'english.tabWords': 'Words',
+  'english.tabReading': 'Reading',
   'english.tabPractice': 'Practice',
   'english.tabMe': 'Me',
   'english.quizSession': 'Quiz',
@@ -777,6 +779,7 @@ export const zh: Record<MessageKey, string> = {
   'kind.demo': '演示（模拟）',
 
   'nav.english': '英语',
+  'nav.reading': '雅思阅读',
   'english.title': '学英语',
   'english.lead': '一张卡片一个词，用十句例句示范这个词怎么用。已收录 4,500 多个单词，从日常英语到雅思学术词汇。不熟悉就加入复习，也可以换一个词。',
   'english.pathLead': '完成一课才能打开下一课。每课五颗心，一次只答一题。',
@@ -906,6 +909,7 @@ export const zh: Record<MessageKey, string> = {
   'english.startPractice': '开始练习（{n} 个词）',
   'english.tabLearn': '学习',
   'english.tabWords': '词库',
+  'english.tabReading': '阅读',
   'english.tabPractice': '练习',
   'english.tabMe': '我的',
   'english.quizSession': '练习',

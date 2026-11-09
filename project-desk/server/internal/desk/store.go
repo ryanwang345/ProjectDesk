@@ -84,6 +84,10 @@ func Connect(ctx context.Context, databaseURL string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("ielts words: %w", err)
 	}
+	if err := store.seedReading(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ielts reading: %w", err)
+	}
 	return store, nil
 }
 

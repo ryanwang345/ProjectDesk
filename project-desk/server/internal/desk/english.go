@@ -28,10 +28,14 @@ type WordSenses []WordSense
 type BandNote struct {
 	Collocations []string `json:"collocations"`
 	Writing      string   `json:"writing"`
+	WritingZh    string   `json:"writingZh"`
 	Speaking     string   `json:"speaking"`
+	SpeakingZh   string   `json:"speakingZh"`
 	Examples     []string `json:"examples"`
+	ExamplesZh   []string `json:"examplesZh"`
 	Weak         string   `json:"weak"`
 	Fix          string   `json:"fix"`
+	FixZh        string   `json:"fixZh"`
 	Paraphrases  []string `json:"paraphrases"`
 	Zh           string   `json:"zh"`
 }
@@ -168,6 +172,9 @@ func scanEnglish(row scanner) (EnglishCard, error) {
 	}
 	if card.Band.Examples == nil {
 		card.Band.Examples = []string{}
+	}
+	if card.Band.ExamplesZh == nil {
+		card.Band.ExamplesZh = []string{}
 	}
 	if card.Band.Paraphrases == nil {
 		card.Band.Paraphrases = []string{}

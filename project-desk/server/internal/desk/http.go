@@ -20,6 +20,7 @@ func NewHandler(store *Store, platform *Platform) http.Handler {
 	if platform != nil {
 		h.registerPlatform(mux)
 	}
+	h.registerReading(mux)
 	mux.HandleFunc("GET /api/healthz", h.health)
 	mux.HandleFunc("GET /api/cycles", h.listCycles)
 	mux.HandleFunc("POST /api/cycles/sample", h.sampleCycle)

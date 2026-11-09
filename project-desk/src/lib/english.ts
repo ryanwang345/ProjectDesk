@@ -7,10 +7,14 @@ export type WordSense = {
 export type BandNote = {
   collocations: string[]
   writing: string
+  writingZh?: string
   speaking: string
+  speakingZh?: string
   examples?: string[]
+  examplesZh?: string[]
   weak: string
   fix: string
+  fixZh?: string
   paraphrases: string[]
   zh: string
 }

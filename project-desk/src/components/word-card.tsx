@@ -5,6 +5,7 @@ import { Pronunciation } from '@/components/pronunciation'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import type { EnglishCard, WordSense } from '@/lib/english'
+import { translateExample } from '@/lib/example-zh'
 
 const POS_SHORT: Record<string, string> = {
   adjective: 'adj.',
@@ -161,12 +162,18 @@ export function WordCard({
             </h3>
             {shownExamples.length === 0 ? null : (
               <ol className="mt-4 flex flex-col gap-4">
-                {shownExamples.map((sentence) => (
-                  <li key={sentence} className="flex items-start gap-3 text-base leading-relaxed">
-                    <span className="min-w-0 flex-1"><Highlighted word={card.word} example={sentence} /></span>
-                    <Pronunciation word={sentence} showText={false} />
-                  </li>
-                ))}
+                {shownExamples.map((sentence) => {
+                  const zh = translateExample(sentence, card.word, gloss)
+                  return (
+                    <li key={sentence} className="flex items-start gap-3 text-base leading-relaxed">
+                      <div className="min-w-0 flex-1">
+                        <p><Highlighted word={card.word} example={sentence} /></p>
+                        {zh ? <p className="mt-1 text-sm text-muted-foreground">{zh}</p> : null}
+                      </div>
+                      <Pronunciation word={sentence} showText={false} />
+                    </li>
+                  )
+                })}
               </ol>
             )}
             {examples.length > 3 ? (

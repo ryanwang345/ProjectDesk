@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 const links: { to: string; label: MessageKey; end: boolean }[] = [
   { to: '/', label: 'nav.desk', end: true },
   { to: '/english', label: 'nav.english', end: false },
+  { to: '/reading', label: 'nav.reading', end: false },
   { to: '/about', label: 'nav.about', end: false },
 ]
 
