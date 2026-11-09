@@ -1,5 +1,6 @@
 import { BookOpen, Dumbbell, FileText, Flame, Library, Star, UserRound } from 'lucide-react'
 import { ThemePicker } from '@/components/theme-picker'
+import { SpeechSettings } from '@/components/speech-settings'
 import { useI18n } from '@/i18n'
 import type { MessageKey } from '@/i18n'
 
@@ -25,6 +26,7 @@ export function EnglishTop({
         </span>
       </button>
       <div className="flex items-center gap-2 text-xs">
+        <SpeechSettings />
         <ThemePicker />
         <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1">
           <Flame className="size-3.5 text-primary" aria-hidden="true" />

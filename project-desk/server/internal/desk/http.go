@@ -10,12 +10,13 @@ import (
 type Handler struct {
 	store    *Store
 	platform *Platform
+	speech   *speechService
 }
 
 // NewHandler serves the desk, the loop, and (when platform is non-nil) the
 // AI platform routes.
 func NewHandler(store *Store, platform *Platform) http.Handler {
-	h := &Handler{store: store, platform: platform}
+	h := &Handler{store: store, platform: platform, speech: newSpeechService()}
 	mux := http.NewServeMux()
 	if platform != nil {
 		h.registerPlatform(mux)
@@ -28,6 +29,8 @@ func NewHandler(store *Store, platform *Platform) http.Handler {
 	mux.HandleFunc("PATCH /api/cycles/{id}", h.updateCycle)
 	mux.HandleFunc("DELETE /api/cycles/{id}", h.deleteCycle)
 	mux.HandleFunc("GET /api/english", h.listEnglish)
+	mux.HandleFunc("GET /api/english/speech", h.speechStatus)
+	mux.HandleFunc("POST /api/english/speech", h.pronounceAudio)
 	mux.HandleFunc("POST /api/english-lessons/{n}", h.prepareEnglishLesson)
 	mux.HandleFunc("POST /api/english/{id}/review", h.addEnglishReview)
 	mux.HandleFunc("POST /api/english/{id}/band", h.writeEnglishBand)
