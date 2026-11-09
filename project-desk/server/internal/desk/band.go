@@ -121,7 +121,7 @@ func (s *Store) EnsureBand(ctx context.Context, provider ai.Provider, cards []En
 	var err error
 	for try := 0; try < 2; try++ {
 		got, err = requestBand(ctx, provider, pending)
-		if err == nil && len(got) > 0 {
+		if err == nil && len(got) > 0 || providerBusy(err) {
 			break
 		}
 	}

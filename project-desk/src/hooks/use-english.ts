@@ -28,7 +28,7 @@ export function useEnglish() {
     void load()
   }, [load])
 
-  const missingDetails = cards.reduce((count, card) => count + (!card.pronunciation || (card.senses ?? []).length === 0 ? 1 : 0), 0)
+  const missingDetails = cards.reduce((count, card) => count + (!card.pronunciation ? 1 : 0), 0)
   const awaitingDetail = ready && missingDetails > 0 && missingDetails <= 80
   useEffect(() => {
     if (!awaitingDetail) return

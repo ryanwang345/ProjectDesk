@@ -25,6 +25,7 @@ export default defineConfig({
     },
   },
   expose: {
+    allowLearningWrites: env.E2E_ALLOW_LEARNING_WRITES === 'true',
     grepTags: env.E2E_TAGS ?? '',
     grepFilterSpecs: true,
     grepOmitFiltered: true,

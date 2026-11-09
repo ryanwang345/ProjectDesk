@@ -110,11 +110,11 @@ func (s *Store) FillSenses(ctx context.Context, provider ai.Provider) error {
 		if round == 0 {
 			log.Printf("writing dictionary senses for %d words", len(missing))
 		}
-		for start := 0; start < len(missing); start += 4 {
+		for start := 0; start < len(missing); start += senseBatch {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			end := start + 4
+			end := start + senseBatch
 			if end > len(missing) {
 				end = len(missing)
 			}
@@ -192,15 +192,13 @@ func (s *Store) saveSenses(ctx context.Context, id string, senses WordSenses) (E
 	return card, err
 }
 
+const senseBatch = 20
+
 type senseDraft struct {
 	Words []struct {
 		Word   string     `json:"word"`
 		Senses WordSenses `json:"senses"`
 	} `json:"words"`
-}
-
-func quotaExceeded(err error) bool {
-	return providerBusy(err)
 }
 
 func providerBusy(err error) bool {
@@ -242,7 +240,7 @@ func requestSenses(ctx context.Context, provider ai.Provider, cards []EnglishCar
 			{Role: "system", Content: senseSystem},
 			{Role: "user", Content: senseUser(cards, notes)},
 		},
-		MaxTokens:   4000,
+		MaxTokens:   1000 + 600*len(cards),
 		Temperature: 0.2,
 	}, &draft)
 	if err != nil {

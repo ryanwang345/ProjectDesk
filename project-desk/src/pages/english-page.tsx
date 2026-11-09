@@ -8,10 +8,11 @@ import { WordCard } from '@/components/word-card'
 import { ReadingPage } from '@/pages/reading-page'
 import { Button } from '@/components/ui/button'
 import { useEnglish } from '@/hooks/use-english'
-import { ensureBand } from '@/lib/api'
+import { useLearningProgress, recordVocabularyCompletion } from '@/hooks/use-learning-progress'
+import { ensureBand, ensureSenses } from '@/lib/api'
 import { useI18n } from '@/i18n'
 import type { EnglishCard } from '@/lib/english'
-import { currentLesson, lessonCount, loadProgress, recordCompletion, type LessonProgress } from '@/lib/lesson'
+import { currentLesson, lessonCount, loadProgress, type LessonProgress } from '@/lib/lesson'
 import type { StorageProblem } from '@/lib/projects'
 
 const PROBLEM_KEY = {
@@ -30,11 +31,32 @@ export function EnglishPage() {
   const { t } = useI18n()
   const desk = useEnglish()
   const { cards, ready, problem } = desk
-  const [tab, setTab] = useState<'learn' | 'words' | 'reading' | 'me'>('learn')
+  const [tab, setTab] = useState<'learn' | 'words' | 'reading' | 'me'>(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    return tab === 'words' || tab === 'reading' || tab === 'me' ? tab : 'learn'
+  })
   const [lesson, setLesson] = useState<number | null>(null)
-  const [progress, setProgress] = useState(loadProgress)
+  const learning = useLearningProgress()
+  const [legacyProgress] = useState(loadProgress)
+  const progress = learning.progress ?? legacyProgress
+  const [pendingCompletion, setPendingCompletion] = useState<{ lesson: number; correct: number } | null>(null)
+  const [progressError, setProgressError] = useState(false)
+  const [savingProgress, setSavingProgress] = useState(false)
+  const [lessonReward, setLessonReward] = useState<number | null>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const showNav = lesson === null
+
+  async function saveLessonProgress(index: number, correct: number) {
+    setPendingCompletion({ lesson: index, correct })
+    setSavingProgress(true)
+    try {
+      const saved = await recordVocabularyCompletion(index, correct)
+      setLessonReward(saved.awardedXP ?? 0)
+      setPendingCompletion(null)
+      setProgressError(false)
+    } catch { setProgressError(true) }
+    finally { setSavingProgress(false) }
+  }
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: 0 })
@@ -42,6 +64,7 @@ export function EnglishPage() {
 
   function openPractice() {
     const index = currentLesson(progress.completed, lessonCount(cards.length))
+    setLessonReward(null)
     setLesson(index)
   }
 
@@ -58,8 +81,10 @@ export function EnglishPage() {
     body = (
       <LessonPlayer
         lesson={lesson}
+        earnedXP={lessonReward}
+        rewardEligible={Boolean(learning.progress && !learning.progress.completed.includes(lesson))}
         onExit={() => setLesson(null)}
-        onComplete={(correct) => setProgress((current) => recordCompletion(current, lesson, correct))}
+        onComplete={(correct) => void saveLessonProgress(lesson, correct)}
       />
     )
   } else if (tab === 'words') {
@@ -73,7 +98,7 @@ export function EnglishPage() {
       <LessonPath
         cards={cards}
         progress={progress}
-        onStart={setLesson}
+        onStart={(index) => { setLessonReward(null); setLesson(index) }}
       />
     )
   }
@@ -93,6 +118,12 @@ export function EnglishPage() {
             xp={progress.xp}
             onWords={lesson === null && tab === 'learn' ? () => setTab('words') : undefined}
           />
+          {progressError && pendingCompletion ? (
+            <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-3 text-sm">
+              <span>{t('english.progressSaveFailed')}</span>
+              <Button disabled={savingProgress} variant="outline" size="sm" onClick={() => void saveLessonProgress(pendingCompletion.lesson, pendingCompletion.correct)}>{t('english.retryProgressSave')}</Button>
+            </div>
+          ) : null}
           {body}
         </div>
       </div>
@@ -109,13 +140,15 @@ function WordDesk({
   const { t } = useI18n()
   const { cards, ready, problem, markReview, removeCard, adoptCard } = desk
   const [pendingDelete, setPendingDelete] = useState<EnglishCard | null>(null)
-  const [shownId, setShownId] = useState<string | null>(null)
+  const [shownId, setShownId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('word'))
   const [reviewing, setReviewing] = useState(false)
   const [wordQuery, setWordQuery] = useState('')
-  const [letter, setLetter] = useState('A')
+  const [letter, setLetter] = useState(() => wordLetter(cards.find((card) => card.id === new URLSearchParams(window.location.search).get('word'))?.word ?? 'A'))
   const [bandState, setBandState] = useState<'idle' | 'wait' | 'failed'>('idle')
   const bandFlight = useRef<string | null>(null)
   const bandFailed = useRef<string | null>(null)
+  const senseFlight = useRef<string | null>(null)
+  const senseTried = useRef(new Set<string>())
   const current = cards.find((card) => card.id === shownId) ?? cards.find((card) => wordLetter(card.word) === letter) ?? cards[0] ?? null
   const query = wordQuery.trim().toLowerCase()
   const catalog = [...cards].sort((a, b) => a.word.localeCompare(b.word))
@@ -156,6 +189,20 @@ function WordDesk({
       })
       .finally(() => {
         if (bandFlight.current === requested) bandFlight.current = null
+      })
+  }, [current, adoptCard])
+
+  useEffect(() => {
+    if (!current || (current.senses ?? []).length > 0) return
+    const requested = current.id
+    if (senseFlight.current === requested || senseTried.current.has(requested)) return
+    senseFlight.current = requested
+    senseTried.current.add(requested)
+    ensureSenses(requested)
+      .then(adoptCard)
+      .catch(() => {})
+      .finally(() => {
+        if (senseFlight.current === requested) senseFlight.current = null
       })
   }, [current, adoptCard])
 

@@ -18,7 +18,7 @@ export default defineConfig({
     port: 47311,
     strictPort: true,
     proxy: {
-      '/api': 'http://127.0.0.1:47292',
+      '/api': process.env.PROJECT_DESK_API_PROXY ?? 'http://127.0.0.1:47292',
     },
   },
   preview: {

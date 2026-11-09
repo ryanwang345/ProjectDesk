@@ -11,6 +11,10 @@ import type {
   ReadingSessionBundle,
   ReadingTest,
   ReadingVocabResponse,
+  LearningProgress,
+  ReadingLearningDashboard,
+  ReadingMistake,
+  ReadingSavedWord,
 } from '@/lib/reading'
 
 /** Error carrying the API's message so screens can show it as written. */
@@ -80,6 +84,10 @@ export function loadSampleProjects(): Promise<Project[]> {
 
 export function ensureBand(id: string): Promise<EnglishCard> {
   return request<EnglishCard>(`/api/english/${id}/band`, { method: 'POST' })
+}
+
+export function ensureSenses(id: string): Promise<EnglishCard> {
+  return request<EnglishCard>(`/api/english/${id}/senses`, { method: 'POST' })
 }
 
 export function prepareLesson(lesson: number): Promise<{ cards: EnglishCard[]; questions: Question[] }> {
@@ -195,4 +203,38 @@ export function generateReadingPractice(input: ReadingGenerateRequest): Promise<
     method: 'POST',
     body: JSON.stringify(input),
   })
+}
+
+export function learningTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+}
+
+const learningQuery = () => `timezone=${encodeURIComponent(learningTimezone())}`
+
+export function getLearningProgress(): Promise<LearningProgress> {
+  return request(`/api/learning/progress?${learningQuery()}`)
+}
+export function importLearningProgress(progress: { xp: number; streak: number; lastDay: string; completed: number[] }): Promise<LearningProgress> {
+  return request(`/api/learning/import?${learningQuery()}`, { method: 'POST', body: JSON.stringify(progress) })
+}
+export function completeVocabularyLesson(lesson: number, correct: number): Promise<LearningProgress> {
+  return request(`/api/learning/vocabulary-completions?${learningQuery()}`, { method: 'POST', body: JSON.stringify({ lesson, correct }) })
+}
+export function getReadingLearning(module: 'academic' | 'general'): Promise<ReadingLearningDashboard> {
+  return request(`/api/reading/learning?module=${module}&${learningQuery()}`)
+}
+export function startDailyReading(module: 'academic' | 'general'): Promise<ReadingSessionBundle> {
+  return request(`/api/reading/daily?${learningQuery()}`, { method: 'POST', body: JSON.stringify({ module }) })
+}
+export function listReadingMistakes(module: 'academic' | 'general', type = '', resolved = false): Promise<ReadingMistake[]> {
+  return request(`/api/reading/mistakes?module=${module}&type=${encodeURIComponent(type)}&resolved=${resolved}`)
+}
+export function startReadingMistakeReview(module: 'academic' | 'general', type = ''): Promise<ReadingSessionBundle> {
+  return request('/api/reading/mistakes/review', { method: 'POST', body: JSON.stringify({ module, type }) })
+}
+export function listReadingVocabulary(): Promise<ReadingSavedWord[]> {
+  return request('/api/reading/vocabulary')
+}
+export function saveReadingVocabulary(input: { sessionId: string; passageId: string; paragraphLabel: string; selection: string; definition: string }): Promise<EnglishCard> {
+  return request('/api/reading/vocabulary', { method: 'POST', body: JSON.stringify(input) })
 }

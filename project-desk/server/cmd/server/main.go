@@ -68,7 +68,11 @@ func main() {
 
 	go func() {
 		store.WritePronunciations(ctx, platform.Sealer)
-		store.WriteSenses(ctx, platform.Sealer)
+		// Filling every word at startup can use up a provider's daily quota.
+		// Words get their senses when they are opened unless this is set.
+		if os.Getenv("PROJECT_DESK_FILL_SENSES") == "1" {
+			store.WriteSenses(ctx, platform.Sealer)
+		}
 	}()
 
 	if os.Getenv("PROJECT_DESK_WORKER_ONLY") == "1" {

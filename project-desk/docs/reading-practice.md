@@ -55,9 +55,13 @@ time away, final submission, late reconnection and submitted-answer protection.
 From `e2e`, run the reading spec against a local app:
 
 ```sh
-E2E_BASE_URL=http://127.0.0.1:47311 npx cypress run --spec cypress/e2e/reading.cy.ts
+E2E_BASE_URL=http://127.0.0.1:47311 E2E_ALLOW_LEARNING_WRITES=true npx cypress run --spec cypress/e2e/reading.cy.ts
 ```
 
 The spec exercises library navigation, practice feedback, mobile layout, exam
 instructions, assistance restrictions, answer review, reload recovery, automatic
 submission and recovery from a failed submission.
+
+Run writing specs against a disposable application database only. See
+[Reading learning](reading-learning.md) for the persisted daily challenges,
+shared rewards, review architecture, migration and expanded verification.

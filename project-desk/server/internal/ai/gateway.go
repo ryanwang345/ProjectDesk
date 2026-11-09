@@ -8,7 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -114,6 +117,55 @@ func (e *ErrProvider) Error() string {
 	return fmt.Sprintf("provider returned %d: %s", e.Status, body)
 }
 
+const quotaPause = 6 * time.Hour
+
+var (
+	quotaMu        sync.Mutex
+	quotaUntil     time.Time
+	quotaAnnounced bool
+)
+
+// QuotaHold reports a recent quota failure so callers skip the network.
+func QuotaHold() error {
+	quotaMu.Lock()
+	defer quotaMu.Unlock()
+	if time.Now().Before(quotaUntil) {
+		return &ErrProvider{Status: http.StatusTooManyRequests, Body: "quota exceeded"}
+	}
+	quotaAnnounced = false
+	return nil
+}
+
+func noteQuota(err error) error {
+	if !quotaLimited(err) {
+		return err
+	}
+	quotaMu.Lock()
+	defer quotaMu.Unlock()
+	quotaUntil = time.Now().Add(quotaPause)
+	if !quotaAnnounced {
+		quotaAnnounced = true
+		log.Printf("model quota is used up; pausing model calls for %s. Saved vocabulary stays available.", quotaPause)
+	}
+	return &ErrProvider{Status: http.StatusTooManyRequests, Body: "quota exceeded"}
+}
+
+func quotaLimited(err error) bool {
+	var providerErr *ErrProvider
+	if err == nil || !errors.As(err, &providerErr) || providerErr.Status != http.StatusTooManyRequests {
+		return false
+	}
+	body := strings.ToLower(providerErr.Body)
+	return strings.Contains(body, "quota") || strings.Contains(body, "resource_exhausted") || strings.Contains(body, "billing")
+}
+
+func clearQuotaPause() {
+	quotaMu.Lock()
+	quotaUntil = time.Time{}
+	quotaAnnounced = false
+	quotaMu.Unlock()
+}
+
 // New builds the adapter for a config.
 func New(cfg Config) (Provider, error) {
 	if cfg.Timeout == 0 {
@@ -137,6 +189,9 @@ func New(cfg Config) (Provider, error) {
 // without a JSON mode are prompted for JSON and the first object in the
 // reply is extracted. The caller still validates required fields.
 func GenerateJSON(ctx context.Context, p Provider, req Request, out any) (Response, error) {
+	if err := QuotaHold(); err != nil {
+		return Response{}, err
+	}
 	req.JSON = true
 	if !p.Capabilities().JSONMode {
 		req.Messages = append([]Message{{
@@ -146,7 +201,7 @@ func GenerateJSON(ctx context.Context, p Provider, req Request, out any) (Respon
 	}
 	resp, err := p.Generate(ctx, req)
 	if err != nil {
-		return resp, err
+		return resp, noteQuota(err)
 	}
 	raw, err := ExtractJSON(resp.Text)
 	if err != nil {

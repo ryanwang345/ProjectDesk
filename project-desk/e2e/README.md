@@ -27,6 +27,15 @@ The target desk holds real projects. The cards spec only creates projects named 
 | --- | --- | --- |
 | `cypress/e2e/smoke.cy.ts` | `@smoke` | Read only: nginx and API health, desk, about page, 404 page |
 | `cypress/e2e/projects.cy.ts` | `@regression` | Validates the form, then adds, edits, moves, and removes one card |
+| `cypress/e2e/reading.cy.ts` | `@regression` | Reading library and existing practice/exam flows; session writes require the flag below |
+| `cypress/e2e/reading-learning.cy.ts` | `@regression` | Dashboard order, mobile/keyboard navigation, load recovery, daily persistence, rewards, mistakes and passage vocabulary |
+
+Reading session write tests are disabled unless `E2E_ALLOW_LEARNING_WRITES=true`.
+Use that flag only against a fresh disposable application database: these tests
+create real learning activity and XP, and the daily test requires an uncompleted
+daily challenge. Do not enable it in recurring deployed checks. Read-only Reading
+checks still run by default. See [Reading learning](../docs/reading-learning.md)
+for the database integration tests and isolated-port setup.
 
 ## Run locally
 
@@ -50,6 +59,7 @@ npm run cypress:open
 | `E2E_TAGS` | all | `@cypress/grep` tags: `@smoke`, `@smoke @regression` (either), `@smoke+@regression` (both) |
 | `E2E_RETRIES` | `1` | Retries per failed test in run mode |
 | `E2E_VIDEO` | `false` | `true` records an mp4 per spec |
+| `E2E_ALLOW_LEARNING_WRITES` | `false` | Enable Reading session/reward tests in a fresh disposable workspace only |
 | `E2E_ENVIRONMENT` | `local` | Name used in summaries, S3 keys, and metrics |
 | `E2E_ARTIFACTS_DIR` | `artifacts/<run id>` | Where JUnit, screenshots, videos, and `summary.json` go |
 

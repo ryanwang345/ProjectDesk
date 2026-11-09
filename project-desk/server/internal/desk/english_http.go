@@ -73,6 +73,37 @@ func (h *Handler) writeEnglishBand(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, cards[0])
 }
 
+func (h *Handler) writeEnglishSenses(w http.ResponseWriter, r *http.Request) {
+	if h.platform == nil {
+		writeError(w, http.StatusServiceUnavailable, "AI is not configured")
+		return
+	}
+	card, err := h.store.English(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeEnglishError(w, err)
+		return
+	}
+	if len(card.Senses) > 0 {
+		writeJSON(w, http.StatusOK, card)
+		return
+	}
+	provider, _, err := h.store.ProviderForRole(r.Context(), "english", h.platform.Sealer)
+	if err != nil {
+		writeEnglishError(w, err)
+		return
+	}
+	saved, err := h.store.AttachSenses(r.Context(), provider, card)
+	if providerBusy(err) {
+		writeError(w, http.StatusTooManyRequests, "the model quota is used up; try again later")
+		return
+	}
+	if err != nil || len(saved.Senses) == 0 {
+		writeError(w, http.StatusBadGateway, "the model could not write the dictionary senses")
+		return
+	}
+	writeJSON(w, http.StatusOK, saved)
+}
+
 func (h *Handler) listEnglish(w http.ResponseWriter, r *http.Request) {
 	cards, err := h.store.ListEnglish(r.Context())
 	if err != nil {

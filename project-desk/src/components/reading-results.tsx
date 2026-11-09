@@ -48,6 +48,7 @@ export function ReadingResultsView({
     if (filter === 'correct') return item.correct
     return true
   })
+  const learningSession = session.kind === 'daily' || session.kind === 'mistake_review'
 
   async function handleAskAI(item: ReadingQuestionResult) {
     setLoadingId(item.questionId)
@@ -78,13 +79,29 @@ export function ReadingResultsView({
             {isZh ? '在分屏试卷中对照原文' : 'Review in Split-Screen Exam'}
           </Button>
           <Button type="button" size="sm" className="rounded-full" onClick={onRetake}>
-            {isZh ? '重新练习本套题' : 'Practice Again'}
+            {learningSession ? (isZh ? '返回学习主页' : 'Back to learning') : (isZh ? '重新练习本套题' : 'Practice Again')}
           </Button>
         </div>
       </div>
 
       {/* Hero Band & Score Banner */}
-      <section className="rounded-3xl border border-primary/30 bg-card p-6 shadow-sm">
+      {learningSession ? (
+        <section className="rounded-3xl border border-primary/30 bg-primary/5 p-6 sm:p-8" data-testid="reading-learning-summary">
+          <p className="text-xs font-semibold tracking-[0.14em] text-primary uppercase">{session.kind === 'daily' ? (isZh ? '每日阅读已完成' : 'Daily reading complete') : (isZh ? '错题重做已完成' : 'Mistake review complete')}</p>
+          <h1 className="mt-2 font-display text-3xl">{isZh ? '为理解多走了一步。' : 'Another step toward understanding.'}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{test.title}</p>
+          <div className="mt-5 flex flex-wrap items-baseline gap-6">
+            <p className="font-display text-4xl text-primary" data-testid="learning-summary-score">{results.score}<span className="text-xl text-muted-foreground"> / {results.total}</span></p>
+            <p className="text-lg font-semibold text-primary" data-testid="learning-summary-xp">{session.xpEarned ?? 0} XP</p>
+            <p className="text-sm text-muted-foreground">{formatDurationClock(results.timeSpent)} {isZh ? '用时' : 'spent learning'}</p>
+          </div>
+          <p className="mt-4 text-sm leading-relaxed">{results.score === results.total
+            ? (isZh ? '你答对了本次全部题目。回看证据，巩固你的推理，再尝试新的题型。' : 'You answered every question correctly. Revisit the evidence to reinforce your reasoning, then try another question type.')
+            : (isZh ? `${results.total - results.score} 道题已保存到错题复习。先读原文证据，稍后不看答案再试一次。` : `${results.total - results.score} questions are saved for review. Read the passage evidence below, then retry later without looking at the answer.`)}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{isZh ? '成绩和 XP 已持久保存。重新查看总结不会重复奖励。' : 'Your result and XP are saved. Reopening this summary never awards XP again.'}</p>
+          <Button className="mt-5 rounded-full" onClick={onBackToDashboard}>{isZh ? '查看适合我的下一步' : 'Find my next step'}</Button>
+        </section>
+      ) : <section className="rounded-3xl border border-primary/30 bg-card p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -165,7 +182,7 @@ export function ReadingResultsView({
             </p>
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* Accuracy by Question Type */}
       <section className="rounded-3xl border border-border bg-card p-6">

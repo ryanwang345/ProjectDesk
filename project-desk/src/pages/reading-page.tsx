@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Award,
-  BookOpen,
   Clock,
   FileText,
   Filter,
@@ -9,9 +7,10 @@ import {
   Layers,
   Play,
   Sparkles,
-  Target,
-  TrendingUp,
 } from 'lucide-react'
+import { ReadingLearningOverview } from '@/components/reading-learning-overview'
+import { ReadingLearningReview } from '@/components/reading-learning-review'
+import { useLearningProgress, refreshLearningProgress } from '@/hooks/use-learning-progress'
 import { ReadingExamView } from '@/components/reading-exam'
 import { ReadingResultsView } from '@/components/reading-results'
 import { Button } from '@/components/ui/button'
@@ -20,6 +19,9 @@ import { useI18n } from '@/i18n'
 import {
   generateReadingPractice,
   getReadingAnalytics,
+  getReadingLearning,
+  startDailyReading,
+  startReadingMistakeReview,
   getReadingSession,
   listReadingTests,
   startReadingSession,
@@ -31,6 +33,8 @@ import {
   QUESTION_TYPE_LABELS,
   type ReadingAnalytics,
   type ReadingHighlight,
+  type ReadingLearningDashboard,
+  type ReadingSessionBundle,
   type ReadingQuestionType,
   type ReadingSession,
   type ReadingTest,
@@ -71,6 +75,52 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
   const [view, setView] = useState<ViewState>({ kind: 'dashboard' })
   const [examBriefing, setExamBriefing] = useState<ReadingTest | null>(null)
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null)
+  const sharedLearning = useLearningProgress()
+  const [learningData, setLearningData] = useState<ReadingLearningDashboard | null>(null)
+  const [learningError, setLearningError] = useState(false)
+  const [learningRevision, setLearningRevision] = useState(0)
+  const learningRequest = useRef(0)
+
+  const loadLearning = useCallback(async (module: ReadingModule) => {
+    const request = ++learningRequest.current
+    try {
+      await refreshLearningProgress()
+      const data = await getReadingLearning(module)
+      if (request === learningRequest.current) { setLearningData(data); setLearningError(false); setLearningRevision((value) => value + 1) }
+    } catch { if (request === learningRequest.current) setLearningError(true) }
+  }, [])
+
+  useEffect(() => {
+    setLearningData(null)
+    void loadLearning(moduleFilter)
+    return () => { learningRequest.current++ }
+  }, [moduleFilter, loadLearning])
+
+  function openBundle(bundle: ReadingSessionBundle) {
+    setModuleFilter(bundle.test.module)
+    if (bundle.session.status === 'active') {
+      rememberReadingSession(bundle.session.id)
+      setResumeSessionId(bundle.session.id)
+      setView({ kind: 'exam', ...bundle })
+    } else setView({ kind: 'results', ...bundle })
+  }
+
+  async function handleDailyChallenge() {
+    setStartingTestId('daily')
+    setError(null)
+    try { openBundle(await startDailyReading(moduleFilter)) }
+    catch (error) { setError(error instanceof Error ? error.message : 'Could not open your daily challenge.') }
+    finally { setStartingTestId(null) }
+  }
+
+  async function handleMistakeReview(type?: ReadingQuestionType) {
+    setStartingTestId('mistake-review')
+    setError(null)
+    try { openBundle(await startReadingMistakeReview(moduleFilter, type)) }
+    catch (error) { setError(error instanceof Error ? error.message : 'Could not open your mistake review.') }
+    finally { setStartingTestId(null) }
+  }
+
 
   useEffect(() => {
     let active = true
@@ -84,7 +134,8 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
           return
         }
         setResumeSessionId(bundle.session.id)
-        setView({ kind: 'exam', session: bundle.session, test: bundle.test })
+        setModuleFilter(bundle.test.module)
+        if (bundle.session.mode === 'exam') setView({ kind: 'exam', session: bundle.session, test: bundle.test })
       }).catch(() => {
         if (active) setResumeSessionId(savedId)
       })
@@ -112,6 +163,7 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
         ])
         setTests(testsList)
         setAnalytics(stats)
+        void loadLearning(mod)
         setError(null)
       } catch {
         setError(
@@ -123,7 +175,7 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
         setLoading(false)
       }
     },
-    [isZh],
+    [isZh, loadLearning],
   )
 
   useEffect(() => {
@@ -176,12 +228,12 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
-  async function handleResumeSession() {
-    if (!resumeSessionId) return
-    setStartingTestId(resumeSessionId)
+  async function handleResumeSession(id: string | null = resumeSessionId) {
+    if (!id) return
+    setStartingTestId(id)
     try {
-      const bundle = await getReadingSession(resumeSessionId)
-      setView({ kind: bundle.session.status === 'submitted' ? 'results' : 'exam', ...bundle })
+      const bundle = await getReadingSession(id)
+      openBundle(bundle)
     } catch {
       setError(isZh ? '无法恢复答题，请重试。' : 'Could not resume your attempt. Please try again.')
     } finally { setStartingTestId(null) }
@@ -221,6 +273,7 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
     const bundle = await submitReadingSession(sessionId, payload)
     rememberReadingSession(null)
     setResumeSessionId(null)
+    void refreshLearningProgress().catch(() => {})
     void refreshDashboard(moduleFilter)
     setView({ kind: 'results', session: bundle.session, test: bundle.test })
   }
@@ -247,6 +300,7 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
         questionTypes: aiTypes,
       })
       setTests((prev) => [created, ...prev])
+      if (selectedMode === 'exam') { setExamBriefing(created); return }
       const bundle = await startReadingSession({ testId: created.id, mode: selectedMode })
       rememberReadingSession(bundle.session.id)
       setResumeSessionId(bundle.session.id)
@@ -299,6 +353,7 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
           })
         }
         onRetake={() => {
+          if (view.session.kind === 'daily' || view.session.kind === 'mistake_review') { setView({ kind: 'dashboard' }); void refreshDashboard(moduleFilter); return }
           setView({ kind: 'dashboard' })
           void handleStartTest(view.test.id, view.session.mode)
         }}
@@ -324,12 +379,8 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
     return true
   })
 
-  const typeStatsMap = new Map(
-    (analytics?.byType ?? []).map((item) => [item.type, item]),
-  )
-
   return (
-    <div className={cn('mx-auto w-full max-w-7xl space-y-6', embedded ? 'py-2' : '')}>
+    <div className={cn('mx-auto w-full max-w-6xl space-y-9', embedded ? 'py-2' : '')}>
       <Dialog open={Boolean(examBriefing)} onOpenChange={(open) => { if (!open) setExamBriefing(null) }}>
         <DialogContent className="sm:max-w-xl" data-testid="reading-exam-briefing">
           <DialogHeader>
@@ -355,187 +406,29 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {resumeSessionId ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
-          <p className="text-sm">{isZh ? '有一份未完成的答卷。模考计时仍在继续。' : 'You have an unfinished attempt. An exam clock continues while you are away.'}</p>
-          <Button disabled={startingTestId !== null} data-testid="reading-resume" onClick={() => void handleResumeSession()}>{isZh ? '继续答题' : 'Resume attempt'}</Button>
-        </div>
-      ) : null}
-      {/* Hero & Module / Mode Controls */}
-      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-7">
-        <div className="flex flex-wrap items-start justify-between gap-6">
-          <div className="max-w-2xl space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold tracking-wider text-primary uppercase">
-              <BookOpen className="size-3.5" />
-              {isZh ? '机考雅思阅读全真模考与精练' : 'Computer-Delivered IELTS Reading'}
-            </div>
-            <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-4xl">
-              {isZh ? 'IELTS Reading 雅思阅读训练中心' : 'IELTS Reading Practice & Exam Studio'}
-            </h1>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {isZh
-                ? '还原机考双栏分屏界面、高亮笔记、段落证据定位、12 种官方题型评分与 AI 考官深度解析。支持 60 分钟全真模考与即时反馈练习模式。'
-                : 'Original, unofficial IELTS practice papers with a split-screen exam, passage highlighting, timed submission, and detailed answer explanations.'}
-            </p>
-          </div>
-
-          {/* Module & Mode Selectors */}
-          <div className="flex flex-col gap-3 sm:items-end">
-            <div
-              role="group"
-              aria-label={isZh ? '阅读模块选择' : 'Reading Module'}
-              className="inline-flex rounded-2xl border border-border bg-muted/60 p-1"
-            >
-              <button
-                type="button"
-                data-testid="module-academic"
-                onClick={() => setModuleFilter('academic')}
-                className={cn(
-                  'rounded-xl px-3.5 py-1.5 text-xs font-medium transition-colors',
-                  moduleFilter === 'academic'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {isZh ? 'Academic 学术类 (A类)' : 'Academic'}
-              </button>
-              <button
-                type="button"
-                data-testid="module-general"
-                onClick={() => setModuleFilter('general')}
-                className={cn(
-                  'rounded-xl px-3.5 py-1.5 text-xs font-medium transition-colors',
-                  moduleFilter === 'general'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {isZh ? 'General 培训类 (G类)' : 'General Training'}
-              </button>
-            </div>
-
-            <div
-              role="group"
-              aria-label={isZh ? '默认答题模式' : 'Default Mode'}
-              className="inline-flex items-center gap-1 rounded-2xl border border-border bg-background p-1 text-xs"
-            >
-              <span className="px-2.5 text-[11px] text-muted-foreground">
-                {isZh ? '启动模式:' : 'Launch in:'}
-              </span>
-              <button
-                type="button"
-                data-testid="mode-practice"
-                onClick={() => setSelectedMode('practice')}
-                className={cn(
-                  'rounded-xl px-3 py-1 font-medium transition-colors',
-                  selectedMode === 'practice'
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {isZh ? '练习模式 (即时批改)' : 'Practice Mode'}
-              </button>
-              <button
-                type="button"
-                data-testid="mode-exam"
-                onClick={() => setSelectedMode('exam')}
-                className={cn(
-                  'rounded-xl px-3 py-1 font-medium transition-colors',
-                  selectedMode === 'exam'
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {isZh ? '全真模考 (计时交卷)' : 'Exam Mode'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Analytics Summary Cards */}
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-primary/25 bg-primary/8 p-4">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{isZh ? '预估雅思阅读 Band' : 'Estimated Reading Band'}</span>
-              <Award className="size-4 text-primary" />
-            </div>
-            <div className="mt-1.5 flex items-baseline gap-2">
-              <span className="font-display text-3xl font-bold text-primary" data-testid="estimated-band">
-                {analytics && analytics.completedExams > 0
-                  ? analytics.averageBand.toFixed(1)
-                  : '—'}
-              </span>
-              <span className="rounded-full bg-background/80 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {isZh ? '非官方预估' : 'Unofficial'}
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {moduleFilter === 'academic'
-                ? isZh
-                  ? '基于 Academic 常用分数区间预估'
-                  : 'Based on Academic 40-question scale'
-                : isZh
-                  ? '基于 General Training 常用分数区间预估'
-                  : 'Based on General Training scale'}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-background/60 p-4">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{isZh ? '平均正确率' : 'Average Accuracy'}</span>
-              <Target className="size-4 text-primary" />
-            </div>
-            <p className="mt-1.5 font-display text-3xl font-bold">
-              {analytics && analytics.completedExams > 0
-                ? `${Math.round(analytics.averageAccuracy)}%`
-                : '0%'}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {isZh ? '所有已提交套题与专项训练' : 'Across all submitted sessions'}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-background/60 p-4">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{isZh ? '已完成练习次数' : 'Completed Attempts'}</span>
-              <TrendingUp className="size-4 text-primary" />
-            </div>
-            <p className="mt-1.5 font-display text-3xl font-bold">
-              {analytics?.completedExams ?? 0}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {isZh ? '每次练习自动保存至 Postgres' : 'Saved automatically in Postgres'}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-background/60 p-4">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{isZh ? '累计精读时长' : 'Total Reading Time'}</span>
-              <Clock className="size-4 text-primary" />
-            </div>
-            <p className="mt-1.5 font-display text-3xl font-bold">
-              {formatDurationClock(analytics?.totalTimeSeconds ?? 0)}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {isZh ? '建议全真模考控制在 60 分钟内' : 'Target 60:00 per full 3-passage test'}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {error && (
-        <div role="alert" className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
+      {error ? <p role="alert" className="rounded-2xl border border-destructive/30 bg-card px-4 py-3 text-sm text-destructive">{error}</p> : null}
+      {learningError ? <p role="alert" className="rounded-2xl border border-border bg-card px-4 py-3 text-sm">{isZh ? '学习进度暂时无法加载。常规练习仍可使用。' : 'Your learning progress could not be loaded. Standard practice is still available.'}<Button variant="ghost" size="sm" onClick={() => void loadLearning(moduleFilter)}>{isZh ? '重试' : 'Retry'}</Button></p> : null}
+      <ReadingLearningOverview data={learningData} progress={sharedLearning.progress ?? learningData?.progress ?? null} module={moduleFilter} onModuleChange={setModuleFilter} onDaily={() => void handleDailyChallenge()} onResume={(id) => void handleResumeSession(id)} onPractice={(id) => void handleStartTest(id, 'practice')} busy={startingTestId !== null} />
+      <section id="reading-library" aria-labelledby="reading-library-title" className="space-y-4 scroll-mt-20" data-testid="reading-library">
+        <div><p className="text-xs font-semibold tracking-[0.15em] text-primary uppercase">{isZh ? '按自己的节奏练习' : 'Practice at your pace'}</p><h2 id="reading-library-title" className="mt-1 font-display text-2xl">{isZh ? '模考与单篇阅读' : 'Mock exams & passage practice'}</h2><p className="mt-2 text-sm text-muted-foreground">{isZh ? '完整保留 60 分钟模考、单篇练习、题型专项与自定义练习。' : 'Choose a full 60-minute exam, a single passage, or a focused question set.'}</p></div>
       {/* Navigation Tabs for Practice Categories */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-        <div role="tablist" aria-label={isZh ? '练习分类' : 'Practice Categories'} className="flex flex-wrap items-center gap-1.5">
+        <div role="tablist" aria-label={isZh ? '练习分类' : 'Practice Categories'} className="flex flex-wrap items-center gap-1.5" onKeyDown={(event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+          const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="tab"]'))
+          const current = tabs.indexOf(document.activeElement as HTMLButtonElement)
+          const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+          event.preventDefault()
+          tabs[next]?.focus()
+          tabs[next]?.click()
+        }}>
           <button
             type="button"
             role="tab"
             aria-selected={categoryTab === 'full'}
+            tabIndex={categoryTab === 'full' ? 0 : -1}
+            id="reading-library-tab-full"
+            aria-controls="reading-library-panel"
             data-testid="tab-full-tests"
             onClick={() => setCategoryTab('full')}
             className={cn(
@@ -553,6 +446,9 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
             type="button"
             role="tab"
             aria-selected={categoryTab === 'passage'}
+            tabIndex={categoryTab === 'passage' ? 0 : -1}
+            id="reading-library-tab-passage"
+            aria-controls="reading-library-panel"
             data-testid="tab-passages"
             onClick={() => setCategoryTab('passage')}
             className={cn(
@@ -570,6 +466,9 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
             type="button"
             role="tab"
             aria-selected={categoryTab === 'question_type'}
+            tabIndex={categoryTab === 'question_type' ? 0 : -1}
+            id="reading-library-tab-question_type"
+            aria-controls="reading-library-panel"
             data-testid="tab-question-types"
             onClick={() => setCategoryTab('question_type')}
             className={cn(
@@ -587,6 +486,9 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
             type="button"
             role="tab"
             aria-selected={categoryTab === 'ai'}
+            tabIndex={categoryTab === 'ai' ? 0 : -1}
+            id="reading-library-tab-ai"
+            aria-controls="reading-library-panel"
             data-testid="tab-ai-generator"
             onClick={() => setCategoryTab('ai')}
             className={cn(
@@ -604,6 +506,9 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
             type="button"
             role="tab"
             aria-selected={categoryTab === 'history'}
+            tabIndex={categoryTab === 'history' ? 0 : -1}
+            id="reading-library-tab-history"
+            aria-controls="reading-library-panel"
             data-testid="tab-history"
             onClick={() => setCategoryTab('history')}
             className={cn(
@@ -624,10 +529,7 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        {/* Left Column: Selected Tab Content */}
-        <div className="space-y-4">
+        <div id="reading-library-panel" role="tabpanel" aria-labelledby={`reading-library-tab-${categoryTab}`} className="space-y-4">
           {loading ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {[1, 2, 3, 4].map((n) => (
@@ -719,7 +621,14 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
 
               {aiError && <p className="text-xs text-destructive">{aiError}</p>}
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex flex-wrap items-end justify-between gap-3 pt-2">
+                <label className="space-y-1 text-xs font-medium" htmlFor="ai-launch-mode">
+                  <span className="block">{isZh ? '答题方式' : 'Session mode'}</span>
+                  <select id="ai-launch-mode" value={selectedMode} onChange={(event) => setSelectedMode(event.target.value as ReadingMode)} className="h-10 rounded-xl border border-border bg-background px-3 text-sm">
+                    <option value="practice">{isZh ? '练习模式' : 'Practice mode'}</option>
+                    <option value="exam">{isZh ? '计时模考' : 'Timed exam'}</option>
+                  </select>
+                </label>
                 <Button type="submit" disabled={aiGenerating} className="rounded-full gap-2">
                   <Sparkles className="size-4" />
                   {aiGenerating
@@ -727,8 +636,8 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
                       ? '正在生成篇章与校验答案…'
                       : 'Generating & Validating Passage…'
                     : isZh
-                      ? '生成并开始练习'
-                      : 'Generate & Start Practice'}
+                      ? (selectedMode === 'exam' ? '生成并查看模考说明' : '生成并开始练习')
+                      : (selectedMode === 'exam' ? 'Generate & Preview Exam' : 'Generate & Start Practice')}
                 </Button>
               </div>
             </form>
@@ -808,7 +717,7 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
             <div className="grid gap-4">
               {filteredTests.map((test) => {
                 const questionTypes = Array.from(
-                  new Set((test.questions ?? []).map((q) => q.type)),
+                  new Set(test.questionTypes ?? (test.questions ?? []).map((q) => q.type)),
                 )
                 return (
                   <article
@@ -853,7 +762,7 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
                       {/* Question Type Pills */}
                       {questionTypes.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 pt-1">
-                          {questionTypes.map((qt) => {
+                          {questionTypes.slice(0, 3).map((qt) => {
                             const label = QUESTION_TYPE_LABELS[qt]
                             return (
                               <span
@@ -864,6 +773,7 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
                               </span>
                             )
                           })}
+                          {questionTypes.length > 3 ? <details className="text-[11px] text-muted-foreground"><summary className="cursor-pointer rounded-full bg-muted px-2.5 py-0.5">+{questionTypes.length - 3} {isZh ? '种题型' : 'types'}</summary><p className="mt-2 leading-relaxed">{questionTypes.slice(3).map((qt) => QUESTION_TYPE_LABELS[qt]?.[isZh ? 'zh' : 'en'] ?? qt).join(' · ')}</p></details> : null}
                         </div>
                       )}
                     </div>
@@ -914,84 +824,8 @@ export function ReadingPage({ embedded = false }: { embedded?: boolean }) {
             </div>
           )}
         </div>
-
-        {/* Right Sidebar: 12 IELTS Question Types Mastery & Quick Guide */}
-        <aside className="space-y-4">
-          <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-            <h2 className="text-sm font-semibold">
-              {isZh ? '12 大雅思阅读题型掌握度' : 'Accuracy by Question Type'}
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {isZh
-                ? '涵盖机考全部 12 种官方题型，自动统计历史正确率。'
-                : 'Tracks your historical accuracy across all 12 official IELTS Reading question formats.'}
-            </p>
-
-            <div className="mt-4 space-y-2.5">
-              {ALL_QUESTION_TYPES.map((qt) => {
-                const stat = typeStatsMap.get(qt)
-                const total = stat?.total ?? 0
-                const correct = stat?.correct ?? 0
-                const pct = total > 0 ? Math.round(stat?.percent ?? 0) : null
-                const label = QUESTION_TYPE_LABELS[qt]
-                return (
-                  <div key={qt} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="truncate font-medium">
-                        {isZh ? label.zh : label.en}
-                      </span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {pct !== null ? `${correct}/${total} (${pct}%)` : isZh ? '未练习' : 'Not tried'}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={cn(
-                          'h-full rounded-full transition-all',
-                          pct === null
-                            ? 'w-0'
-                            : pct >= 75
-                              ? 'bg-emerald-500'
-                              : pct >= 50
-                                ? 'bg-amber-500'
-                                : 'bg-rose-500',
-                        )}
-                        style={{ width: `${pct ?? 0}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-border bg-card p-5 shadow-sm space-y-2.5">
-            <h3 className="text-sm font-semibold">
-              {isZh ? '机考阅读实用技巧' : 'Computer-Delivered Exam Tips'}
-            </h3>
-            <ul className="space-y-2 text-xs leading-relaxed text-muted-foreground">
-              <li>
-                •{' '}
-                {isZh
-                  ? '选中文章任意句子即可添加黄色/绿色高亮笔记，方便回看定位。'
-                  : 'Select any phrase in the passage to highlight evidence in yellow or green.'}
-              </li>
-              <li>
-                •{' '}
-                {isZh
-                  ? '双击或选中生词即可唤起 AI 语境词汇助手，查看同义替换与中英例句。'
-                  : 'Select any unfamiliar word to open the AI Vocabulary Assistant in context.'}
-              </li>
-              <li>
-                •{' '}
-                {isZh
-                  ? '严格遵守字数限制（如 ONE WORD ONLY），超字数系统将实时提醒。'
-                  : 'Watch word-limit badges (e.g. ONE WORD ONLY); live word counters warn if you exceed the limit.'}
-              </li>
-            </ul>
-          </div>
-        </aside>
-      </div>
+      </section>
+      <ReadingLearningReview data={learningData} analytics={analytics} module={moduleFilter} busy={startingTestId !== null} onReview={(type) => void handleMistakeReview(type)} onHistory={() => { setCategoryTab('history'); document.getElementById('reading-library')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }} revision={learningRevision} />
     </div>
   )
 }

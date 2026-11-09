@@ -15,6 +15,7 @@ import {
   Type,
   XCircle,
 } from 'lucide-react'
+import { Pronunciation } from '@/components/pronunciation'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useI18n } from '@/i18n'
@@ -22,6 +23,7 @@ import {
   checkReadingQuestion,
   explainReadingQuestion,
   lookupReadingVocab,
+  saveReadingVocabulary,
   updateReadingSession,
 } from '@/lib/api'
 import {
@@ -115,6 +117,10 @@ export function ReadingExamView({
   const [vocabLoading, setVocabLoading] = useState<boolean>(false)
   const [vocabResult, setVocabResult] = useState<ReadingVocabResponse | null>(null)
   const [vocabInput, setVocabInput] = useState<string>('')
+  const [vocabDefinition, setVocabDefinition] = useState('')
+  const [savingVocab, setSavingVocab] = useState(false)
+  const [savedVocabTerm, setSavedVocabTerm] = useState('')
+  const [vocabError, setVocabError] = useState<string | null>(null)
 
   const isSubmitted = session.status === 'submitted' || Boolean(reviewMode)
   const isExamMode = session.mode === 'exam'
@@ -326,15 +332,42 @@ export function ReadingExamView({
     if (!term) return
     setVocabOpen(true)
     setVocabLoading(true)
+    setVocabError(null)
+    setSavedVocabTerm('')
     try {
+      const paragraph = currentPassage?.paragraphs.find((p) => p.label === selectedParagraph && p.text.toLowerCase().includes(term.toLowerCase()))
+        ?? currentPassage?.paragraphs.find((p) => p.text.toLowerCase().includes(term.toLowerCase()))
+      const text = paragraph?.text ?? selectedContext
+      const index = Math.max(0, text.toLowerCase().indexOf(term.toLowerCase()))
       const res = await lookupReadingVocab({
         selection: term,
-        context: selectedContext || currentPassage?.paragraphs[0]?.text || '',
+        context: text.slice(Math.max(0, index - 100), index + term.length + 150),
       })
       setVocabResult(res)
+      setVocabInput(term)
+      setVocabDefinition(res.simulated ? '' : res.definition || res.chinese)
+      if (paragraph) setSelectedParagraph(paragraph.label)
+    } catch {
+      setVocabError(isZh ? '暂时无法查询。你可以填写释义后保存原文中的词语。' : 'Lookup is unavailable. You can add your own definition and save the passage word.')
     } finally {
       setVocabLoading(false)
     }
+  }
+
+  async function handleSaveVocabulary() {
+    if (!assistanceAllowed || !currentPassage) return
+    const term = vocabInput.trim()
+    const paragraph = currentPassage.paragraphs.find((p) => p.label === selectedParagraph && p.text.toLowerCase().includes(term.toLowerCase()))
+      ?? currentPassage.paragraphs.find((p) => p.text.toLowerCase().includes(term.toLowerCase()))
+    if (!term || !paragraph) { setVocabError(isZh ? '请选择或输入当前原文中的词语。' : 'Choose a word or phrase from the current passage.'); return }
+    setSavingVocab(true)
+    setVocabError(null)
+    try {
+      await saveReadingVocabulary({ sessionId: session.id, passageId: currentPassage.id, paragraphLabel: paragraph.label, selection: term, definition: vocabDefinition.trim() })
+      setSavedVocabTerm(term)
+    } catch (error) {
+      setVocabError(error instanceof Error ? error.message : (isZh ? '保存失败，请重试。' : 'Could not save this word. Please retry.'))
+    } finally { setSavingVocab(false) }
   }
 
   async function handlePracticeCheck(q: ReadingQuestion) {
@@ -384,8 +417,8 @@ export function ReadingExamView({
     setSubmitError(null)
     try {
       await onSubmitRef.current(latestPayloadRef.current)
-    } catch {
-      setSubmitError(isZh ? '交卷失败，答案仍保留在本页，请重试。' : 'Could not submit. Your answers are still on this page. Please try again.')
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : (isZh ? '交卷失败，答案仍保留在本页，请重试。' : 'Could not submit. Your answers are still on this page. Please try again.'))
     } finally {
       submissionInFlightRef.current = false
       setSubmitting(false)
@@ -530,7 +563,7 @@ export function ReadingExamView({
             onClick={() => setVocabOpen((open) => !open)}
           >
             <Sparkles className="mr-1 size-3.5 text-primary" />
-            {isZh ? 'AI 词汇助手' : 'AI Vocab'}
+            {isZh ? '词汇助手' : 'Vocabulary'}
           </Button> : null}
 
           <span className="text-xs text-muted-foreground tabular-nums" data-testid="reading-progress">
@@ -597,14 +630,14 @@ export function ReadingExamView({
 
       {/* AI Vocabulary Assistant Drawer */}
       {vocabOpen && assistanceAllowed ? (
-        <div className="border-b border-primary/30 bg-primary/5 px-4 py-3">
+        <div className="max-h-[40dvh] shrink-0 overflow-y-auto border-b border-primary/30 bg-primary/5 px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-1 items-center gap-2">
               <Sparkles className="size-4 shrink-0 text-primary" />
               <input
                 type="text"
                 value={vocabInput}
-                onChange={(e) => setVocabInput(e.target.value)}
+                onChange={(e) => { setVocabInput(e.target.value); setVocabResult(null); setVocabDefinition(''); setSavedVocabTerm('') }}
                 placeholder={isZh ? '输入或在文中划词查询语境释义、同义替换与中英例句…' : 'Type or select any word/phrase in the passage to analyze in context…'}
                 className="h-8 min-w-48 flex-1 rounded-full border border-border bg-background px-3 text-xs outline-none focus:border-primary"
               />
@@ -622,15 +655,24 @@ export function ReadingExamView({
               {isZh ? '收起' : 'Close'}
             </Button>
           </div>
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <label className="min-w-48 flex-1 text-xs text-muted-foreground">{isZh ? '语境释义（可自行填写）' : 'Definition in context (you can write your own)'}
+              <input data-testid="reading-vocab-definition" value={vocabDefinition} maxLength={160} onChange={(event) => setVocabDefinition(event.target.value)} className="mt-1 h-9 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground" />
+            </label>
+            <Button data-testid="save-reading-vocabulary" size="sm" disabled={savingVocab || !vocabInput.trim() || savedVocabTerm === vocabInput.trim()} onClick={() => void handleSaveVocabulary()}>{savedVocabTerm === vocabInput.trim() ? (isZh ? '已加入词汇复习' : 'Saved to vocabulary') : savingVocab ? (isZh ? '保存中…' : 'Saving…') : (isZh ? '保存到词汇复习' : 'Save to vocabulary')}</Button>
+          </div>
+          {vocabError ? <p role="alert" className="mt-2 text-xs text-destructive">{vocabError}</p> : null}
+          {savedVocabTerm ? <p role="status" className="mt-2 text-xs text-primary">{isZh ? '原文语境已保存，可在词汇页的复习列表中查看。' : 'Passage context saved. Find this word in your vocabulary review list.'}</p> : null}
           {vocabResult ? (
             <div className="mt-2.5 grid gap-2 rounded-2xl border border-border bg-card p-3 text-xs md:grid-cols-2">
               <div>
-                <p className="font-semibold text-foreground">
-                  {vocabResult.term}{' '}
-                  <span className="ml-1 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">{vocabResult.pos}</span>
-                  <span className="ml-2 text-primary">{vocabResult.chinese}</span>
+                <p className="flex flex-wrap items-center gap-x-1.5 font-semibold text-foreground">
+                  {vocabResult.term}
+                  <Pronunciation word={vocabResult.term} showText={false} />
+                  <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">{vocabResult.pos}</span>
+                  <span className="ml-1 text-primary">{vocabResult.chinese}</span>
                 </p>
-                <p className="mt-1 text-muted-foreground">{vocabResult.definition}</p>
+                <p className="mt-1 text-muted-foreground">{vocabResult.simulated ? (isZh ? '暂无可靠释义。请填写你自己的语境释义。' : 'No verified definition is available. Add your own contextual definition before saving.') : vocabResult.definition}</p>
                 {vocabResult.synonyms.length > 0 ? (
                   <p className="mt-1.5">
                     <span className="text-muted-foreground">{isZh ? '雅思同义替换：' : 'IELTS Paraphrases: '}</span>
@@ -640,11 +682,14 @@ export function ReadingExamView({
               </div>
               <div className="flex flex-col gap-1 border-t border-border pt-2 md:border-t-0 md:border-l md:pt-0 md:pl-3">
                 {vocabResult.examples.map((ex, idx) => (
-                  <div key={ex}>
-                    <p className="text-foreground">{ex}</p>
-                    {vocabResult.examplesZh?.[idx] ? (
-                      <p className="text-muted-foreground">{vocabResult.examplesZh[idx]}</p>
-                    ) : null}
+                  <div key={ex} className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-foreground">{ex}</p>
+                      {vocabResult.examplesZh?.[idx] ? (
+                        <p className="text-muted-foreground">{vocabResult.examplesZh[idx]}</p>
+                      ) : null}
+                    </div>
+                    <Pronunciation word={ex} showText={false} />
                   </div>
                 ))}
               </div>
@@ -691,7 +736,10 @@ export function ReadingExamView({
               {/* Selection Highlight & Vocab Toolbar */}
               {selectedText ? (
                 <div className="sticky top-2 z-20 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-primary/40 bg-card/95 px-3 py-2 text-xs shadow-md backdrop-blur">
-                  <span className="max-w-xs truncate font-medium">“{selectedText}”</span>
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span className="max-w-xs truncate font-medium">“{selectedText}”</span>
+                    <Pronunciation word={selectedText} showText={false} />
+                  </span>
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
@@ -760,6 +808,8 @@ export function ReadingExamView({
                       key={para.label}
                       id={`passage-${currentPassage.id}-para-${para.label}`}
                       onMouseUp={() => handlePassageSelection(para.label, para.text)}
+                      onKeyUp={() => handlePassageSelection(para.label, para.text)}
+                      onTouchEnd={() => handlePassageSelection(para.label, para.text)}
                       className={`rounded-2xl border p-4 transition-colors ${
                         isEvidenceTarget
                           ? 'border-primary bg-primary/10 shadow-sm'
@@ -1277,6 +1327,7 @@ function HighlightedParagraphText({
       <mark className="rounded bg-primary/25 px-1 py-0.5 font-medium text-foreground underline decoration-primary decoration-2">
         {text.slice(idx, end)}
       </mark>
+      {evidenceQuote ? null : <span className="select-none"><Pronunciation word={text.slice(idx, end)} showText={false} /></span>}
       {text.slice(end)}
     </>
   )

@@ -2,6 +2,7 @@ package desk
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -89,9 +90,11 @@ type ReadingTest struct {
 	Difficulty      string            `json:"difficulty"`
 	DurationSeconds int               `json:"durationSeconds"`
 	QuestionCount   int               `json:"questionCount"`
+	QuestionTypes   []string          `json:"questionTypes,omitempty"`
 	Passages        []ReadingPassage  `json:"passages"`
 	Questions       []ReadingQuestion `json:"questions,omitempty"`
 	CreatedAt       time.Time         `json:"createdAt"`
+	Hidden          bool              `json:"-"`
 }
 
 type ReadingHighlight struct {
@@ -104,6 +107,7 @@ type ReadingHighlight struct {
 }
 
 type ReadingQuestionResult struct {
+	QuestionKey       string   `json:"questionKey,omitempty"`
 	QuestionID        string   `json:"questionId"`
 	Number            int      `json:"number"`
 	PassageID         string   `json:"passageId"`
@@ -156,6 +160,9 @@ type ReadingSession struct {
 	StartedAt       time.Time              `json:"startedAt"`
 	SubmittedAt     *time.Time             `json:"submittedAt,omitempty"`
 	UpdatedAt       time.Time              `json:"updatedAt"`
+	Kind            string                 `json:"kind"`
+	ChallengeDay    string                 `json:"challengeDay,omitempty"`
+	XPEarned        int                    `json:"xpEarned"`
 }
 
 type ReadingSessionBundle struct {
@@ -376,6 +383,7 @@ func ScoreReadingSession(test ReadingTest, answers map[string]string, elapsedSec
 			correctCount++
 		}
 		qResults = append(qResults, ReadingQuestionResult{
+			QuestionKey:       readingQuestionFingerprint(q),
 			QuestionID:        q.ID,
 			Number:            q.Number,
 			PassageID:         q.PassageID,
@@ -429,8 +437,12 @@ func ScoreReadingSession(test ReadingTest, answers map[string]string, elapsedSec
 	}
 }
 
-const readingTestColumns = `id::text, slug, title, subtitle, module, category, difficulty, duration_seconds, passages, questions, created_at`
-const readingSessionColumns = `s.id::text, s.test_id::text, t.title, s.mode, s.module, s.status, s.duration_seconds, s.elapsed_seconds, s.answers, s.flags, s.bookmarks, s.highlights, s.score, s.total, s.band::float8, s.results, s.started_at, s.submitted_at, s.updated_at`
+func readingQuestionFingerprint(q ReadingQuestion) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(q.Type+"\x00"+q.Prompt+"\x00"+q.EvidenceQuote+"\x00"+q.CorrectAnswer)))
+}
+
+const readingTestColumns = `id::text, slug, title, subtitle, module, category, difficulty, duration_seconds, passages, questions, created_at, hidden`
+const readingSessionColumns = `s.id::text, s.test_id::text, t.title, s.mode, s.module, s.status, s.duration_seconds, s.elapsed_seconds, s.answers, s.flags, s.bookmarks, s.highlights, s.score, s.total, s.band::float8, s.results, s.started_at, s.submitted_at, s.updated_at, s.kind, COALESCE(s.challenge_day::text, ''), COALESCE((SELECT xp FROM learning_events WHERE event_key = 'reading:' || s.id::text), 0)`
 
 func scanReadingTest(row scanner, includeQuestions bool) (ReadingTest, error) {
 	var t ReadingTest
@@ -447,6 +459,7 @@ func scanReadingTest(row scanner, includeQuestions bool) (ReadingTest, error) {
 		&passagesRaw,
 		&questionsRaw,
 		&t.CreatedAt,
+		&t.Hidden,
 	)
 	if err != nil {
 		return ReadingTest{}, err
@@ -463,6 +476,13 @@ func scanReadingTest(row scanner, includeQuestions bool) (ReadingTest, error) {
 		}
 	}
 	t.QuestionCount = len(questions)
+	seenTypes := map[string]bool{}
+	for _, q := range questions {
+		if !seenTypes[q.Type] {
+			t.QuestionTypes = append(t.QuestionTypes, q.Type)
+			seenTypes[q.Type] = true
+		}
+	}
 	if includeQuestions {
 		t.Questions = questions
 	}
@@ -495,6 +515,9 @@ func scanReadingSession(row scanner) (ReadingSession, error) {
 		&s.StartedAt,
 		&s.SubmittedAt,
 		&s.UpdatedAt,
+		&s.Kind,
+		&s.ChallengeDay,
+		&s.XPEarned,
 	)
 	if err != nil {
 		return ReadingSession{}, err
@@ -525,10 +548,10 @@ func scanReadingSession(row scanner) (ReadingSession, error) {
 }
 
 func (s *Store) ListReadingTests(ctx context.Context, module string) ([]ReadingTest, error) {
-	query := `SELECT ` + readingTestColumns + ` FROM reading_tests`
+	query := `SELECT ` + readingTestColumns + ` FROM reading_tests WHERE NOT hidden`
 	args := []any{}
 	if m := strings.ToLower(strings.TrimSpace(module)); m == "academic" || m == "general" {
-		query += ` WHERE module = $1`
+		query += ` AND module = $1`
 		args = append(args, m)
 	}
 	query += ` ORDER BY CASE category WHEN 'full' THEN 1 WHEN 'passage' THEN 2 ELSE 3 END, created_at ASC`
@@ -568,6 +591,9 @@ func (s *Store) StartReadingSession(ctx context.Context, testID, mode string, du
 	test, err := s.GetReadingTest(ctx, testID, true)
 	if err != nil {
 		return ReadingSessionBundle{}, err
+	}
+	if test.Hidden {
+		return ReadingSessionBundle{}, fmt.Errorf("%w: resume this challenge or review through its learning action", ErrInvalid)
 	}
 	mode = strings.ToLower(strings.TrimSpace(mode))
 	if mode != "exam" && mode != "practice" {
@@ -728,19 +754,38 @@ func (s *Store) CheckPracticeQuestion(ctx context.Context, sessionID, questionID
 }
 
 func (s *Store) SubmitReadingSession(ctx context.Context, sessionID string, patch ReadingSessionPatch) (ReadingSessionBundle, error) {
-	bundle, err := s.GetReadingSession(ctx, sessionID)
+	if err := s.ensureLearningProfile(ctx, ""); err != nil {
+		return ReadingSessionBundle{}, err
+	}
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return ReadingSessionBundle{}, err
 	}
-	session := bundle.Session
+	defer tx.Rollback(ctx)
+	session, err := scanReadingSession(tx.QueryRow(ctx, `SELECT `+readingSessionColumns+` FROM reading_sessions s JOIN reading_tests t ON t.id=s.test_id WHERE s.id::text=$1 FOR UPDATE OF s`, sessionID))
+	if err != nil {
+		return ReadingSessionBundle{}, readingNotFound(err)
+	}
 	if session.Status == "submitted" {
-		return bundle, nil
+		if err := tx.Commit(ctx); err != nil {
+			return ReadingSessionBundle{}, err
+		}
+		return s.GetReadingSession(ctx, sessionID)
 	}
 	session = applyReadingSessionPatch(session, patch, time.Now())
-
-	fullTest, err := s.GetReadingTest(ctx, session.TestID, true)
+	fullTest, err := scanReadingTest(tx.QueryRow(ctx, `SELECT `+readingTestColumns+` FROM reading_tests WHERE id=$1`, session.TestID), true)
 	if err != nil {
 		return ReadingSessionBundle{}, err
+	}
+	if session.Kind == "daily" || session.Kind == "mistake_review" {
+		for _, q := range fullTest.Questions {
+			if strings.TrimSpace(session.Answers[q.ID]) == "" {
+				if session.Kind == "mistake_review" {
+					return ReadingSessionBundle{}, fmt.Errorf("%w: answer each review question before finishing", ErrInvalid)
+				}
+				return ReadingSessionBundle{}, fmt.Errorf("%w: answer all five questions before completing the daily challenge", ErrInvalid)
+			}
+		}
 	}
 	results := ScoreReadingSession(fullTest, session.Answers, session.ElapsedSeconds)
 	answersRaw, _ := json.Marshal(session.Answers)
@@ -748,34 +793,17 @@ func (s *Store) SubmitReadingSession(ctx context.Context, sessionID string, patc
 	bookmarksRaw, _ := json.Marshal(session.Bookmarks)
 	highlightsRaw, _ := json.Marshal(session.Highlights)
 	resultsRaw, _ := json.Marshal(results)
-
-	_, err = s.pool.Exec(ctx, `
-		UPDATE reading_sessions
-		SET status = 'submitted',
-		    elapsed_seconds = $2,
-		    answers = $3::jsonb,
-		    flags = $4::jsonb,
-		    bookmarks = $5::jsonb,
-		    highlights = $6::jsonb,
-		    score = $7,
-		    total = $8,
-		    band = $9,
-		    results = $10::jsonb,
-		    submitted_at = now(),
-		    updated_at = now()
-		WHERE id = $1 AND status = 'active'`,
-		session.ID,
-		session.ElapsedSeconds,
-		answersRaw,
-		flagsRaw,
-		bookmarksRaw,
-		highlightsRaw,
-		results.Score,
-		results.Total,
-		results.Band,
-		resultsRaw,
-	)
+	_, err = tx.Exec(ctx, `UPDATE reading_sessions SET status='submitted',elapsed_seconds=$2,answers=$3::jsonb,flags=$4::jsonb,bookmarks=$5::jsonb,highlights=$6::jsonb,score=$7,total=$8,band=$9,results=$10::jsonb,submitted_at=now(),updated_at=now() WHERE id=$1`, session.ID, session.ElapsedSeconds, answersRaw, flagsRaw, bookmarksRaw, highlightsRaw, results.Score, results.Total, results.Band, resultsRaw)
 	if err != nil {
+		return ReadingSessionBundle{}, err
+	}
+	if err := recordReadingLearning(ctx, tx, session, results); err != nil {
+		return ReadingSessionBundle{}, err
+	}
+	if err := recordReadingMistakes(ctx, tx, session, fullTest, results); err != nil {
+		return ReadingSessionBundle{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return ReadingSessionBundle{}, err
 	}
 	return s.GetReadingSession(ctx, sessionID)
@@ -786,7 +814,7 @@ func (s *Store) GetReadingAnalytics(ctx context.Context, module string) (Reading
 		SELECT ` + readingSessionColumns + `
 		FROM reading_sessions s
 		JOIN reading_tests t ON t.id = s.test_id
-		WHERE s.status = 'submitted'`
+		WHERE s.status = 'submitted' AND s.kind = 'standard'`
 	args := []any{}
 	if m := strings.ToLower(strings.TrimSpace(module)); m == "academic" || m == "general" {
 		query += ` AND s.module = $1`
@@ -1080,49 +1108,37 @@ Return JSON with keys:
 	}
 
 	pos := "phrase"
-	if !strings.Contains(term, " ") {
-		pos = "academic lexis"
-	}
-	def := fmt.Sprintf("Used in this passage context (%q) to convey a key academic concept or relationship.", term)
-	zh := savedMeaning
+	definition := ""
+	chinese := savedMeaning
 	if len(savedSenses) > 0 {
 		pos = savedSenses[0].Pos
-		if savedSenses[0].En != "" {
-			def = savedSenses[0].En
-		}
+		definition = savedSenses[0].En
 		if savedSenses[0].Zh != "" {
-			zh = savedSenses[0].Zh
+			chinese = savedSenses[0].Zh
 		}
 	}
-	if zh == "" {
-		zh = lookupBuiltinVocabZh(term)
+	if chinese == "" {
+		chinese = lookupBuiltinVocabZh(term)
+	}
+	if definition == "" {
+		definition = savedMeaning
+	}
+	if definition == "" {
+		definition = chinese
 	}
 	synonyms := savedBand.Paraphrases
-	if len(synonyms) == 0 {
-		synonyms = []string{"key concept", "contextual term", "academic expression"}
+	if synonyms == nil {
+		synonyms = []string{}
 	}
 	examples := savedBand.Examples
-	examplesZh := savedBand.ExamplesZh
-	if len(examples) == 0 {
-		examples = []string{
-			fmt.Sprintf("The author uses %q to highlight a critical distinction in the study.", term),
-			fmt.Sprintf("Understanding %q in context helps readers track the passage's main argument.", term),
-		}
-		examplesZh = []string{
-			fmt.Sprintf("作者使用“%s”来强调研究中的一项关键区分。", term),
-			fmt.Sprintf("结合上下文理解“%s”有助于把握文章的核心论点。", term),
-		}
+	if examples == nil {
+		examples = []string{}
 	}
-	return ReadingVocabResponse{
-		Term:       term,
-		Pos:        pos,
-		Definition: def,
-		Chinese:    zh,
-		Synonyms:   synonyms,
-		Examples:   examples[:minInt(len(examples), 3)],
-		ExamplesZh: examplesZh[:minInt(len(examplesZh), 3)],
-		Simulated:  true,
-	}, nil
+	examplesZh := savedBand.ExamplesZh
+	if examplesZh == nil {
+		examplesZh = []string{}
+	}
+	return ReadingVocabResponse{Term: term, Pos: pos, Definition: definition, Chinese: chinese, Synonyms: synonyms, Examples: examples, ExamplesZh: examplesZh, Simulated: definition == ""}, nil
 }
 
 func minInt(a, b int) int {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -86,7 +87,7 @@ func (p *Platform) ask(ctx context.Context, kind string, messages []ai.Message, 
 	}
 	if err != nil {
 		var perr *ai.ErrProvider
-		if errors.As(err, &perr) && perr.Status >= 400 && perr.Status < 500 && perr.Status != 429 {
+		if errors.As(err, &perr) && (strings.Contains(strings.ToLower(perr.Body), "quota") || (perr.Status >= 400 && perr.Status < 500 && perr.Status != http.StatusTooManyRequests)) {
 			return meta, rec, noRetry(fmt.Errorf("%s rejected the request: %w", rec.Name, err))
 		}
 		return meta, rec, fmt.Errorf("%s: %w", rec.Name, err)

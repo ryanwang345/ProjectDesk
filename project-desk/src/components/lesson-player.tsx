@@ -17,10 +17,14 @@ export function LessonPlayer({
   lesson,
   onExit,
   onComplete,
+  earnedXP = null,
+  rewardEligible = true,
 }: {
   lesson: number
   onExit: () => void
   onComplete: (correct: number) => void
+  earnedXP?: number | null
+  rewardEligible?: boolean
 }) {
   const { t } = useI18n()
   const [words, setWords] = useState<EnglishCard[]>([])
@@ -215,7 +219,7 @@ export function LessonPlayer({
       <div className="flex min-h-[60vh] w-full flex-col items-center justify-center gap-4 text-center">
         <h1 className="font-display text-5xl tracking-tight">{won ? t('english.lessonDone') : t('english.outOfHearts')}</h1>
         <p className="text-muted-foreground">
-          {won ? t('english.lessonScore', { correct: correctCount, total: questions.length, xp: correctCount * XP_PER_CORRECT }) : t('english.tryAgain')}
+          {won ? earnedXP === null ? t('english.lessonProgressPending') : t('english.lessonScore', { correct: correctCount, total: questions.length, xp: earnedXP }) : t('english.tryAgain')}
         </p>
         <Button type="button" className="mt-2 h-12 px-8 text-base" onClick={onExit}>{t('english.backToPath')}</Button>
       </div>
@@ -292,7 +296,7 @@ export function LessonPlayer({
         })}
       </div>
       <div ref={resultRef}>
-        {checked && picked ? <Result question={question} correct={correct} card={promptCard} /> : null}
+        {checked && picked ? <Result question={question} correct={correct} card={promptCard} rewardEligible={rewardEligible} /> : null}
         {checked ? (
           <Button type="button" className="mt-3 h-12 w-full rounded-full text-base" onClick={continueLesson}>{t('english.continueNext')}</Button>
         ) : (
@@ -304,7 +308,7 @@ export function LessonPlayer({
   )
 }
 
-function Result({ question, correct, card }: { question: Question; correct: boolean; card?: EnglishCard }) {
+function Result({ question, correct, card, rewardEligible }: { question: Question; correct: boolean; card?: EnglishCard; rewardEligible: boolean }) {
   const { t } = useI18n()
   return (
     <div className={`rounded-3xl border px-4 py-4 ${correct ? 'border-primary/40 bg-primary/10' : 'border-destructive/40 bg-destructive/10'}`}>
@@ -313,7 +317,7 @@ function Result({ question, correct, card }: { question: Question; correct: bool
           <span className={`grid size-5 place-items-center rounded-full text-xs ${correct ? 'bg-primary text-primary-foreground' : 'bg-destructive text-white'}`}>{correct ? '✓' : '×'}</span>
           {correct ? t('english.answeredRight') : t('english.wrong')}
         </p>
-        {correct ? <span className="text-sm text-primary">{t('english.points', { n: XP_PER_CORRECT })}</span> : null}
+        {correct && rewardEligible ? <span className="text-sm text-primary">{t('english.points', { n: XP_PER_CORRECT })}</span> : null}
       </div>
       {question.why ? <p className="mt-3 text-sm leading-relaxed">{question.why}</p> : null}
       {question.chinese ? <p className="mt-2 text-sm text-primary">{question.chinese}</p> : null}

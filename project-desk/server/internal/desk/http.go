@@ -22,6 +22,7 @@ func NewHandler(store *Store, platform *Platform) http.Handler {
 		h.registerPlatform(mux)
 	}
 	h.registerReading(mux)
+	h.registerLearning(mux)
 	mux.HandleFunc("GET /api/healthz", h.health)
 	mux.HandleFunc("GET /api/cycles", h.listCycles)
 	mux.HandleFunc("POST /api/cycles/sample", h.sampleCycle)
@@ -34,6 +35,7 @@ func NewHandler(store *Store, platform *Platform) http.Handler {
 	mux.HandleFunc("POST /api/english-lessons/{n}", h.prepareEnglishLesson)
 	mux.HandleFunc("POST /api/english/{id}/review", h.addEnglishReview)
 	mux.HandleFunc("POST /api/english/{id}/band", h.writeEnglishBand)
+	mux.HandleFunc("POST /api/english/{id}/senses", h.writeEnglishSenses)
 	mux.HandleFunc("DELETE /api/english/{id}/review", h.removeEnglishReview)
 	mux.HandleFunc("DELETE /api/english/{id}", h.deleteEnglish)
 	mux.HandleFunc("GET /api/projects", h.list)

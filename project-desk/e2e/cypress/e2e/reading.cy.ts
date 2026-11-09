@@ -1,9 +1,11 @@
 describe('IELTS Reading Practice Module', { tags: '@regression' }, () => {
+  // Reward-bearing attempts must run against an isolated test workspace.
+  const writingTest = Cypress.expose('allowLearningWrites') ? it : it.skip
   it('opens IELTS Reading from the primary header and switches modules and tabs', () => {
     cy.visitDesk()
     cy.get('nav[aria-label="Primary"]').contains('a', 'IELTS Reading').click()
     cy.location('pathname').should('eq', '/reading')
-    cy.contains('h1', 'IELTS Reading Practice & Exam Studio').should('be.visible')
+    cy.get('[data-testid="reading-welcome"] h1').should('be.visible')
 
     // Academic full test should be visible by default
     cy.get('[data-testid="reading-test-card-academic-full-1"]').should('be.visible')
@@ -21,7 +23,7 @@ describe('IELTS Reading Practice Module', { tags: '@regression' }, () => {
     cy.get('[data-testid="reading-test-card-drill-tfng-ynng"]').should('be.visible')
   })
 
-  it('redacts protected answer keys during an active session, supports Practice check, and scores submission', () => {
+  writingTest('redacts protected answer keys during an active session, supports Practice check, and scores submission', () => {
     cy.intercept('POST', '/api/reading/sessions').as('startSession')
     cy.intercept('POST', '/api/reading/sessions/*/check').as('checkQuestion')
     cy.intercept('POST', '/api/reading/sessions/*/submit').as('submitSession')
@@ -58,7 +60,7 @@ describe('IELTS Reading Practice Module', { tags: '@regression' }, () => {
     cy.contains('Unofficial Band Estimate').should('be.visible')
   })
 
-  it('supports responsive mobile tabbed layout between Passage and Questions', () => {
+  writingTest('supports responsive mobile tabbed layout between Passage and Questions', () => {
     cy.viewport('iphone-x')
     cy.visit('/reading')
     cy.get('[data-testid="start-practice-academic-full-1"]').click()
@@ -70,7 +72,7 @@ describe('IELTS Reading Practice Module', { tags: '@regression' }, () => {
     cy.contains('button', 'Reading Passage').click()
   })
 
-  it('auto-submits when the countdown timer expires in Exam Mode', () => {
+  writingTest('auto-submits when the countdown timer expires in Exam Mode', () => {
     cy.request('GET', '/api/reading/tests').then((res) => {
       const tests = res.body as Array<{ id: string; slug: string }>
       const drill = tests.find((t) => t.slug === 'drill-tfng-ynng') ?? tests[0]
@@ -117,7 +119,7 @@ describe('IELTS Reading Practice Module', { tags: '@regression' }, () => {
     cy.get('[data-testid="reading-test-card-academic-full-2-drill-tfng"]').should('not.exist')
   })
 
-  it('briefs the candidate, locks assistance, and reviews unanswered and flagged questions before submission', () => {
+  writingTest('briefs the candidate, locks assistance, and reviews unanswered and flagged questions before submission', () => {
     cy.intercept('POST', '/api/reading/sessions').as('startExam')
     cy.intercept('POST', '/api/reading/sessions/*/submit').as('submitExam')
     cy.visit('/reading')
@@ -162,7 +164,7 @@ describe('IELTS Reading Practice Module', { tags: '@regression' }, () => {
     cy.get('[data-testid="reading-exam-briefing"]').should('be.visible')
   })
 
-  it('restores saved answers after reloading without resetting the exam clock', () => {
+  writingTest('restores saved answers after reloading without resetting the exam clock', () => {
     cy.intercept('PATCH', '/api/reading/sessions/*').as('saveAnswers')
     cy.intercept('GET', '/api/reading/sessions/*').as('resumeExam')
     cy.visit('/reading')
@@ -178,7 +180,7 @@ describe('IELTS Reading Practice Module', { tags: '@regression' }, () => {
     cy.get('[data-testid="reading-timer"]').should('not.contain', '60:00')
   })
 
-  it('locks answers at expiry and retries a failed automatic submission', () => {
+  writingTest('locks answers at expiry and retries a failed automatic submission', () => {
     let submissions = 0
     cy.intercept('POST', '/api/reading/sessions', (req) => { req.body.durationSeconds = 2 })
     cy.intercept('POST', '/api/reading/sessions/*/submit', (req) => {

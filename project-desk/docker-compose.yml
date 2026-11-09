@@ -35,6 +35,9 @@ services:
       # "not run" here. Run the API on a host with Docker to enable them.
       PROJECT_DESK_RUNNER: none
       PROJECT_DESK_WORKER_CONCURRENCY: "2"
+      # Set to 1 to write dictionary senses for every word at startup. Off by
+      # default because one full run can use up a free model quota.
+      PROJECT_DESK_FILL_SENSES: ${PROJECT_DESK_FILL_SENSES:-0}
     ports:
       - "47292:47292"
     depends_on:

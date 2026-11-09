@@ -128,6 +128,29 @@ func TestAnthropicPromptsForJSONWithoutJSONMode(t *testing.T) {
 	}
 }
 
+func TestQuotaPauseSkipsLaterCalls(t *testing.T) {
+	clearQuotaPause()
+	t.Cleanup(clearQuotaPause)
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details.","status":"RESOURCE_EXHAUSTED"}}`))
+	}))
+	defer server.Close()
+	p, _ := New(Config{Kind: KindGemini, BaseURL: server.URL, Model: "gemini", APIKey: "k"})
+	var out struct{}
+	if _, err := GenerateJSON(context.Background(), p, Request{Messages: []Message{{Role: "user", Content: "hi"}}}, &out); err == nil {
+		t.Fatal("expected the quota error")
+	}
+	if _, err := GenerateJSON(context.Background(), p, Request{Messages: []Message{{Role: "user", Content: "hi"}}}, &out); err == nil {
+		t.Fatal("expected the pause to keep failing closed")
+	}
+	if calls != 1 {
+		t.Fatalf("quota pause still called the provider %d times", calls)
+	}
+}
+
 func TestProviderErrorsAreSurfaced(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

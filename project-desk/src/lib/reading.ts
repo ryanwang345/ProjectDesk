@@ -55,6 +55,7 @@ export type ReadingTest = {
   difficulty: string
   durationSeconds: number
   questionCount: number
+  questionTypes?: ReadingQuestionType[]
   passages: ReadingPassage[]
   questions?: ReadingQuestion[]
   createdAt: string
@@ -122,6 +123,9 @@ export type ReadingSession = {
   startedAt: string
   submittedAt?: string
   updatedAt: string
+  kind?: 'standard' | 'daily' | 'mistake_review'
+  challengeDay?: string
+  xpEarned?: number
 }
 
 export type ReadingSessionBundle = {
@@ -197,4 +201,64 @@ export function countAnswerWords(input: string): number {
   const trimmed = input.trim()
   if (!trimmed) return 0
   return trimmed.split(/\s+/).length
+}
+
+export type LearningDay = { day: string; reading: number; vocabulary: number; xp: number }
+export type LearningProgress = {
+  xp: number
+  streak: number
+  lastDay: string
+  completed: number[]
+  timezone: string
+  weekly: LearningDay[]
+  legacyImported: boolean
+  awardedXP?: number
+}
+export type ReadingRecommendation = {
+  testId: string
+  title: string
+  type: ReadingQuestionType
+  reason: string
+  accuracy?: number
+  sampleSize: number
+  lastPracticed?: string
+  questionCount: number
+  durationSeconds: number
+}
+export type ReadingMistake = {
+  id: string
+  module: 'academic' | 'general'
+  question: ReadingQuestion
+  passage: ReadingPassage
+  userAnswer: string
+  incorrectCount: number
+  retryCount: number
+  correctRetries: number
+  firstWrongAt: string
+  lastWrongAt: string
+  resolvedAt?: string
+}
+export type ReadingLearningDashboard = {
+  progress: LearningProgress
+  daily: { day: string; title: string; session?: ReadingSession }
+  activeSessions: ReadingSession[]
+  recommendations: ReadingRecommendation[]
+  mistakes: {
+    open: number
+    resolved: number
+    retries: number
+    correctRetries: number
+    byType: Array<{ type: ReadingQuestionType; open: number; resolved: number }>
+  }
+  readingCompletions: number
+  questionsAnswered: number
+}
+export type ReadingSavedWord = {
+  id: string
+  cardId: string
+  word: string
+  meaning: string
+  context: string
+  passageTitle: string
+  createdAt: string
 }

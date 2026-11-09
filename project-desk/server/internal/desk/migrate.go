@@ -377,6 +377,86 @@ CREATE TABLE IF NOT EXISTS reading_sessions (
 );
 CREATE INDEX IF NOT EXISTS reading_sessions_status_idx ON reading_sessions (status, submitted_at DESC);
 `},
+	{13, `
+-- The existing application is a single shared learner workspace.
+CREATE TABLE learning_profile (
+    id TEXT PRIMARY KEY CHECK (id = 'workspace'),
+    timezone TEXT NOT NULL,
+    completed JSONB NOT NULL DEFAULT '[]'::jsonb,
+    legacy_imported BOOLEAN NOT NULL DEFAULT false,
+    legacy_last_day DATE,
+    legacy_streak INT NOT NULL DEFAULT 0
+);
+CREATE TABLE learning_events (
+    event_key TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('reading', 'vocabulary', 'legacy')),
+    xp INT NOT NULL CHECK (xp >= 0),
+    activity_day DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX learning_events_day_idx ON learning_events (activity_day);
+ALTER TABLE reading_tests ADD COLUMN hidden BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE reading_sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'standard'
+    CHECK (kind IN ('standard', 'daily', 'mistake_review'));
+ALTER TABLE reading_sessions ADD COLUMN challenge_day DATE;
+ALTER TABLE reading_sessions ADD COLUMN review_type TEXT NOT NULL DEFAULT '';
+CREATE TABLE reading_daily_challenges (
+    day DATE NOT NULL,
+    module TEXT NOT NULL CHECK (module IN ('academic', 'general')),
+    session_id UUID NOT NULL UNIQUE REFERENCES reading_sessions(id),
+    PRIMARY KEY (day, module)
+);
+CREATE TABLE reading_mistakes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    test_id UUID NOT NULL REFERENCES reading_tests(id),
+    question_id TEXT NOT NULL,
+    module TEXT NOT NULL,
+    question JSONB NOT NULL,
+    passage JSONB NOT NULL,
+    user_answer TEXT NOT NULL DEFAULT '',
+    incorrect_count INT NOT NULL DEFAULT 1,
+    retry_count INT NOT NULL DEFAULT 0,
+    correct_retries INT NOT NULL DEFAULT 0,
+    first_wrong_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_wrong_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved_at TIMESTAMPTZ,
+    UNIQUE (test_id, question_id)
+);
+CREATE INDEX reading_mistakes_review_idx ON reading_mistakes (module, resolved_at, last_wrong_at);
+-- Bring genuine historical incorrect answers into the review queue.
+INSERT INTO reading_mistakes (test_id,question_id,module,question,passage,user_answer,incorrect_count,first_wrong_at,last_wrong_at)
+SELECT DISTINCT ON (s.test_id,answer->>'questionId')
+    s.test_id,answer->>'questionId',s.module,q,p,COALESCE(answer->>'userAnswer',''),
+    count(*) OVER w,min(s.submitted_at) OVER w,max(s.submitted_at) OVER w
+FROM reading_sessions s JOIN reading_tests t ON t.id=s.test_id
+CROSS JOIN LATERAL jsonb_array_elements(COALESCE(s.results->'questions','[]'::jsonb)) answer
+CROSS JOIN LATERAL jsonb_array_elements(t.questions) q
+CROSS JOIN LATERAL jsonb_array_elements(t.passages) p
+WHERE s.status='submitted' AND answer->>'correct'='false'
+    AND q->>'id'=answer->>'questionId' AND p->>'id'=q->>'passageId'
+WINDOW w AS (PARTITION BY s.test_id,answer->>'questionId')
+ORDER BY s.test_id,answer->>'questionId',s.submitted_at DESC;
+CREATE TABLE reading_review_items (
+    session_id UUID NOT NULL REFERENCES reading_sessions(id) ON DELETE CASCADE,
+    question_id TEXT NOT NULL,
+    mistake_id UUID NOT NULL REFERENCES reading_mistakes(id),
+    PRIMARY KEY (session_id, question_id)
+);
+-- A saved reading word has one genuine passage example; never invent nine more.
+ALTER TABLE english_cards DROP CONSTRAINT english_cards_examples_count;
+ALTER TABLE english_cards ADD CONSTRAINT english_cards_examples_count
+    CHECK (cardinality(examples) BETWEEN 1 AND 10);
+CREATE TABLE reading_vocabulary (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    card_id UUID NOT NULL REFERENCES english_cards(id) ON DELETE CASCADE,
+    session_id UUID NOT NULL REFERENCES reading_sessions(id),
+    passage_id TEXT NOT NULL,
+    paragraph_label TEXT NOT NULL,
+    context TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (card_id, session_id, passage_id, paragraph_label)
+);
+`},
 }
 
 func migrate(ctx context.Context, s *Store) error {
