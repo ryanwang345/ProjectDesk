@@ -27,14 +27,14 @@ function Frame() {
   return (
     <div className="relative z-10 flex min-h-svh flex-col">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+      <main className="w-full flex-1 px-4 py-8 sm:px-6 sm:py-10">
         <Routes>
           <Route index element={<BoardPage />} />
           <Route path="about" element={<AboutPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
-      <footer className="mx-auto w-full max-w-6xl px-4 pt-6 pb-10 sm:px-6">
+      <footer className="w-full px-4 pt-6 pb-10 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/80 pt-4 text-xs text-muted-foreground">
           <p>{t('footer')}</p>
           <p className="font-display text-sm tracking-tight text-primary">{t('brand')}</p>

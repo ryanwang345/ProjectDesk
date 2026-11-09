@@ -24,14 +24,14 @@ const steps = [
 export function AboutPage() {
   const { t } = useI18n()
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8">
+    <div className="flex w-full flex-col gap-8">
       <div>
         <h1 className="font-display text-4xl tracking-tight sm:text-5xl">{t('about.title')}</h1>
         <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
           {t('about.lead')}
         </p>
       </div>
-      <div className="grid gap-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {steps.map((step, index) => (
           <Card key={step.title}>
             <CardHeader>

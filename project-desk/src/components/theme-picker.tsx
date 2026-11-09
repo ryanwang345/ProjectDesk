@@ -51,7 +51,7 @@ export function ThemePicker({ showName = false }: { showName?: boolean }) {
         onClick={() => setOpen((value) => !value)}
       >
         <Swatch colors={current.colors} />
-        {showName ? <span className="truncate">{current.name}</span> : null}
+        {showName ? <span className="hidden max-w-40 truncate sm:inline">{current.name}</span> : null}
         <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </button>
       {open ? (

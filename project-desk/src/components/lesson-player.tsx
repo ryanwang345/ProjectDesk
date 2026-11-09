@@ -100,7 +100,7 @@ export function LessonPlayer({
 
   if (failed) {
     return (
-      <div className="mx-auto max-w-xl">
+      <div className="w-full">
         <p className="text-sm text-destructive">{failed}</p>
         <Button type="button" className="mt-4" onClick={onExit}>{t('english.backToPath')}</Button>
       </div>
@@ -109,7 +109,7 @@ export function LessonPlayer({
 
   if (questions.length === 0) {
     return (
-      <div aria-busy="true" className="mx-auto flex h-48 max-w-xl items-center justify-center rounded-xl bg-muted">
+      <div aria-busy="true" className="flex h-48 w-full items-center justify-center rounded-xl bg-muted">
         <p className="text-sm text-muted-foreground">{t('english.writing')}</p>
       </div>
     )
@@ -117,7 +117,7 @@ export function LessonPlayer({
 
   if (!started) {
     return (
-      <div className="flex flex-col gap-4 pb-4">
+      <div className="flex w-full flex-col gap-4 pb-4">
         <div className="flex items-center gap-3">
           <Button type="button" size="icon" variant="ghost" aria-label={t('english.quit')} onClick={onExit}>
             <X />
@@ -131,7 +131,7 @@ export function LessonPlayer({
           <span className="text-xs text-muted-foreground tabular-nums">{words.length}/{words.length}</span>
         </div>
         <p className="text-sm text-muted-foreground">{t('english.learnThese')}</p>
-        <ol className="flex flex-col gap-3">
+        <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {words.map((card) => {
             const cloze = questions.find((item) => item.kind === 'cloze' && item.answer.toLowerCase() === card.word.toLowerCase())
             const example = cloze && cloze.kind === 'cloze' ? `${cloze.before}${cloze.answer}${cloze.after}` : (card.examples[0] ?? '')
@@ -211,7 +211,7 @@ export function LessonPlayer({
   if (finished) {
     const won = finished === 'done'
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center gap-4 text-center">
+      <div className="flex min-h-[60vh] w-full flex-col items-center justify-center gap-4 text-center">
         <h1 className="font-display text-5xl tracking-tight">{won ? t('english.lessonDone') : t('english.outOfHearts')}</h1>
         <p className="text-muted-foreground">
           {won ? t('english.lessonScore', { correct: correctCount, total: questions.length, xp: correctCount * XP_PER_CORRECT }) : t('english.tryAgain')}
@@ -226,12 +226,12 @@ export function LessonPlayer({
     : words.find((card) => card.word.toLowerCase() === question.answer.toLowerCase())
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center gap-3">
+    <div className="flex w-full flex-col gap-5">
+      <div className="flex flex-wrap items-center gap-3">
         <Button type="button" size="icon" variant="ghost" aria-label={t('english.quit')} onClick={onExit}>
           <X />
         </Button>
-        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+        <div className="h-2 min-w-32 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
           <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
         </div>
         <p className="text-xs text-muted-foreground tabular-nums">{t('english.questionOf', { n: step + 1, total: questions.length })}</p>
@@ -260,7 +260,7 @@ export function LessonPlayer({
       ) : (
         <Prompt question={question} words={words} picked={picked} checked={checked} />
       )}
-      <div className="grid gap-2">
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {question.choices.map((choice, index) => {
           const selected = picked === choice
           const showCorrect = checked && choice === question.answer
@@ -274,17 +274,17 @@ export function LessonPlayer({
               aria-pressed={selected}
               className={
                 showCorrect
-                  ? 'flex items-center gap-3 rounded-2xl border border-primary bg-primary/15 px-3 py-3 text-left'
+                  ? 'flex min-w-0 items-center gap-3 rounded-2xl border border-primary bg-primary/15 px-3 py-3 text-left'
                   : showWrong
-                    ? 'flex items-center gap-3 rounded-2xl border border-destructive bg-destructive/10 px-3 py-3 text-left'
+                    ? 'flex min-w-0 items-center gap-3 rounded-2xl border border-destructive bg-destructive/10 px-3 py-3 text-left'
                     : selected
-                      ? 'flex items-center gap-3 rounded-2xl border border-primary bg-card px-3 py-3 text-left'
-                      : 'flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-3 text-left'
+                      ? 'flex min-w-0 items-center gap-3 rounded-2xl border border-primary bg-card px-3 py-3 text-left'
+                      : 'flex min-w-0 items-center gap-3 rounded-2xl border border-border bg-card px-3 py-3 text-left'
               }
               onClick={() => setPicked(choice)}
             >
               <span className={`grid size-7 place-items-center rounded-full text-xs font-medium ${showCorrect ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>{letter}</span>
-              <span className="flex-1 text-sm">{choice}</span>
+              <span className="min-w-0 flex-1 text-sm break-words">{choice}</span>
               {showCorrect ? <span className="text-xs text-primary">{t('english.correct')}</span> : null}
             </button>
           )

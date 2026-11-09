@@ -8,6 +8,7 @@ export type BandNote = {
   collocations: string[]
   writing: string
   speaking: string
+  examples?: string[]
   weak: string
   fix: string
   paraphrases: string[]

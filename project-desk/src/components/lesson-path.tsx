@@ -40,8 +40,8 @@ export function LessonPath({
         <p className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
           {t('english.immersive')}
         </p>
-        <h1 className="mt-3 font-display text-4xl tracking-tight">{t('english.title')}</h1>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t('english.pathLead')}</p>
+        <h1 className="mt-3 font-display text-4xl tracking-tight md:text-5xl">{t('english.title')}</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">{t('english.pathLead')}</p>
       </div>
       <div className="flex gap-2">
         <p className="rounded-full border border-border bg-card px-3 py-1.5 text-sm">{t('english.streak', { n: progress.streak })}</p>
@@ -61,8 +61,10 @@ export function LessonPath({
           <ChevronRight className="size-4" aria-hidden="true" />
         </button>
       </div>
-      <ol className="relative mx-auto flex w-full max-w-xs flex-col items-center gap-7 py-2">
-        <span className="absolute top-8 bottom-8 left-1/2 w-px -translate-x-1/2 bg-primary/25" aria-hidden="true" />
+      <div className="grid items-start gap-6 md:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
+      <div className="flex min-w-0 flex-col gap-5">
+      <ol className="relative flex w-full flex-col gap-7 py-2">
+        <span className="absolute top-8 bottom-8 left-8 w-px -translate-x-1/2 bg-primary/25" aria-hidden="true" />
         {Array.from({ length: LESSONS_PER_UNIT }, (_, offset) => unit * LESSONS_PER_UNIT + offset)
           .filter((index) => index < count)
           .map((index) => {
@@ -70,23 +72,25 @@ export function LessonPath({
             const done = progress.completed.includes(index)
             const current = index === active && lessonOpen
             return (
-              <li key={index} className="relative z-10 flex items-center gap-3">
-                <button
-                  type="button"
-                  disabled={!lessonOpen}
-                  className={
-                    done
-                      ? 'grid size-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_0_24px_oklch(0.8_0.17_158/0.55)]'
-                      : current
-                        ? 'grid size-16 place-items-center rounded-full border-4 border-primary bg-background text-xl font-semibold text-primary shadow-[0_0_28px_oklch(0.8_0.17_158/0.45)]'
-                        : 'grid size-14 place-items-center rounded-full border border-border bg-card text-muted-foreground'
-                  }
-                  aria-label={t('english.lessonNode', { n: index + 1 })}
-                  onClick={() => onStart(index)}
-                >
-                  {done ? <Check className="size-6" /> : lessonOpen ? index + 1 : <Lock className="size-4" />}
-                </button>
-                <span className={`absolute left-[4.5rem] w-24 text-xs ${current ? 'text-primary' : 'text-muted-foreground'}`}>
+              <li key={index} className="relative z-10 flex items-center gap-4">
+                <span className="grid size-16 shrink-0 place-items-center">
+                  <button
+                    type="button"
+                    disabled={!lessonOpen}
+                    className={
+                      done
+                        ? 'grid size-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_0_24px_oklch(0.8_0.17_158/0.55)]'
+                        : current
+                          ? 'grid size-16 place-items-center rounded-full border-4 border-primary bg-background text-xl font-semibold text-primary shadow-[0_0_28px_oklch(0.8_0.17_158/0.45)]'
+                          : 'grid size-14 place-items-center rounded-full border border-border bg-card text-muted-foreground'
+                    }
+                    aria-label={t('english.lessonNode', { n: index + 1 })}
+                    onClick={() => onStart(index)}
+                  >
+                    {done ? <Check className="size-6" /> : lessonOpen ? index + 1 : <Lock className="size-4" />}
+                  </button>
+                </span>
+                <span className={`text-sm ${current ? 'text-primary' : 'text-muted-foreground'}`}>
                   <span className="block font-medium">{t('english.lessonNode', { n: index + 1 })}</span>
                   {current ? <span>{t('english.inProgress')}</span> : null}
                 </span>
@@ -94,7 +98,9 @@ export function LessonPath({
             )
           })}
       </ol>
-      <section className="rounded-3xl border border-primary/25 bg-card p-4">
+      </div>
+      <div className="flex min-w-0 flex-col gap-5 md:sticky md:top-20">
+      <section className="rounded-3xl border border-primary/25 bg-card p-4 md:p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <span className="grid size-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{preview + 1}</span>
@@ -117,7 +123,7 @@ export function LessonPath({
                   {card.senses?.[0] ? `${card.senses[0].pos} ${card.senses[0].zh}` : card.meaning}
                 </p>
               </div>
-              <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{card.meaning}</span>
+              <span className="max-w-[40%] shrink truncate rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{card.meaning}</span>
             </li>
           ))}
         </ul>
@@ -125,6 +131,8 @@ export function LessonPath({
       <Button type="button" className="h-12 w-full rounded-full text-base" disabled={!open} onClick={() => onStart(preview)}>
         {t('english.startLesson', { n: preview + 1 })}
       </Button>
+      </div>
+      </div>
       <p className="text-center text-xs text-muted-foreground">{t('footer')}</p>
     </div>
   )

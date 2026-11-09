@@ -51,6 +51,15 @@ func (h *Handler) writeEnglishBand(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, card)
 		return
 	}
+	if note, ok := builtinBand[strings.ToLower(card.Word)]; ok {
+		saved, saveErr := h.store.saveBand(r.Context(), card.ID, note)
+		if saveErr != nil {
+			writeEnglishError(w, saveErr)
+			return
+		}
+		writeJSON(w, http.StatusOK, saved)
+		return
+	}
 	provider, _, err := h.store.ProviderForRole(r.Context(), "english", h.platform.Sealer)
 	if err != nil {
 		writeEnglishError(w, err)

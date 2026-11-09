@@ -240,6 +240,54 @@ ALTER TABLE english_cards ADD COLUMN IF NOT EXISTS senses JSONB NOT NULL DEFAULT
 	{9, `
 ALTER TABLE english_cards ADD COLUMN IF NOT EXISTS band JSONB NOT NULL DEFAULT '{}'::jsonb;
 `},
+	{10, `
+UPDATE english_cards
+SET
+    examples = ARRAY[
+        'She started her career as an administrative assistant at a law firm.',
+        'Doctors spend too much time on routine administrative tasks.',
+        'Your application was delayed because of an administrative error.',
+        'Automating payroll helped reduce our administrative overhead.',
+        'Please contact the administrative staff if you need to reschedule.',
+        'Small businesses struggle with the administrative burden of new tax rules.',
+        'There is a small administrative fee for changing your booking.',
+        'The officer was placed on administrative leave during the inquiry.',
+        'The capital serves as the political and administrative center of the region.',
+        'Her new role combines teaching with administrative duties.'
+    ],
+    band = '{
+        "collocations": [
+            "administrative burden",
+            "administrative tasks",
+            "administrative overhead",
+            "administrative error",
+            "administrative staff",
+            "administrative duties",
+            "administrative leave",
+            "administrative costs"
+        ],
+        "writing": "Reducing the administrative burden on teachers allows them to dedicate more time to classroom instruction.",
+        "speaking": "I spend far too much of my working week dealing with tedious administrative tasks rather than teaching.",
+        "examples": [
+            "Automating the invoicing workflow significantly reduced our monthly administrative overhead.",
+            "The hospital apologized after a patient record was misplaced due to an administrative error.",
+            "Universities have been criticized for increasing spending on administrative staff while freezing teaching posts.",
+            "Small firms often lack the resources to cope with the heavy administrative costs of regulatory compliance.",
+            "She was promoted to department head, a role that carries substantial administrative duties.",
+            "The official was placed on paid administrative leave pending the outcome of the investigation."
+        ],
+        "weak": "The administrative is very difficult in this company.",
+        "fix": "Use administrative as an adjective before a noun such as burden, tasks, overhead, or error.",
+        "paraphrases": [
+            "managerial",
+            "bureaucratic",
+            "organizational",
+            "clerical"
+        ],
+        "zh": "将 administrative 作为前置形容词修饰具体名词（如 burden、tasks、overhead、error），切勿单独当作名词使用。"
+    }'::jsonb
+WHERE lower(word) = 'administrative';
+`},
 }
 
 func migrate(ctx context.Context, s *Store) error {

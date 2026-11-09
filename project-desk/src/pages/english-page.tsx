@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { RefreshCw } from 'lucide-react'
-import { BandNotes } from '@/components/band-notes'
+import { Search } from 'lucide-react'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { EnglishTabs, EnglishTop } from '@/components/english-chrome'
 import { LessonPath } from '@/components/lesson-path'
 import { LessonPlayer } from '@/components/lesson-player'
-import { Pronunciation } from '@/components/pronunciation'
+import { WordCard } from '@/components/word-card'
 import { Button } from '@/components/ui/button'
 import { useEnglish } from '@/hooks/use-english'
 import { ensureBand } from '@/lib/api'
@@ -33,7 +32,12 @@ export function EnglishPage() {
   const [tab, setTab] = useState<'learn' | 'words' | 'me'>('learn')
   const [lesson, setLesson] = useState<number | null>(null)
   const [progress, setProgress] = useState(loadProgress)
+  const scrollerRef = useRef<HTMLDivElement>(null)
   const showNav = lesson === null
+
+  useEffect(() => {
+    scrollerRef.current?.scrollTo({ top: 0 })
+  }, [tab, lesson])
 
   function openPractice() {
     const index = currentLesson(progress.completed, lessonCount(cards.length))
@@ -71,25 +75,25 @@ export function EnglishPage() {
     )
   }
 
+  function changeTab(next: 'learn' | 'words' | 'me' | 'practice') {
+    if (next === 'practice') openPractice()
+    else setTab(next)
+  }
+
   return (
-    <div className="english-app fixed inset-0 z-40 overflow-y-auto">
-      <div className={`mx-auto w-full max-w-[430px] px-4 pt-2 ${showNav ? 'pb-32' : 'pb-8'}`}>
-        <EnglishTop
-          streak={progress.streak}
-          xp={progress.xp}
-          onWords={lesson === null && tab === 'learn' ? () => setTab('words') : undefined}
-        />
-        {body}
+    <div className="english-app fixed inset-0 z-40 flex overflow-hidden">
+      {showNav ? <EnglishTabs tab={tab} variant="rail" onChange={changeTab} /> : null}
+      <div ref={scrollerRef} className="min-w-0 flex-1 overflow-y-auto">
+        <div className={`w-full px-4 pt-2 md:px-8 ${showNav ? 'pb-32 lg:pb-10' : 'pb-8'}`}>
+          <EnglishTop
+            streak={progress.streak}
+            xp={progress.xp}
+            onWords={lesson === null && tab === 'learn' ? () => setTab('words') : undefined}
+          />
+          {body}
+        </div>
       </div>
-      {showNav ? (
-        <EnglishTabs
-          tab={tab}
-          onChange={(next) => {
-            if (next === 'practice') openPractice()
-            else setTab(next)
-          }}
-        />
-      ) : null}
+      {showNav ? <EnglishTabs tab={tab} variant="bar" onChange={changeTab} /> : null}
     </div>
   )
 }
@@ -104,7 +108,6 @@ function WordDesk({
   const [pendingDelete, setPendingDelete] = useState<EnglishCard | null>(null)
   const [shownId, setShownId] = useState<string | null>(null)
   const [reviewing, setReviewing] = useState(false)
-  const [exampleAt, setExampleAt] = useState<Record<string, number>>({})
   const [wordQuery, setWordQuery] = useState('')
   const [letter, setLetter] = useState('A')
   const [bandState, setBandState] = useState<'idle' | 'wait' | 'failed'>('idle')
@@ -124,7 +127,7 @@ function WordDesk({
   useEffect(() => {
     if (!current) return
     const card = current
-    if (card.band?.writing) {
+    if (card.band?.writing && (card.band.examples?.length ?? 0) > 0) {
       setBandState('idle')
       return
     }
@@ -148,13 +151,6 @@ function WordDesk({
       })
   }, [current, adoptCard])
 
-  function refreshExample(card: EnglishCard) {
-    const count = Math.max(card.examples.length, 1)
-    setExampleAt((indexes) => ({ ...indexes, [card.id]: ((indexes[card.id] ?? 0) + 1) % count }))
-  }
-
-  const example = current ? current.examples[exampleAt[current.id] ?? 0] : undefined
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-end justify-between gap-3">
@@ -162,15 +158,18 @@ function WordDesk({
         <p className="text-xs text-primary">{t('english.savedCount', { n: cards.length })}</p>
       </div>
       <label className="sr-only" htmlFor="english-search">{t('english.search')}</label>
-      <input
-        id="english-search"
-        value={wordQuery}
-        autoComplete="off"
-        placeholder={t('english.searchPh')}
-        className="h-11 w-full rounded-full border border-border bg-card px-4 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
-        onChange={(event) => setWordQuery(event.target.value)}
-      />
-      <div className="flex gap-1 overflow-x-auto pb-1">
+      <div className="flex items-center gap-3 border-b border-foreground/70">
+        <input
+          id="english-search"
+          value={wordQuery}
+          autoComplete="off"
+          placeholder={t('english.searchPh')}
+          className="h-12 min-w-0 flex-1 bg-transparent text-xl outline-none placeholder:text-muted-foreground"
+          onChange={(event) => setWordQuery(event.target.value)}
+        />
+        <Search className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </div>
+      <div className="flex gap-1 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
         {WORD_LETTERS.map((item) => {
           const available = catalog.some((card) => wordLetter(card.word) === item)
           const selected = !query && letter === item
@@ -199,51 +198,22 @@ function WordDesk({
         })}
       </div>
       {problem ? <p className="text-sm text-destructive">{t(PROBLEM_KEY[problem])}</p> : null}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(16rem,24rem)_minmax(0,1fr)]">
       {!ready || !current ? (
-        <p className="text-sm text-muted-foreground">{ready ? t('english.emptyTitle') : t('english.loading')}</p>
+        <p className="text-sm text-muted-foreground lg:col-span-2">{ready ? t('english.emptyTitle') : t('english.loading')}</p>
       ) : (
-        <article className="rounded-3xl border border-primary/25 bg-card p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-4xl font-medium tracking-tight">{current.word}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{current.meaning}</p>
-              <Pronunciation word={current.word} pronunciation={current.pronunciation} />
-            </div>
-            <Pronunciation word={current.word} showText={false} orb />
-          </div>
-          <BandNotes band={current.band} />
-          {bandState === 'wait' && !current.band?.writing ? <p className="mt-3 text-sm text-muted-foreground">{t('english.bandWait')}</p> : null}
-          {bandState === 'failed' && !current.band?.writing ? <p className="mt-3 text-sm text-destructive">{t('english.bandFailed')}</p> : null}
-          {example ? (
-            <p className="mt-4 flex items-start gap-2 text-sm leading-relaxed">
-              <span className="flex-1"><Highlighted word={current.word} example={example} /></span>
-              <Pronunciation word={example} showText={false} />
-            </p>
-          ) : null}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => refreshExample(current)}>
-              <RefreshCw data-icon="inline-start" />
-              {t('english.refreshExample')}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="rounded-full"
-              disabled={current.inReview || reviewing}
-              onClick={() => {
-                setReviewing(true)
-                void markReview(current.id, true).finally(() => setReviewing(false))
-              }}
-            >
-              {current.inReview ? t('english.inReview') : t('english.addReview')}
-            </Button>
-            <Button type="button" size="sm" variant="ghost" className="rounded-full" onClick={() => setPendingDelete(current)}>
-              {t('english.remove')}
-            </Button>
-          </div>
-        </article>
+        <WordCard
+          card={current}
+          reviewing={reviewing}
+          bandState={bandState}
+          onReview={(inReview) => {
+            setReviewing(true)
+            void markReview(current.id, inReview).finally(() => setReviewing(false))
+          }}
+          onRemove={() => setPendingDelete(current)}
+        />
       )}
-      <section>
+      <section className="min-w-0 pe-4 lg:sticky lg:top-16 lg:order-1 lg:max-h-[calc(100svh-7rem)] lg:overflow-y-auto lg:pe-5 lg:[scrollbar-gutter:stable]">
         <div className="mb-2 flex items-baseline justify-between">
           <h2 className="text-sm font-medium">{query ? t('english.allWords') : t('english.letterHeading', { letter })}</h2>
           <p className="text-xs text-muted-foreground">{t('english.wordCount', { n: visibleWords.length })}</p>
@@ -256,20 +226,21 @@ function WordDesk({
               <li key={card.id}>
                 <button
                   type="button"
-                  className={`flex w-full items-center justify-between gap-3 border-b border-border py-3 text-left ${card.id === current?.id ? 'text-primary' : ''}`}
+                  className={`flex w-full min-w-0 items-center justify-between gap-3 border-b border-border py-3 text-left ${card.id === current?.id ? 'text-primary' : ''}`}
                   onClick={() => setShownId(card.id)}
                 >
-                  <span>
+                  <span className="min-w-0 flex-1">
                     <span className="block text-lg">{card.word}</span>
                     <span className="block text-xs text-muted-foreground">{card.pronunciation}</span>
                   </span>
-                  <span className="text-sm text-muted-foreground">{card.meaning}</span>
+                  <span className="max-w-[45%] truncate text-right text-sm text-muted-foreground">{card.meaning}</span>
                 </button>
               </li>
             ))}
           </ul>
         )}
       </section>
+      </div>
       <ConfirmDialog
         open={pendingDelete !== null}
         title={t('english.removeTitle')}
@@ -296,8 +267,9 @@ function MePanel({
   const { t } = useI18n()
   const review = desk.cards.filter((card) => card.inReview)
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-medium">{t('english.tabMe')}</h1>
+    <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(16rem,24rem)_minmax(0,1fr)]">
+      <div className="flex flex-col gap-4">
+      <h1 className="text-2xl font-medium md:text-3xl">{t('english.tabMe')}</h1>
       <p className="text-sm text-muted-foreground">{t('english.meLead')}</p>
       <div className="grid grid-cols-2 gap-3">
         <p className="rounded-3xl border border-border bg-card p-4">
@@ -307,7 +279,8 @@ function MePanel({
           <span className="block text-xs text-muted-foreground">{t('english.xp', { n: progress.xp })}</span>
         </p>
       </div>
-      <section>
+      </div>
+      <section className="rounded-3xl border border-border bg-card p-4">
         <h2 className="text-sm font-medium">{t('english.reviewTitle')}</h2>
         {review.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">{t('english.reviewEmpty')}</p>
@@ -317,7 +290,7 @@ function MePanel({
               <li key={card.id} className="flex items-center justify-between gap-3 border-b border-border py-3">
                 <span>
                   <span className="block">{card.word}</span>
-                  <span className="text-sm text-muted-foreground">{card.meaning}</span>
+                  <span className="block truncate text-sm text-muted-foreground">{card.meaning}</span>
                 </span>
                 <Button type="button" size="sm" variant="ghost" className="rounded-full" onClick={() => void desk.markReview(card.id, false)}>
                   {t('english.removeReview')}
@@ -328,18 +301,5 @@ function MePanel({
         )}
       </section>
     </div>
-  )
-}
-
-function Highlighted({ word, example }: { word: string; example: string }) {
-  const match = example.toLowerCase().indexOf(word.trim().toLowerCase())
-  if (match < 0 || word.trim() === '') return example
-  const end = match + word.trim().length
-  return (
-    <>
-      {example.slice(0, match)}
-      <strong className="font-semibold text-primary">{example.slice(match, end)}</strong>
-      {example.slice(end)}
-    </>
   )
 }

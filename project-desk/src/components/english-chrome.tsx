@@ -14,7 +14,7 @@ export function EnglishTop({
 }) {
   const { t } = useI18n()
   return (
-    <div className="sticky top-0 z-30 -mx-4 flex items-center justify-between gap-3 bg-background/90 px-4 py-2 backdrop-blur">
+    <div className="sticky top-0 z-30 -mx-4 flex items-center justify-between gap-3 bg-background/90 px-4 py-2 backdrop-blur md:-mx-8 md:px-8">
       <button type="button" className="flex items-center gap-2 text-left" onClick={onWords}>
         <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground" aria-hidden="true">
           <BookOpen className="size-4" />
@@ -49,30 +49,46 @@ const tabs = [
 export function EnglishTabs({
   tab,
   onChange,
+  variant,
 }: {
   tab: 'learn' | 'words' | 'me'
   onChange: (tab: 'learn' | 'words' | 'me' | 'practice') => void
+  variant: 'bar' | 'rail'
 }) {
   const { t } = useI18n()
+  const buttons = tabs.map((item) => {
+    const active = item.id !== 'practice' && tab === item.id
+    const Icon = item.icon
+    return (
+      <button
+        key={item.id}
+        type="button"
+        className={
+          variant === 'rail'
+            ? `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${active ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted'}`
+            : `flex flex-col items-center gap-1 rounded-xl py-1.5 text-[11px] ${active ? 'text-primary' : 'text-muted-foreground'}`
+        }
+        aria-current={active ? 'page' : undefined}
+        onClick={() => onChange(item.id)}
+      >
+        <Icon className="size-5" aria-hidden="true" />
+        {t(item.label)}
+      </button>
+    )
+  })
+
+  if (variant === 'rail') {
+    return (
+      <nav className="hidden h-full w-56 shrink-0 flex-col gap-1 border-r border-border bg-background/80 px-3 py-4 lg:flex" aria-label={t('nav.primary')}>
+        {buttons}
+      </nav>
+    )
+  }
+
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur" aria-label={t('nav.primary')}>
-      <div className="mx-auto grid w-full max-w-[430px] grid-cols-4 px-2 py-2">
-        {tabs.map((item) => {
-          const active = item.id !== 'practice' && tab === item.id
-          const Icon = item.icon
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={`flex flex-col items-center gap-1 rounded-xl py-1.5 text-[11px] ${active ? 'text-primary' : 'text-muted-foreground'}`}
-              aria-current={active ? 'page' : undefined}
-              onClick={() => onChange(item.id)}
-            >
-              <Icon className="size-5" aria-hidden="true" />
-              {t(item.label)}
-            </button>
-          )
-        })}
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" aria-label={t('nav.primary')}>
+      <div className="grid w-full grid-cols-4 px-2 py-2">
+        {buttons}
       </div>
     </nav>
   )

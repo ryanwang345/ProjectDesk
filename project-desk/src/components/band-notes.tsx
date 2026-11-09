@@ -7,6 +7,7 @@ export function BandNotes({ band }: { band?: BandNote | null }) {
   const { t } = useI18n()
   if (!band?.writing || !band.speaking) return null
   const collocations = band.collocations ?? []
+  const examples = (band.examples ?? []).filter((sentence) => sentence.trim() !== '')
   const paraphrases = band.paraphrases ?? []
 
   return (
@@ -25,6 +26,19 @@ export function BandNotes({ band }: { band?: BandNote | null }) {
       ) : null}
       <BandLine label={t('english.bandWriting')} text={band.writing} />
       <BandLine label={t('english.bandSpeaking')} text={band.speaking} />
+      {examples.length > 0 ? (
+        <div className="mt-3">
+          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{t('english.bandExamples')}</p>
+          <ul className="mt-1.5 flex flex-col gap-2">
+            {examples.map((sentence) => (
+              <li key={sentence} className="flex items-start gap-2 text-sm leading-relaxed">
+                <span className="flex-1">{sentence}</span>
+                <Pronunciation word={sentence} showText={false} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {band.weak || band.fix ? (
         <div className="mt-3 rounded-2xl border border-border bg-background/40 p-3 text-sm leading-relaxed">
           <p className="text-xs font-medium text-primary">{t('english.bandFix')}</p>
@@ -76,7 +90,7 @@ export function BandDrill({
 }) {
   const { t } = useI18n()
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-5">
+    <div className="flex w-full flex-col gap-5">
       <div className="flex items-center justify-between gap-3">
         <h1 className="font-display text-3xl tracking-tight">{card.word}</h1>
         <p className="text-xs font-medium text-muted-foreground tabular-nums">{index + 1} / {total}</p>

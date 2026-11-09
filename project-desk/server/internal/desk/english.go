@@ -29,6 +29,7 @@ type BandNote struct {
 	Collocations []string `json:"collocations"`
 	Writing      string   `json:"writing"`
 	Speaking     string   `json:"speaking"`
+	Examples     []string `json:"examples"`
 	Weak         string   `json:"weak"`
 	Fix          string   `json:"fix"`
 	Paraphrases  []string `json:"paraphrases"`
@@ -164,6 +165,9 @@ func scanEnglish(row scanner) (EnglishCard, error) {
 	}
 	if card.Band.Collocations == nil {
 		card.Band.Collocations = []string{}
+	}
+	if card.Band.Examples == nil {
+		card.Band.Examples = []string{}
 	}
 	if card.Band.Paraphrases == nil {
 		card.Band.Paraphrases = []string{}

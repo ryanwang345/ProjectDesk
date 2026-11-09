@@ -41,6 +41,9 @@ func extraVocab() ([]ieltsEntry, error) {
 }
 
 func variedExamples(word, kind string) ([]string, error) {
+	if custom, ok := ieltsCustom[strings.ToLower(word)]; ok && len(custom) == ExampleCount {
+		return append([]string(nil), custom...), nil
+	}
 	banks, ok := variedFrames[kind]
 	if !ok {
 		return ieltsExamples(word, kind)

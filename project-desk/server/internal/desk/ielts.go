@@ -2,6 +2,7 @@ package desk
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -141,6 +142,18 @@ var ieltsFrames = map[string][]string{
 }
 
 var ieltsCustom = map[string][]string{
+	"administrative": {
+		"She started her career as an administrative assistant at a law firm.",
+		"Doctors spend too much time on routine administrative tasks.",
+		"Your application was delayed because of an administrative error.",
+		"Automating payroll helped reduce our administrative overhead.",
+		"Please contact the administrative staff if you need to reschedule.",
+		"Small businesses struggle with the administrative burden of new tax rules.",
+		"There is a small administrative fee for changing your booking.",
+		"The officer was placed on administrative leave during the inquiry.",
+		"The capital serves as the political and administrative center of the region.",
+		"Her new role combines teaching with administrative duties.",
+	},
 	"consist": {
 		"Groups consist of people who share a goal.",
 		"A good essay can consist of four clear parts.",
@@ -521,6 +534,15 @@ func insertVocab(ctx context.Context, tx pgx.Tx, entries []ieltsEntry, have map[
 			VALUES ($1, $2, $3, true)`,
 			input.Word, input.Meaning, input.Examples); err != nil {
 			return err
+		}
+		if note, ok := builtinBand[key]; ok {
+			raw, err := json.Marshal(note)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE english_cards SET band = $2::jsonb WHERE lower(word) = $1`, key, raw); err != nil {
+				return err
+			}
 		}
 		have[key] = true
 	}

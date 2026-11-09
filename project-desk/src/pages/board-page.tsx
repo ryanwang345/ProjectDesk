@@ -16,10 +16,10 @@ import {
 } from '@/lib/projects'
 
 function useDesktopBoard() {
-  const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
+  const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
 
   useEffect(() => {
-    const media = window.matchMedia('(min-width: 768px)')
+    const media = window.matchMedia('(min-width: 1024px)')
     const onChange = (event: MediaQueryListEvent) => setDesktop(event.matches)
     media.addEventListener('change', onChange)
     return () => media.removeEventListener('change', onChange)
@@ -112,7 +112,7 @@ export function BoardPage() {
       ) : null}
 
       {!ready ? (
-        <div aria-busy="true" aria-live="polite" className="grid gap-4 md:grid-cols-3">
+        <div aria-busy="true" aria-live="polite" className="grid gap-4 lg:grid-cols-3">
           <p className="sr-only">Loading projects</p>
           {STATUSES.map((status) => (
             <div key={status} className="h-48 animate-pulse rounded-xl bg-muted" />
@@ -122,7 +122,7 @@ export function BoardPage() {
         <EmptyDesk onAdd={openCreate} onSamples={useSamples} />
       ) : (
         desktop ? (
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-3">
             {STATUSES.map((status) => (
               <ProjectColumn
                 key={status}
