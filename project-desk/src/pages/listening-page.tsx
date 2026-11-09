@@ -27,6 +27,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { Pronunciation } from '@/components/pronunciation'
+import { InteractiveGlossText } from '@/components/interactive-gloss-text'
 import { Button } from '@/components/ui/button'
 import { useLearningProgress, recordVocabularyCompletion } from '@/hooks/use-learning-progress'
 import { useI18n } from '@/i18n'
@@ -594,7 +595,9 @@ export function ListeningPage() {
                         <span className="font-semibold text-primary">
                           {zh ? '🎙️ 录音原文证据：' : '🎙️ Spoken Evidence:'}
                         </span>
-                        <p className="mt-1 font-medium text-foreground">“{q.evidenceQuote}”</p>
+                        <div className="mt-1 font-medium text-foreground">
+                          “<InteractiveGlossText text={q.evidenceQuote} />”
+                        </div>
                         <p className="mt-1 text-muted-foreground">{q.evidenceQuoteZh}</p>
                       </div>
 
@@ -1007,6 +1010,10 @@ export function ListeningPage() {
                     >
                       {zh ? '答案句线索' : 'Cue Tags'}
                     </button>
+                    <span className="hidden items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2 py-1 text-[11px] font-medium text-emerald-400 sm:inline-flex">
+                      <Sparkles className="size-3 text-emerald-400" aria-hidden="true" />
+                      {zh ? '点击词汇查小词典' : 'Click word for dictionary'}
+                    </span>
                   </div>
                 )}
               </div>
@@ -1324,9 +1331,12 @@ export function ListeningPage() {
                               </button>
                             </div>
 
-                            <p className="mt-2 text-xs leading-relaxed text-foreground sm:text-sm">
-                              {seg.text}
-                            </p>
+                            <div className="mt-2 text-xs leading-relaxed text-foreground sm:text-sm">
+                              <InteractiveGlossText
+                                text={seg.text}
+                                contextSentence={seg.text}
+                              />
+                            </div>
 
                             {showChineseTranscript && (
                               <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
@@ -1728,7 +1738,9 @@ export function ListeningPage() {
                             </button>
                           </div>
 
-                          <p className="text-foreground">“{q.evidenceQuote}”</p>
+                          <div className="text-foreground">
+                            “<InteractiveGlossText text={q.evidenceQuote} />”
+                          </div>
                           <p className="text-muted-foreground">
                             {zh ? q.paraphrase.explanationZh : q.paraphrase.explanationEn}
                           </p>
@@ -1836,8 +1848,8 @@ export function ListeningPage() {
             </h1>
             <p className="max-w-3xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
               {zh
-                ? '内置全套考官播音导语、考场双音钟声提示及英音（UK）、美音（US）、澳音（AU）多角色实录级音频文件（/audio/listening/part1–4.m4a），并支持一键下载离线音频或挂载本地剑桥雅思 MP3 真题音源。'
-                : 'Includes pre-recorded multi-speaker studio tracks (/audio/listening/part1–4.m4a) with official examiner narration, exam chimes, and distinct UK, US, and Australian voices, plus local MP3 import.'}
+                ? '内置剑桥雅思 14 Test 1 与 Test 2 完整官方母带真题音频（全套 80 题官方考官原声），包含考官导语、双音钟声与英/美/澳口音，支持 30 分钟全真模拟机考与单 Section 逐句精听。'
+                : 'Includes authentic Cambridge IELTS 14 Test 1 & Test 2 official audio masters (80 official exam questions) with examiner narration, test chimes, UK/US/AU accents, and full 30-minute exam simulation.'}
             </p>
           </div>
 

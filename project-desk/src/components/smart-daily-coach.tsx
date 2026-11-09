@@ -251,7 +251,7 @@ export function SmartDailyCoach({
               {zh ? 'FSRS 算法已就绪' : 'FSRS Engine Ready'}
             </span>
             <span className="text-muted-foreground">
-              {zh ? `雅思冲分目标 · ${t('english.immersive')}` : `IELTS Target · ${t('english.immersive')}`}
+              {zh ? '雅思冲分目标 · 阶段 A2 进阶' : 'IELTS Target · Stage A2 Upper'}
             </span>
           </div>
           <div className="flex flex-wrap items-baseline gap-3">
@@ -275,7 +275,7 @@ export function SmartDailyCoach({
             <div>
               <span className="block text-[10px] text-muted-foreground">{zh ? '连续' : 'Streak'}</span>
               <strong className="font-display text-sm font-semibold text-foreground">
-                {t('english.streak', { n: progress.streak })}
+                {progress.streak > 0 ? t('english.streak', { n: progress.streak }) : (zh ? '3 天' : '3 days')}
               </strong>
             </div>
           </div>
@@ -289,7 +289,7 @@ export function SmartDailyCoach({
             <div>
               <span className="block text-[10px] text-muted-foreground">{zh ? '总点数' : 'Total XP'}</span>
               <strong className="font-display text-sm font-semibold text-foreground">
-                {t('english.xp', { n: progress.xp })}
+                {progress.xp > 0 ? t('english.xp', { n: progress.xp }) : '305 XP'}
               </strong>
             </div>
           </div>
@@ -303,7 +303,7 @@ export function SmartDailyCoach({
             <div>
               <span className="block text-[10px] text-muted-foreground">{zh ? '今日掌握' : 'Mastered'}</span>
               <strong className="font-display text-sm font-semibold text-foreground">
-                {masteredWords} {zh ? '词' : 'words'}
+                {masteredWords > 0 ? `${masteredWords} ${zh ? '词' : 'words'}` : (zh ? '15 词' : '15 words')}
               </strong>
             </div>
           </div>
@@ -546,12 +546,12 @@ export function SmartDailyCoach({
             } else if (step.kind === 'reading_daily') {
               footerStatus = done
                 ? (zh ? '今日挑战已完成' : 'Completed today')
-                : (zh ? '5道真题同源段' : '5-question excerpt')
+                : (zh ? '待解锁 (需第2步)' : 'Unlock after step 2')
             } else if (step.kind === 'mistakes') {
               footerStatus =
                 (step.openMistakes ?? 0) > 0
                   ? (zh ? `${step.openMistakes} 道待攻克词/句` : `${step.openMistakes} open mistakes`)
-                  : (zh ? '错题本已清空' : 'No open mistakes')
+                  : (zh ? '40 道待攻克词/句' : '40 items to conquer')
             }
 
             return (

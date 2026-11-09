@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, BookOpen, Brain, Check, RotateCcw, Sparkles, X } from 'lucide-react'
 import { Pronunciation } from '@/components/pronunciation'
+import { InteractiveGlossText } from '@/components/interactive-gloss-text'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { listDueVocabularyReviews, submitVocabularyReview } from '@/lib/api'
@@ -137,7 +138,7 @@ export function SrsReviewPlayer({
         </div>
         <div className="flex justify-center gap-3 pt-2">
           <Button onClick={onExit} className="rounded-full px-6" data-testid="srs-finish-btn">
-            {zh ? '返回学习主页' : 'Back to learning'}
+            {zh ? '完成并返回' : 'Finish & Return'}
           </Button>
         </div>
       </section>
@@ -209,9 +210,9 @@ export function SrsReviewPlayer({
 
           {isProductive ? (
             <div className="space-y-3 rounded-2xl border border-border/80 bg-background/60 p-4 sm:p-5">
-              <p className="font-display text-lg leading-relaxed sm:text-xl" data-testid="srs-cloze-sentence">
-                {revealed ? current.contextSentence : current.blankedSentence}
-              </p>
+              <div className="font-display text-lg leading-relaxed sm:text-xl" data-testid="srs-cloze-sentence">
+                <InteractiveGlossText text={revealed ? current.contextSentence : current.blankedSentence} />
+              </div>
               <p className="text-xs text-muted-foreground">
                 {zh ? `目标词义提示：${current.meaning}` : `Meaning cue: ${current.meaning}`}
               </p>
@@ -283,7 +284,9 @@ export function SrsReviewPlayer({
                   <Pronunciation word={current.word} pronunciation={current.pronunciation} />
                 </div>
                 <p className="text-sm text-foreground">{current.meaning}</p>
-                <p className="pt-1 text-xs leading-relaxed text-muted-foreground">{current.contextSentence}</p>
+                <div className="pt-1 text-xs leading-relaxed text-muted-foreground">
+                  <InteractiveGlossText text={current.contextSentence} />
+                </div>
               </div>
               <Pronunciation word={current.contextSentence} showText={false} />
             </div>

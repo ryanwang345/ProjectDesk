@@ -68,8 +68,28 @@ export function useEnglish() {
   }, [cards])
 
   const adoptCard = useCallback((saved: EnglishCard) => {
-    setCards((current) => current.map((card) => (card.id === saved.id ? saved : card)))
+    setCards((current) => {
+      const idx = current.findIndex(
+        (c) => c.id === saved.id || c.word.trim().toLowerCase() === saved.word.trim().toLowerCase(),
+      )
+      if (idx >= 0) {
+        const next = [...current]
+        next[idx] = saved
+        return next
+      }
+      return [saved, ...current]
+    })
   }, [])
 
-  return { cards, ready, problem, markReview, removeCard, adoptCard, reload: load }
+  const adoptBatch = useCallback((newCards: EnglishCard[]) => {
+    setCards((current) => {
+      const existingMap = new Map(current.map((c) => [c.word.trim().toLowerCase(), c]))
+      for (const card of newCards) {
+        existingMap.set(card.word.trim().toLowerCase(), card)
+      }
+      return Array.from(existingMap.values())
+    })
+  }, [])
+
+  return { cards, ready, problem, markReview, removeCard, adoptCard, adoptBatch, reload: load }
 }

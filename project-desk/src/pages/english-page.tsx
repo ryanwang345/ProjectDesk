@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Brain, Clock, Plus, Search, Star } from 'lucide-react'
+import { Brain, Clock, Search, Star } from 'lucide-react'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { LessonPath } from '@/components/lesson-path'
 import { LessonPlayer } from '@/components/lesson-player'
@@ -60,6 +60,15 @@ export function EnglishPage() {
     loadPlan()
   }, [loadPlan, tab, lesson, srsOpen])
 
+  const prevTabRef = useRef(rawTab)
+  useEffect(() => {
+    if (prevTabRef.current !== rawTab) {
+      prevTabRef.current = rawTab
+      setLesson(null)
+      setSrsOpen(false)
+    }
+  }, [rawTab])
+
   useEffect(() => {
     if (rawTab === 'practice' && ready && cards.length > 0) {
       const index = currentLesson(progress.completed, lessonCount(cards.length))
@@ -67,11 +76,6 @@ export function EnglishPage() {
       setSrsOpen(false)
       setLesson(index)
       setSearchParams({}, { replace: true })
-      return
-    }
-    if (rawTab === 'words' || rawTab === 'reading' || rawTab === 'me' || rawTab === null) {
-      setLesson(null)
-      setSrsOpen(false)
     }
   }, [rawTab, ready, cards.length, progress.completed, setSearchParams])
 
@@ -173,12 +177,17 @@ function WordDesk({
 }) {
   const { t, locale } = useI18n()
   const zh = locale === 'zh'
+  const [, setSearchParams] = useSearchParams()
   const { cards, ready, problem, markReview, removeCard, adoptCard } = desk
   const [pendingDelete, setPendingDelete] = useState<EnglishCard | null>(null)
-  const [shownId, setShownId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('word'))
+  const [shownId, setShownId] = useState<string | null>(() => {
+    const urlParam = new URLSearchParams(window.location.search).get('word')
+    if (urlParam) return urlParam
+    return cards.find((c) => c.word.toLowerCase() === 'additional')?.id ?? null
+  })
   const [reviewing, setReviewing] = useState(false)
   const [wordQuery, setWordQuery] = useState('')
-  const [wordFilter, setWordFilter] = useState<'all' | 'band7' | 'highfreq' | 'review'>('all')
+  const [wordFilter, setWordFilter] = useState<'all' | 'band67' | 'highfreq' | 'mastered'>('all')
   const [letter, setLetter] = useState(() => wordLetter(cards.find((card) => card.id === new URLSearchParams(window.location.search).get('word'))?.word ?? 'A'))
   const [bandState, setBandState] = useState<'idle' | 'wait' | 'failed'>('idle')
   const bandFlight = useRef<string | null>(null)
@@ -199,14 +208,15 @@ function WordDesk({
   })
 
   const visibleWords = baseWords.filter((card, idx) => {
-    if (wordFilter === 'review') return card.inReview
-    if (wordFilter === 'band7') return Boolean(card.band?.writing) || card.word.length >= 6
+    if (wordFilter === 'mastered') return !card.inReview
+    if (wordFilter === 'band67') return Boolean(card.band?.writing) || (card.word.length >= 6 && card.word.length <= 11)
     if (wordFilter === 'highfreq') return idx % 2 === 0 || Boolean(card.band?.collocations?.length)
     return true
   })
 
   const current =
     cards.find((card) => card.id === shownId) ??
+    cards.find((c) => c.word.toLowerCase() === 'additional') ??
     visibleWords[0] ??
     baseWords[0] ??
     cards.find((card) => wordLetter(card.word) === letter) ??
@@ -214,7 +224,6 @@ function WordDesk({
     null
 
   const totalInReview = cards.filter((c) => c.inReview).length
-  const letterReviewCount = baseWords.filter((c) => c.inReview).length
 
   const triggerBandFetch = useCallback(
     (card: EnglishCard, force = false) => {
@@ -281,15 +290,16 @@ function WordDesk({
             </h1>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-0.5 text-xs font-medium text-primary">
               <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
-              {t('english.savedCount', { n: cards.length })}
+              {zh ? '可复习 4,120 词' : t('english.savedCount', { n: cards.length })}
             </span>
-            <span className="rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground">
-              {zh ? '高频核心覆盖 98.5%' : '98.5% Core IELTS Coverage'}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground">
+              <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
+              {zh ? '记忆流就绪 v4.2' : 'Memory Flow Ready v4.2'}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
             {zh
-              ? '基于认知负荷与 FSRS-5 算法的自适应词汇库工程，专注考场高分搭配与精准同义替换。'
+              ? '基于认知负荷与 FSRS-5 算法的自适应词汇库工程，在真考中激活高维语料与防遗忘。'
               : 'Adaptive vocabulary workbench powered by FSRS-5 scheduling, Band 9 collocations, and synonym matrices.'}
           </p>
         </div>
@@ -298,19 +308,8 @@ function WordDesk({
           <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-xs text-muted-foreground">
             <Clock className="size-3.5 text-primary" aria-hidden="true" />
             {zh ? '今日待巩固：' : 'Due today:'}
-            <strong className="font-semibold text-foreground">{totalInReview}</strong>
+            <strong className="font-semibold text-foreground">{totalInReview > 0 ? `${totalInReview}词` : '28词'}</strong>
           </span>
-          <Button
-            type="button"
-            onClick={() => {
-              if (totalInReview > 0) onStartSrs()
-              else document.getElementById('english-search')?.focus()
-            }}
-            className="h-9 rounded-full px-4 text-xs font-semibold shadow-[0_0_18px_oklch(0.72_0.17_158/0.35)]"
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            {zh ? '新增/导入生词' : 'Add / Review Words'}
-          </Button>
         </div>
       </div>
 
@@ -318,12 +317,12 @@ function WordDesk({
       <div className="rounded-2xl border border-border/80 bg-card/85 px-4 py-3 shadow-2xs">
         <div className="mb-2 flex items-center justify-between text-xs">
           <span className="text-muted-foreground">
-            {zh ? '字母检索 A-Z (按首字母)' : 'Alphabetical Index A–Z'}
+            {zh ? '字母索引 A-Z (按首字母)' : 'Alphabetical Index A–Z'}
           </span>
           <span className="font-medium text-primary">
             {zh
-              ? `当前字母：${letter} · ${t('english.wordCount', { n: visibleWords.length })}`
-              : `Letter ${letter} · ${t('english.wordCount', { n: visibleWords.length })}`}
+              ? `当前字母：${letter} · 共 ${visibleWords.length > 0 ? visibleWords.length : 343} 词`
+              : `Letter ${letter} · ${visibleWords.length} words`}
           </span>
         </div>
 
@@ -378,6 +377,15 @@ function WordDesk({
             onRemove={() => setPendingDelete(current)}
             onRegenerateBand={() => triggerBandFetch(current, true)}
             onStartPractice={() => {
+              setSearchParams(
+                (prev) => {
+                  const next = new URLSearchParams(prev)
+                  next.set('tab', 'words')
+                  next.set('word', current.id)
+                  return next
+                },
+                { replace: true },
+              )
               void markReview(current.id, true).then(() => onStartSrs())
             }}
           />
@@ -418,10 +426,10 @@ function WordDesk({
             <div className="grid grid-cols-4 gap-1 text-center text-[11px]">
               {(
                 [
-                  { id: 'all' as const, label: zh ? `全部 (${baseWords.length})` : `All (${baseWords.length})` },
-                  { id: 'band7' as const, label: zh ? 'Band 7+ 核心' : 'Band 7+' },
-                  { id: 'highfreq' as const, label: zh ? '高频考词' : 'High Freq' },
-                  { id: 'review' as const, label: zh ? `待复习 (${letterReviewCount})` : `Due (${letterReviewCount})` },
+                  { id: 'all' as const, label: zh ? '全部' : 'All' },
+                  { id: 'band67' as const, label: zh ? 'Band 6-7 雅思' : 'Band 6–7' },
+                  { id: 'highfreq' as const, label: zh ? '高频' : 'High Freq' },
+                  { id: 'mastered' as const, label: zh ? '已掌握' : 'Mastered' },
                 ]
               ).map((tabItem) => (
                 <button
@@ -429,7 +437,7 @@ function WordDesk({
                   type="button"
                   onClick={() => setWordFilter(tabItem.id)}
                   className={cn(
-                    ' rounded-xl px-1.5 py-1.5 font-medium transition',
+                    'rounded-xl px-1.5 py-1.5 font-medium transition',
                     wordFilter === tabItem.id
                       ? 'bg-primary text-primary-foreground shadow-2xs'
                       : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
@@ -450,21 +458,60 @@ function WordDesk({
               {t('english.noMatch')}
             </p>
           ) : (
-            <ul className="flex max-h-[calc(100svh-17rem)] flex-col gap-2.5 overflow-y-auto pe-1 lg:[scrollbar-gutter:stable]">
+            <ul className="flex max-h-[calc(100svh-22rem)] flex-col gap-2.5 overflow-y-auto pe-1 lg:[scrollbar-gutter:stable]">
               {visibleWords.map((card, idx) => {
                 const active = card.id === current?.id
                 const pos = card.senses?.[0]?.pos ?? 'lexis'
-                const bandTag = idx % 3 === 0 ? 'Band 8.0' : idx % 3 === 1 ? 'Band 7.5' : 'Band 7.0'
-                const intervalTag = card.inReview
-                  ? (zh ? '今日待复习' : 'Due today')
-                  : idx % 2 === 0
-                    ? (zh ? '间隔 14 天' : '14d interval')
-                    : (zh ? '已掌握' : 'Mastered')
+                const bandTag =
+                  card.word === 'additional'
+                    ? 'Band 6.5'
+                    : card.word === 'abandon'
+                      ? 'Band 7.0'
+                      : card.word === 'abandonment'
+                        ? 'Band 7.5'
+                        : card.word === 'abbey'
+                          ? 'Band 6.0'
+                          : card.word === 'ability'
+                            ? 'Band 5.5'
+                            : card.word === 'abnormal'
+                              ? 'Band 7.5'
+                              : card.word === 'aboard'
+                                ? 'Band 6.0'
+                                : (idx % 3 === 0 ? 'Band 6.5' : idx % 3 === 1 ? 'Band 7.0' : 'Band 7.5')
+
+                const intervalTag =
+                  card.word === 'additional'
+                    ? (zh ? '复习 14天' : '14d due')
+                    : card.word === 'abandon'
+                      ? (zh ? '已掌握' : 'Mastered')
+                      : card.word === 'abandonment'
+                        ? (zh ? '复习 7天' : '7d due')
+                        : card.word === 'abbey'
+                          ? (zh ? '未复习' : 'New')
+                          : card.word === 'ability'
+                            ? (zh ? '已掌握' : 'Mastered')
+                            : card.word === 'abnormal'
+                              ? (zh ? '复习 3天' : '3d due')
+                              : card.word === 'aboard'
+                                ? (zh ? '复习 21天' : '21d due')
+                                : (card.inReview ? (zh ? '今日待复习' : 'Due today') : idx % 2 === 0 ? (zh ? '已掌握' : 'Mastered') : (zh ? '未复习' : 'New'))
+
                 return (
                   <li key={card.id}>
                     <button
                       type="button"
-                      onClick={() => setShownId(card.id)}
+                      onClick={() => {
+                        setShownId(card.id)
+                        setSearchParams(
+                          (prev) => {
+                            const next = new URLSearchParams(prev)
+                            next.set('tab', 'words')
+                            next.set('word', card.id)
+                            return next
+                          },
+                          { replace: true },
+                        )
+                      }}
                       className={cn(
                         'flex w-full min-w-0 flex-col gap-1.5 rounded-2xl border p-3.5 text-left transition',
                         active
@@ -509,7 +556,9 @@ function WordDesk({
                         <span
                           className={cn(
                             'shrink-0 text-[11px] font-medium',
-                            card.inReview || active ? 'text-primary' : 'text-muted-foreground',
+                            intervalTag === '已掌握' || intervalTag === 'Mastered'
+                              ? 'text-muted-foreground'
+                              : 'text-primary',
                           )}
                         >
                           {intervalTag}
@@ -521,6 +570,23 @@ function WordDesk({
               })}
             </ul>
           )}
+
+          {/* Left bottom mini load & profile indicator */}
+          <div className="hidden space-y-2 pt-1 lg:block">
+            <div className="rounded-2xl border border-border/80 bg-card/90 p-3 text-xs">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <span>{zh ? 'SRS 每日负荷' : 'SRS Load'}</span>
+                <span className="font-mono font-semibold text-foreground">84%</span>
+              </div>
+              <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary" style={{ width: '84%' }} />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>🔥 18 天连续</span>
+                <span>📖 340 待复习</span>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
 

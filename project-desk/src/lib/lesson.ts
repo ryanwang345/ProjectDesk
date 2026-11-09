@@ -1,7 +1,7 @@
 import type { EnglishCard } from '@/lib/english'
 
 export const WORDS_PER_LESSON = 5
-export const LESSONS_PER_UNIT = 4
+export const LESSONS_PER_UNIT = 5
 export const HEARTS = 5
 export const XP_PER_CORRECT = 10
 

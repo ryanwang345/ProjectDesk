@@ -100,38 +100,46 @@ export function prepareLesson(lesson: number): Promise<{ cards: EnglishCard[]; q
   return request(`/api/english-lessons/${lesson}`, { method: 'POST' })
 }
 
+import { BUILTIN_VOCAB_CARDS } from '@/lib/vocab-builtin'
+
 let englishETagCache = ''
 let englishCardsCache: EnglishCard[] | null = null
+
+function mergeWithBuiltinCards(serverCards: EnglishCard[]): EnglishCard[] {
+  const wordsSet = new Set(serverCards.map((c) => c.word.trim().toLowerCase()))
+  const additions = BUILTIN_VOCAB_CARDS.filter((b) => !wordsSet.has(b.word.trim().toLowerCase()))
+  return [...serverCards, ...additions]
+}
 
 export async function listEnglish(): Promise<EnglishCard[]> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (englishETagCache && englishCardsCache) {
     headers['If-None-Match'] = englishETagCache
   }
-  const response = await fetch('/api/english', { cache: 'no-store', headers })
-  if (response.status === 304 && englishCardsCache) {
-    return englishCardsCache
-  }
-  if (!response.ok) {
-    let message = `request failed: ${response.status}`
-    try {
-      const body = (await response.json()) as { error?: string }
-      if (body.error) message = body.error
-    } catch {
-      // Not JSON; keep the generic message.
+  try {
+    const response = await fetch('/api/english', { cache: 'no-store', headers })
+    if (response.status === 304 && englishCardsCache) {
+      return englishCardsCache
     }
-    throw new ApiError(response.status, message)
+    if (!response.ok) {
+      if (englishCardsCache && englishCardsCache.length > 0) return englishCardsCache
+      return BUILTIN_VOCAB_CARDS
+    }
+    const rawCards = (await response.json()) as EnglishCard[]
+    const cards = mergeWithBuiltinCards(rawCards)
+    const etag = response.headers.get('ETag')
+    if (etag) {
+      englishETagCache = etag
+      englishCardsCache = cards
+    } else {
+      englishETagCache = ''
+      englishCardsCache = null
+    }
+    return cards
+  } catch {
+    if (englishCardsCache && englishCardsCache.length > 0) return englishCardsCache
+    return BUILTIN_VOCAB_CARDS
   }
-  const cards = (await response.json()) as EnglishCard[]
-  const etag = response.headers.get('ETag')
-  if (etag) {
-    englishETagCache = etag
-    englishCardsCache = cards
-  } else {
-    englishETagCache = ''
-    englishCardsCache = null
-  }
-  return cards
 }
 
 export function deleteEnglish(id: string): Promise<void> {

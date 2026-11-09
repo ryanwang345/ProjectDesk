@@ -177,21 +177,21 @@ export function LessonPath({
               <div className="flex flex-wrap items-baseline gap-2.5">
                 <BookOpen className="size-5 self-center text-primary" aria-hidden="true" />
                 <h2 className="font-display text-xl font-semibold text-foreground">
-                  {t('english.previewTitle', { n: preview + 1 })}
+                  {zh ? `第 ${preview + 1} 课 · 词汇预习` : t('english.previewTitle', { n: preview + 1 })}
                 </h2>
                 <span className="text-xs text-muted-foreground">
-                  {t('english.previewMeta', { n: previewWords.length })}
+                  {zh ? `共 ${previewWords.length || 5} 个核心目标词` : t('english.previewMeta', { n: previewWords.length })}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
                 {zh
-                  ? '提前熟读音标、高频释义与词性，进入阅读时激活即时映射'
+                  ? '提前熟读目标、高频释义与词性，进入阅读时激活即时映射'
                   : 'Preview IPA pronunciation, core meanings, and parts of speech before practice'}
               </p>
             </div>
 
             <span className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              <Zap className="size-3.5" aria-hidden="true" />+{previewWords.length * 10} XP{' '}
+              <Zap className="size-3.5" aria-hidden="true" />+{previewWords.length > 0 ? previewWords.length * 10 : 50} XP{' '}
               {zh ? '奖励' : 'Reward'}
             </span>
           </div>
@@ -222,11 +222,11 @@ export function LessonPath({
                     </p>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="max-w-32 truncate rounded-lg border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground">
-                      {shortTag}
+                  <div className="flex shrink-0 items-center">
+                    <span className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground">
+                      <span>{shortTag}</span>
+                      <ChevronRight className="size-3 text-muted-foreground/70" aria-hidden="true" />
                     </span>
-                    <ChevronRight className="size-4 text-muted-foreground/70" aria-hidden="true" />
                   </div>
                 </li>
               )
@@ -238,7 +238,7 @@ export function LessonPath({
           <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
             <Headphones className="size-4 text-primary" aria-hidden="true" />
             {zh
-              ? '点击小喇叭试听发音 · 预习完毕即可开始答题'
+              ? '点击小喇叭试听音素 · 预习完毕即可开始答题'
               : 'Click the speaker icon to hear pronunciation · Start when ready'}
           </span>
 
@@ -249,7 +249,7 @@ export function LessonPath({
             onClick={() => onStart(preview)}
           >
             <GraduationCap className="size-4" aria-hidden="true" />
-            {t('english.startLesson', { n: preview + 1 })}
+            {zh ? `开始学习第 ${preview + 1} 课` : t('english.startLesson', { n: preview + 1 })}
             <ChevronRight className="size-4" aria-hidden="true" />
           </Button>
         </div>

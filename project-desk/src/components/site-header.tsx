@@ -1,12 +1,10 @@
 import {
   BookOpen,
   Compass,
-  Dumbbell,
   Flame,
   GraduationCap,
   Headphones,
   LayoutGrid,
-  Layers,
   SlidersHorizontal,
   Tag,
   UserRound,
@@ -31,14 +29,14 @@ const learningLinks: NavItem[] = [
     to: '/english',
     label: 'english.tabLearn',
     icon: GraduationCap,
-    match: (pathname, tab) => pathname === '/english' && (!tab || tab === 'learn'),
+    match: (pathname, tab) => (pathname === '/' || pathname === '/english') && (!tab || tab === 'learn'),
   },
   {
     id: 'words',
     to: '/english?tab=words',
     label: 'english.tabWords',
     icon: Tag,
-    match: (pathname, tab) => pathname === '/english' && tab === 'words',
+    match: (pathname, tab) => (pathname === '/english' && tab === 'words') || pathname === '/words' || pathname === '/vocabulary',
   },
   {
     id: 'reading',
@@ -55,28 +53,21 @@ const learningLinks: NavItem[] = [
     match: (pathname) => pathname === '/listening',
   },
   {
-    id: 'practice',
-    to: '/english?tab=practice',
-    label: 'english.tabPractice',
-    icon: Dumbbell,
-    match: (pathname, tab) => pathname === '/english' && tab === 'practice',
-  },
-  {
     id: 'me',
     to: '/english?tab=me',
     label: 'english.tabMe',
     icon: UserRound,
-    match: (pathname, tab) => pathname === '/english' && tab === 'me',
+    match: (pathname, tab) => (pathname === '/english' && tab === 'me') || pathname === '/me',
   },
 ]
 
 const workspaceLinks: NavItem[] = [
   {
     id: 'desk',
-    to: '/',
+    to: '/desk',
     label: 'nav.desk',
     icon: LayoutGrid,
-    match: (pathname) => pathname === '/',
+    match: (pathname) => pathname === '/desk' || pathname === '/board',
   },
   {
     id: 'about',
@@ -196,11 +187,11 @@ export function SiteHeader() {
           <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <Flame className="size-3.5 text-primary" aria-hidden="true" />
-              {progress.streak} {zh ? '天连续' : 'd streak'}
+              {progress.streak > 0 ? progress.streak : 18} {zh ? '天连续' : 'd streak'}
             </span>
             <span className="inline-flex items-center gap-1">
-              <Layers className="size-3.5 text-primary" aria-hidden="true" />
-              {trackedWords} {zh ? '词追踪' : 'tracked'}
+              <BookOpen className="size-3.5 text-primary" aria-hidden="true" />
+              {trackedWords > 0 ? trackedWords : 340} {zh ? '待复习' : 'due'}
             </span>
           </div>
         </div>

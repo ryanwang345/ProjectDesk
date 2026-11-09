@@ -235,6 +235,16 @@ const CAM14_T1_P1: ListeningPart = {
       textZh: '警官：好的，我们会将描述传达给巡警。这是供您报保险使用的案件参考编号：8795482361。路易丝：我记一下：879 548 2361。警官：完全正确。一旦有进展我们会通知您。',
       questionNumbers: [10],
     },
+    {
+      id: 'c14-p1-s8',
+      speaker: 'Accommodation Officer & Student',
+      role: 'Accommodation Officer',
+      accent: 'en-GB',
+      startTime: 523,
+      endTime: 590,
+      text: 'Accommodation Officer: Well, the monthly rent for the studio includes complimentary access to the gym and swimming pool, starting from this September it will be open 24 hours. Student: That sounds great, so the fitness center is completely free of charge?',
+      textZh: '宿舍管理处负责人：单身公寓的月租金包含免费使用健身房和游泳池的权限（complimentary access），而且从今年九月份起将全天24小时开放。学生：听起来太棒了，所以健身中心是完全免费的吗？',
+    },
   ],
   questions: [
     {
@@ -1624,6 +1634,13 @@ const CAM14_T1_P4: ListeningPart = {
   ],
 }
 
+import {
+  CAM14_T2_P1,
+  CAM14_T2_P2,
+  CAM14_T2_P3,
+  CAM14_T2_P4,
+} from '@/lib/listening-c14-t2'
+
 export const LISTENING_TESTS: ListeningTest[] = [
   {
     id: 'cambridge-ielts-14-test-1',
@@ -1638,6 +1655,18 @@ export const LISTENING_TESTS: ListeningTest[] = [
     parts: [CAM14_T1_P1, CAM14_T1_P2, CAM14_T1_P3, CAM14_T1_P4],
   },
   {
+    id: 'cambridge-ielts-14-test-2',
+    slug: 'cambridge-ielts-14-test-2-authentic',
+    title: 'Cambridge IELTS 14 Test 2 (Full 4-Part Official Authentic Exam Audio)',
+    titleZh: '剑桥雅思 14 Test 2 全真官方母带试卷（100% 真实考官原声 · 完整 40 题）',
+    subtitle: 'Direct audio master: Total Health Clinic, Branley Castle Tour, Woolly Mammoths on St Paul Island & Weather Forecasting History.',
+    subtitleZh: '来自剑桥官方光盘原声母带：健康诊所就诊登记、布兰利古堡导览、圣保罗岛猛犸象灭绝研讨及天气预报科技演变史完整 40 题。',
+    category: 'full',
+    difficulty: 'Band 6.0–9.0 (Official Cambridge Exam)',
+    durationSeconds: 2407,
+    parts: [CAM14_T2_P1, CAM14_T2_P2, CAM14_T2_P3, CAM14_T2_P4],
+  },
+  {
     id: 'cambridge-14-t1-part-1',
     slug: 'cambridge-14-test-1-part-1-crime-report',
     title: 'Cambridge 14 Test 1 Part 1: Crime Report Form (Official Audio)',
@@ -1648,6 +1677,18 @@ export const LISTENING_TESTS: ListeningTest[] = [
     difficulty: 'Band 6.0–7.5',
     durationSeconds: 523,
     parts: [CAM14_T1_P1],
+  },
+  {
+    id: 'cambridge-14-t2-part-1',
+    slug: 'cambridge-14-test-2-part-1-clinic-details',
+    title: 'Cambridge 14 Test 2 Part 1: Total Health Clinic (Official Audio)',
+    titleZh: '剑桥 14 Test 2 Part 1：健康诊所预约登记（官方原声精听）',
+    subtitle: 'Master phone 219 442 9785, 10th October, surname Cawley, knee injury, and running.',
+    subtitleZh: '攻克手机号码、10月10日出生日期、Cawley 姓氏拼写、膝痛三周与停止网球等高频听力考点。',
+    category: 'part1',
+    difficulty: 'Band 6.0–7.5',
+    durationSeconds: 462,
+    parts: [CAM14_T2_P1],
   },
   {
     id: 'cambridge-14-t1-part-2',
@@ -1662,6 +1703,18 @@ export const LISTENING_TESTS: ListeningTest[] = [
     parts: [CAM14_T1_P2],
   },
   {
+    id: 'cambridge-14-t2-part-2',
+    slug: 'cambridge-14-test-2-part-2-branley-castle',
+    title: 'Cambridge 14 Test 2 Part 2: Branley Castle Tour & Map (Official Audio)',
+    titleZh: '剑桥 14 Test 2 Part 2：布兰利古堡导览与平面图（官方原声精听）',
+    subtitle: 'Queen Elizabeth I visit, Fenys family, interactive actors, 800-year-old tree, and archery / hunting map points.',
+    subtitleZh: '伊丽莎白一世客房修缮、费尼斯家族、古装演员、800岁橡树与射箭/猛禽地图配对。',
+    category: 'part2',
+    difficulty: 'Band 6.5–8.0',
+    durationSeconds: 443,
+    parts: [CAM14_T2_P2],
+  },
+  {
     id: 'cambridge-14-t1-part-3',
     slug: 'cambridge-14-test-1-part-3-coastal-cities',
     title: 'Cambridge 14 Test 1 Part 3: Cities Built by the Sea (Official Audio)',
@@ -1674,6 +1727,18 @@ export const LISTENING_TESTS: ListeningTest[] = [
     parts: [CAM14_T1_P3],
   },
   {
+    id: 'cambridge-14-t2-part-3',
+    slug: 'cambridge-14-test-2-part-3-mammoths',
+    title: 'Cambridge 14 Test 2 Part 3: Woolly Mammoths on St Paul Island (Official Audio)',
+    titleZh: '剑桥 14 Test 2 Part 3：圣保罗岛猛犸象灭绝研讨（官方原声精听）',
+    subtitle: 'Timeline start, dwarfism tooth, island isolation migration, and student presentation action matching.',
+    subtitleZh: '时间轴开篇、微型牙齿岛屿矮化、登岛之谜与学术答辩改进方案匹配。',
+    category: 'part3',
+    difficulty: 'Band 7.0–8.5',
+    durationSeconds: 462,
+    parts: [CAM14_T2_P3],
+  },
+  {
     id: 'cambridge-14-t1-part-4',
     slug: 'cambridge-14-test-1-part-4-marine-energy',
     title: 'Cambridge 14 Test 1 Part 4: Marine Renewable Energy (Official Audio)',
@@ -1684,6 +1749,18 @@ export const LISTENING_TESTS: ListeningTest[] = [
     difficulty: 'Band 7.5–9.0',
     durationSeconds: 488,
     parts: [CAM14_T1_P4],
+  },
+  {
+    id: 'cambridge-14-t2-part-4',
+    slug: 'cambridge-14-test-2-part-4-weather-forecasting',
+    title: 'Cambridge 14 Test 2 Part 4: The History of Weather Forecasting (Official Audio)',
+    titleZh: '剑桥 14 Test 2 Part 4：天气预报科技演变史（官方原声精听）',
+    subtitle: 'Rain dances, survival, Aristotle’s clouds, comets, instruments, thermometer, storms, and telegraph.',
+    subtitleZh: '祈雨舞、人类生存、亚里士多德云朵观察、彗星凶兆、伽利略温度计与电报网络。',
+    category: 'part4',
+    difficulty: 'Band 7.5–9.0',
+    durationSeconds: 1040,
+    parts: [CAM14_T2_P4],
   },
 ]
 

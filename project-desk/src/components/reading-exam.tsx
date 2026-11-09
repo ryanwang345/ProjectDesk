@@ -16,6 +16,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { Pronunciation } from '@/components/pronunciation'
+import { InteractiveGlossText } from '@/components/interactive-gloss-text'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useI18n } from '@/i18n'
@@ -1324,18 +1325,18 @@ function HighlightedParagraphText({
   evidenceQuote?: string
 }) {
   const target = evidenceQuote?.trim() || highlights[0]?.text?.trim()
-  if (!target) return <>{text}</>
+  if (!target) return <InteractiveGlossText text={text} contextSentence={text} />
   const idx = text.toLowerCase().indexOf(target.toLowerCase())
-  if (idx < 0) return <>{text}</>
+  if (idx < 0) return <InteractiveGlossText text={text} contextSentence={text} />
   const end = idx + target.length
   return (
     <>
-      {text.slice(0, idx)}
+      <InteractiveGlossText text={text.slice(0, idx)} contextSentence={text} />
       <mark className="rounded bg-primary/25 px-1 py-0.5 font-medium text-foreground underline decoration-primary decoration-2">
-        {text.slice(idx, end)}
+        <InteractiveGlossText text={text.slice(idx, end)} contextSentence={text} />
       </mark>
       {evidenceQuote ? null : <span className="select-none"><Pronunciation word={text.slice(idx, end)} showText={false} /></span>}
-      {text.slice(end)}
+      <InteractiveGlossText text={text.slice(end)} contextSentence={text} />
     </>
   )
 }

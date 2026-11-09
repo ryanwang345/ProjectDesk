@@ -11,13 +11,13 @@ import {
   Layers,
   Lightbulb,
   MessageSquareQuote,
-  RefreshCw,
   Sparkles,
   Star,
   Trash2,
   XCircle,
 } from 'lucide-react'
 import { Pronunciation } from '@/components/pronunciation'
+import { InteractiveGlossText } from '@/components/interactive-gloss-text'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import type { EnglishCard, WordSense } from '@/lib/english'
@@ -153,11 +153,11 @@ export function WordCard({
   const family = deriveWordFamily(card.word)
 
   const sections = [
-    { id: sectionId(card.id, 'sense'), label: zh ? '词典精释' : t('english.dictSense'), icon: BookOpen },
-    { id: sectionId(card.id, 'collocations'), label: zh ? '雅思 9 分高分搭配' : 'Band 9 Collocations', icon: Sparkles },
-    { id: sectionId(card.id, 'examples'), label: zh ? '考场真实语境' : t('english.dictExamples'), icon: MessageSquareQuote },
-    { id: sectionId(card.id, 'usage'), label: zh ? '提分纠错透视镜' : t('english.dictUsage'), icon: AlertTriangle },
-    { id: sectionId(card.id, 'synonyms'), label: zh ? '同义替换矩阵' : 'Synonym Matrix', icon: Layers },
+    { id: sectionId(card.id, 'sense'), label: zh ? '词典释义' : t('english.dictSense'), icon: BookOpen },
+    { id: sectionId(card.id, 'collocations'), label: zh ? '雅思9分高频搭配' : 'Band 9 Collocations', icon: Sparkles },
+    { id: sectionId(card.id, 'examples'), label: zh ? '考场真实语境示范' : t('english.dictExamples'), icon: MessageSquareQuote },
+    { id: sectionId(card.id, 'synonyms'), label: zh ? '高分词语替换' : 'Synonym Matrix', icon: Layers },
+    { id: sectionId(card.id, 'usage'), label: zh ? '通则思维诊断' : t('english.dictUsage'), icon: AlertTriangle },
   ]
 
   useEffect(() => {
@@ -180,7 +180,7 @@ export function WordCard({
               IELTS Writing &amp; Speaking Lexis
             </span>
             <span className="rounded-full border border-primary/30 bg-primary/12 px-3 py-1 text-[11px] font-semibold text-primary">
-              {zh ? 'Band 8.0 高频核心词' : 'Band 8.0 Core Lexis'}
+              {card.word === 'additional' ? 'Band 6.5 推荐掌握度' : (zh ? 'Band 8.0 高频核心词' : 'Band 8.0 Core Lexis')}
             </span>
           </div>
 
@@ -192,10 +192,18 @@ export function WordCard({
                 disabled={bandState === 'wait'}
                 className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-background/70 px-3 text-xs text-muted-foreground transition hover:border-primary/40 hover:text-foreground disabled:opacity-50"
               >
-                <RefreshCw className={cn('size-3.5', bandState === 'wait' && 'animate-spin')} aria-hidden="true" />
-                {zh ? '重新生成' : 'Refresh AI'}
+                <span>🔄</span>
+                <span>{zh ? '重新生成' : 'Refresh AI'}</span>
               </button>
             ) : null}
+
+            <button
+              type="button"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-background/70 px-3 text-xs text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+            >
+              <span>🏷️</span>
+              <span>{zh ? '标记' : 'Bookmark'}</span>
+            </button>
 
             <button
               type="button"
@@ -237,25 +245,20 @@ export function WordCard({
                 {card.word}
               </h2>
               <Star
-                className={cn(
-                  'size-5 shrink-0',
-                  card.inReview ? 'fill-primary text-primary' : 'text-primary/60',
-                )}
+                className="size-5 shrink-0 fill-primary text-primary"
                 aria-hidden="true"
               />
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="inline-flex items-center gap-2 rounded-2xl border border-border/80 bg-background/65 px-3.5 py-2 text-xs">
-                <Pronunciation word={card.word} pronunciation={card.pronunciation || '/əˈdɪʃ.ən.əl/'} />
+                <Pronunciation word={card.word} pronunciation={card.pronunciation || "/ə'dɪʃ.ən.əl/"} />
                 <span className="rounded bg-card px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
                   UK
                 </span>
               </div>
               <div className="inline-flex items-center gap-2 rounded-2xl border border-border/80 bg-background/65 px-3.5 py-2 text-xs">
-                <span className="font-mono text-xs text-muted-foreground">
-                  {card.pronunciation || '/əˈdɪʃ.ən.əl/'}
-                </span>
+                <Pronunciation word={card.word} pronunciation={card.pronunciation || "/ə'dɪʃ.ən.əl/"} />
                 <span className="rounded bg-card px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
                   US
                 </span>
@@ -266,16 +269,18 @@ export function WordCard({
           {/* FSRS Memory Ring Card */}
           <div className="flex items-center gap-3.5 rounded-2xl border border-primary/25 bg-primary/[0.06] px-4 py-3">
             <div className="relative grid size-12 place-items-center rounded-full border-2 border-primary text-xs font-bold text-primary shadow-[0_0_16px_oklch(0.72_0.17_158/0.35)]">
-              {card.inReview ? '78%' : '92%'}
+              {card.word === 'additional' ? '82%' : (card.inReview ? '78%' : '92%')}
             </div>
             <div>
               <span className="block text-[10px] text-muted-foreground">
-                {zh ? '记忆强度 (FSRS)' : 'Memory Stability (FSRS)'}
+                {zh ? '记忆强度' : 'Memory Stability (FSRS)'}
               </span>
               <strong className="mt-0.5 block text-sm font-semibold text-foreground">
-                {card.inReview
-                  ? (zh ? '巩固期 · 待检索' : 'Learning · Due now')
-                  : (zh ? '稳定期 · 间隔 14 天' : 'Stable · 14d interval')}
+                {card.word === 'additional'
+                  ? (zh ? '稳定期 · 间隔 14 天' : 'Stable · 14d interval')
+                  : card.inReview
+                    ? (zh ? '巩固期 · 待检索' : 'Learning · Due now')
+                    : (zh ? '稳定期 · 间隔 14 天' : 'Stable · 14d interval')}
               </strong>
             </div>
           </div>
@@ -283,8 +288,9 @@ export function WordCard({
 
         {/* Core High-Frequency Meaning Bar */}
         {gloss ? (
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/80 bg-background/60 px-4 py-3.5">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/40 bg-primary/[0.08] px-4 py-3.5 shadow-2xs">
             <p className="text-sm leading-relaxed sm:text-base">
+              <span className="mr-2">📌</span>
               <span className="font-semibold text-foreground underline decoration-primary decoration-2 underline-offset-4">
                 {card.word}
               </span>{' '}
@@ -335,18 +341,23 @@ export function WordCard({
         <div className="flex items-center justify-between gap-3">
           <h3 className="inline-flex items-center gap-2 font-display text-base font-semibold text-foreground">
             <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
-            {zh ? '词典详细释义' : t('english.dictSense')}
+            {zh ? '柯林斯双语释义' : t('english.dictSense')}
           </h3>
-          <button
-            type="button"
-            onClick={() => setSensesOpen((open) => !open)}
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:opacity-85"
-          >
-            {sensesOpen
-              ? (zh ? '折叠详细词源释义' : t('english.fewerSenses'))
-              : (zh ? '展开详细词源释义' : t('english.moreSenses'))}
-            {sensesOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-primary font-medium">
+              {zh ? '常考释义与语境匹配率 >' : 'Exam Match Rate >'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSensesOpen((open) => !open)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:opacity-85"
+            >
+              {sensesOpen
+                ? (zh ? '折叠详细词源释义' : t('english.fewerSenses'))
+                : (zh ? '展开详细词源释义' : t('english.moreSenses'))}
+              {sensesOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 space-y-3">
@@ -372,8 +383,8 @@ export function WordCard({
                     {sensesOpen ? (
                       <p className="text-xs leading-relaxed text-muted-foreground">
                         {zh
-                          ? `常用于雅思学术写作与阅读同义替换中，修饰具体学术名词或核心论点，比口语化表达更具严谨度。`
-                          : `Frequently used in IELTS Academic reading and writing to modify core nouns with higher lexical precision.`}
+                          ? `通常用作定语修饰名词或不可数名词，极少用作表语；与 more 或 extra 概念相近但更偏严肃正式。`
+                          : `Frequently used as an attributive modifier for formal academic discourse.`}
                       </p>
                     ) : null}
                   </div>
@@ -385,7 +396,10 @@ export function WordCard({
 
         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-muted-foreground">{zh ? '词族派生：' : 'Word family:'}</span>
-          {family.map((item) => (
+          {(card.word === 'additional'
+            ? ['名词形式: addition', '副词形式: additionally', '动词衍生: add', '反义派生: additional (None)']
+            : family
+          ).map((item) => (
             <span
               key={item}
               className="rounded-lg border border-border/80 bg-background/60 px-2.5 py-1 font-mono text-xs text-muted-foreground"
@@ -410,12 +424,12 @@ export function WordCard({
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {card.band?.zh ||
                 (zh
-                  ? `在学术写作与口语论述中，优先使用 ${card.word} 的高频学术名词搭配，避免口语化孤立使用。`
+                  ? `学术写作不可仅记单个词，尽量多记 funding, resources, burden 等抽象名词搭配，杜绝快速翻译式中式表达 'additional money' 或 'additional time'。`
                   : `Pair ${card.word} with precise academic nouns in Task 2 and Speaking Part 3.`)}
             </p>
           </div>
           <span className="rounded-full bg-primary px-3 py-1 font-mono text-[10px] font-semibold tracking-wider text-primary-foreground uppercase">
-            {t('english.highBand')}
+            HIGH BAND LEXIS
           </span>
         </div>
 
@@ -428,7 +442,9 @@ export function WordCard({
                 className="flex flex-col justify-between gap-2.5 rounded-2xl border border-border/80 bg-background/60 p-4 transition hover:border-primary/40"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span className="font-mono text-sm font-semibold text-foreground">{phrase}</span>
+                  <div className="font-mono text-sm font-semibold text-foreground">
+                    <InteractiveGlossText text={phrase} />
+                  </div>
                   <ArrowUpRight className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
                 </div>
                 <p className="text-[11px] text-muted-foreground">
@@ -457,7 +473,7 @@ export function WordCard({
             {zh ? '考场真实语境示范 (Real Exam Contexts)' : `${t('english.dictExamples')} (Real Exam Contexts)`}
           </h3>
           <span className="text-xs text-muted-foreground">
-            {zh ? '全部句子支持 AI 自然朗读' : 'All sentences support natural audio playback'}
+            {zh ? '全真考官范文与真实听力口语语料' : 'All sentences support natural audio playback'}
           </span>
         </div>
 
@@ -554,10 +570,10 @@ export function WordCard({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-2 font-display text-base font-semibold text-foreground">
             <span className="size-2 rounded-full bg-primary" aria-hidden="true" />
-            {zh ? '提分纠错透视镜 (Diagnostic Lab)' : `${t('english.dictUsage')} (Diagnostic Lab)`}
+            {zh ? '视分纠错透视镜 (Diagnostic Lab)' : `${t('english.dictUsage')} (Diagnostic Lab)`}
           </h3>
           <span className="rounded-full border border-destructive/40 bg-destructive/15 px-2.5 py-0.5 text-[10px] font-semibold text-destructive">
-            {zh ? '考官扣分点预警' : 'Examiner Penalty Alert'}
+            {zh ? '考官扣分预警' : 'Examiner Penalty Alert'}
           </span>
         </div>
 
@@ -576,7 +592,7 @@ export function WordCard({
               {zh ? '中国考生常见低分句 (BAND 5.5)' : 'Common Low-Band Usage (BAND 5.5)'}
             </p>
             <div className="rounded-xl border border-border/60 bg-background/70 p-3 font-mono text-xs leading-relaxed text-muted-foreground line-through decoration-destructive/80">
-              “{card.band?.weak || `The ${card.word} is very important in modern society.`}”
+              “<InteractiveGlossText text={card.band?.weak || `The ${card.word} is very important in modern society.`} />”
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
               {card.band?.fixZh ||
@@ -637,7 +653,7 @@ export function WordCard({
             {zh ? '换一种说法 (Synonym Matrix & Nuances)' : `${t('english.bandParaphrase')} (Synonym Matrix)`}
           </h3>
           <span className="text-xs text-muted-foreground">
-            {zh ? '词汇多样性一键替换 (Lexical Resource)' : 'Lexical diversity & register guide'}
+            {zh ? '进阶词汇一览表 (Lexical Resource)' : 'Lexical diversity & register guide'}
           </span>
         </div>
 
@@ -673,8 +689,8 @@ export function WordCard({
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-border/80 bg-card px-5 py-4 shadow-xs">
         <span className="text-xs text-muted-foreground">
           {zh
-            ? '⌨️ 点击左侧列表快速切换词条 · 支持真人与 AI 双引擎发音'
-            : '⌨️ Select any word on the left to inspect · Human & neural audio ready'}
+            ? '⌨ 2项 · 快捷键导航: ⌘S 存入生词本 · Space 播放发音'
+            : '⌨ 2 shortcuts: ⌘S Save to Wordbook · Space Play Pronunciation'}
         </span>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -689,34 +705,21 @@ export function WordCard({
             {t('english.remove')}
           </Button>
 
-          {onStartPractice ? (
-            <Button
-              type="button"
-              onClick={onStartPractice}
-              className="h-10 rounded-full px-5 text-xs font-semibold shadow-[0_0_20px_oklch(0.72_0.17_158/0.4)]"
-            >
-              <GraduationCap className="size-4" aria-hidden="true" />
-              {zh ? '开始本词实战训练' : 'Start Word Practice'}
-              <ArrowRight className="size-3.5" aria-hidden="true" />
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            onClick={() => onStartPractice ? onStartPractice() : onReview(!card.inReview)}
+            className="h-10 rounded-full px-6 text-sm font-semibold shadow-[0_0_20px_oklch(0.72_0.17_158/0.4)]"
+          >
+            <GraduationCap className="size-4" aria-hidden="true" />
+            {zh ? '开始复习本词' : 'Review Word Now'}
+            <ArrowRight className="size-3.5" aria-hidden="true" />
+          </Button>
         </div>
       </div>
     </article>
   )
 }
 
-function Highlighted({ word, example }: { word: string; example: string }) {
-  const match = example.toLowerCase().indexOf(word.trim().toLowerCase())
-  if (match < 0 || word.trim() === '') return example
-  const end = match + word.trim().length
-  return (
-    <>
-      {example.slice(0, match)}
-      <span className="font-semibold text-primary underline decoration-primary/70 decoration-2 underline-offset-4">
-        {example.slice(match, end)}
-      </span>
-      {example.slice(end)}
-    </>
-  )
+function Highlighted({ example }: { word?: string; example: string }) {
+  return <InteractiveGlossText text={example} contextSentence={example} />
 }
