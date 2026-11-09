@@ -3,18 +3,75 @@ package desk
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 )
 
 func (h *Handler) registerLearning(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/learning/progress", h.learningProgress)
 	mux.HandleFunc("POST /api/learning/import", h.importLearningProgress)
 	mux.HandleFunc("POST /api/learning/vocabulary-completions", h.completeVocabularyLesson)
+	mux.HandleFunc("GET /api/learning/plan", h.learningPlan)
+	mux.HandleFunc("PATCH /api/learning/profile", h.updateLearningProfile)
+	mux.HandleFunc("GET /api/learning/srs/due", h.dueVocabularyReviews)
+	mux.HandleFunc("POST /api/learning/srs/review", h.submitVocabularyReview)
 	mux.HandleFunc("GET /api/reading/learning", h.readingLearning)
 	mux.HandleFunc("POST /api/reading/daily", h.startDailyReading)
 	mux.HandleFunc("GET /api/reading/mistakes", h.readingMistakes)
 	mux.HandleFunc("POST /api/reading/mistakes/review", h.startReadingReview)
 	mux.HandleFunc("GET /api/reading/vocabulary", h.readingVocabulary)
 	mux.HandleFunc("POST /api/reading/vocabulary", h.saveReadingVocabulary)
+}
+
+func (h *Handler) learningPlan(w http.ResponseWriter, r *http.Request) {
+	plan, err := h.store.GetLearningPlan(r.Context(), r.URL.Query().Get("module"), r.URL.Query().Get("timezone"))
+	if err != nil {
+		writeReadingError(w, err)
+		return
+	}
+	writeJSON(w, 200, plan)
+}
+
+func (h *Handler) updateLearningProfile(w http.ResponseWriter, r *http.Request) {
+	var input LearnerProfileSettings
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		writeError(w, 400, "provide learner profile settings")
+		return
+	}
+	settings, err := h.store.UpdateLearningProfileSettings(r.Context(), input, r.URL.Query().Get("timezone"))
+	if err != nil {
+		writeReadingError(w, err)
+		return
+	}
+	writeJSON(w, 200, settings)
+}
+
+func (h *Handler) dueVocabularyReviews(w http.ResponseWriter, r *http.Request) {
+	limit := 12
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	items, err := h.store.GetDueVocabularyReviews(r.Context(), limit)
+	if err != nil {
+		writeReadingError(w, err)
+		return
+	}
+	writeJSON(w, 200, items)
+}
+
+func (h *Handler) submitVocabularyReview(w http.ResponseWriter, r *http.Request) {
+	var input SrsReviewInput
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input); err != nil {
+		writeError(w, 400, "provide a vocabulary review rating")
+		return
+	}
+	res, err := h.store.SubmitVocabularyReview(r.Context(), input, r.URL.Query().Get("timezone"))
+	if err != nil {
+		writeReadingError(w, err)
+		return
+	}
+	writeJSON(w, 200, res)
 }
 
 func (h *Handler) learningProgress(w http.ResponseWriter, r *http.Request) {

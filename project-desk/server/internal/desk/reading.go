@@ -547,32 +547,80 @@ func scanReadingSession(row scanner) (ReadingSession, error) {
 	return s, nil
 }
 
-func (s *Store) ListReadingTests(ctx context.Context, module string) ([]ReadingTest, error) {
-	query := `SELECT ` + readingTestColumns + ` FROM reading_tests WHERE NOT hidden`
-	args := []any{}
-	if m := strings.ToLower(strings.TrimSpace(module)); m == "academic" || m == "general" {
-		query += ` AND module = $1`
-		args = append(args, m)
+func (s *Store) ensureReadingCache(ctx context.Context) error {
+	s.readingMu.RLock()
+	if s.readingCached {
+		s.readingMu.RUnlock()
+		return nil
 	}
-	query += ` ORDER BY CASE category WHEN 'full' THEN 1 WHEN 'passage' THEN 2 ELSE 3 END, created_at ASC`
-	rows, err := s.pool.Query(ctx, query, args...)
+	s.readingMu.RUnlock()
+
+	s.readingMu.Lock()
+	defer s.readingMu.Unlock()
+	if s.readingCached {
+		return nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT `+readingTestColumns+`
+		FROM reading_tests
+		WHERE NOT hidden
+		ORDER BY CASE category WHEN 'full' THEN 1 WHEN 'passage' THEN 2 ELSE 3 END, created_at ASC`)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rows.Close()
 
-	out := []ReadingTest{}
+	tests := make([]ReadingTest, 0, 32)
+	byKey := make(map[string]ReadingTest, 64)
 	for rows.Next() {
-		t, err := scanReadingTest(rows, false)
+		t, err := scanReadingTest(rows, true)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		tests = append(tests, t)
+		byKey[t.ID] = t
+		byKey[t.Slug] = t
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	s.readingTests = tests
+	s.readingByKey = byKey
+	s.readingCached = true
+	return nil
+}
+
+func (s *Store) ListReadingTests(ctx context.Context, module string) ([]ReadingTest, error) {
+	if err := s.ensureReadingCache(ctx); err != nil {
+		return nil, err
+	}
+	m := strings.ToLower(strings.TrimSpace(module))
+	filterModule := m == "academic" || m == "general"
+	s.readingMu.RLock()
+	out := make([]ReadingTest, 0, len(s.readingTests))
+	for _, t := range s.readingTests {
+		if filterModule && t.Module != m {
+			continue
+		}
+		t.Questions = nil
 		out = append(out, t)
 	}
-	return out, rows.Err()
+	s.readingMu.RUnlock()
+	return out, nil
 }
 
 func (s *Store) GetReadingTest(ctx context.Context, id string, includeAnswers bool) (ReadingTest, error) {
+	if err := s.ensureReadingCache(ctx); err == nil {
+		s.readingMu.RLock()
+		t, ok := s.readingByKey[id]
+		s.readingMu.RUnlock()
+		if ok {
+			if !includeAnswers {
+				t = RedactTestForActiveSession(t)
+			}
+			return t, nil
+		}
+	}
 	row := s.pool.QueryRow(ctx, `SELECT `+readingTestColumns+` FROM reading_tests WHERE id::text = $1 OR slug = $1`, id)
 	t, err := scanReadingTest(row, true)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -975,6 +1023,9 @@ func (s *Store) ExplainReadingQuestion(ctx context.Context, req ReadingAIExplain
 		return fallback, nil
 	}
 
+	doneInteractive := s.beginInteractiveAI()
+	defer doneInteractive()
+
 	var draft ReadingAIExplanation
 	sys := `You are an expert IELTS Reading tutor. Reply with one JSON object and nothing else.
 Use ONLY the provided passage text and official evidence. Never invent evidence that is not in the passage.
@@ -1063,24 +1114,33 @@ func (s *Store) LookupReadingVocab(ctx context.Context, req ReadingVocabRequest,
 	contextSentence := oneLine(req.Context, 360)
 
 	// Check if the word is already in english_cards for instant local enrichment.
-	var savedMeaning, savedPron string
+	var savedMeaning string
 	var savedSenses WordSenses
 	var savedBand BandNote
-	var sensesRaw, bandRaw []byte
-	_ = s.pool.QueryRow(ctx, `
-		SELECT meaning, pronunciation, senses, band
-		FROM english_cards
-		WHERE lower(word) = lower($1)
-		LIMIT 1`, term).Scan(&savedMeaning, &savedPron, &sensesRaw, &bandRaw)
-	if len(sensesRaw) > 0 {
-		_ = json.Unmarshal(sensesRaw, &savedSenses)
-	}
-	if len(bandRaw) > 0 {
-		_ = json.Unmarshal(bandRaw, &savedBand)
+	if cached, ok := s.englishCardByWord(ctx, term); ok {
+		savedMeaning = cached.Meaning
+		savedSenses = cached.Senses
+		savedBand = cached.Band
+	} else {
+		var savedPron string
+		var sensesRaw, bandRaw []byte
+		_ = s.pool.QueryRow(ctx, `
+			SELECT meaning, pronunciation, senses, band
+			FROM english_cards
+			WHERE lower(word) = lower($1)
+			LIMIT 1`, term).Scan(&savedMeaning, &savedPron, &sensesRaw, &bandRaw)
+		if len(sensesRaw) > 0 {
+			_ = json.Unmarshal(sensesRaw, &savedSenses)
+		}
+		if len(bandRaw) > 0 {
+			_ = json.Unmarshal(bandRaw, &savedBand)
+		}
 	}
 
 	provider, _, pErr := s.ProviderForRole(ctx, "english", sealer)
 	if pErr == nil && realPronunciationModel(provider) {
+		doneInteractive := s.beginInteractiveAI()
+		defer doneInteractive()
 		var draft ReadingVocabResponse
 		sys := `You are an IELTS Reading vocabulary assistant. Reply with one JSON object and nothing else.
 Explain the selected word or phrase in the exact context of the passage sentence.
@@ -1209,9 +1269,11 @@ func (s *Store) GenerateReadingPractice(ctx context.Context, req ReadingGenerate
 	var generated ReadingTest
 	provider, _, pErr := s.ProviderForRole(ctx, "english", sealer)
 	if pErr == nil && realPronunciationModel(provider) {
+		doneInteractive := s.beginInteractiveAI()
 		if aiTest, err := requestGeneratedReadingTest(ctx, provider, topic, module, difficulty, qTypes); err == nil {
 			generated = aiTest
 		}
+		doneInteractive()
 	}
 	if len(generated.Passages) == 0 || len(generated.Questions) == 0 {
 		generated = buildFallbackGeneratedTest(topic, module, difficulty, qTypes)
@@ -1253,6 +1315,7 @@ func (s *Store) GenerateReadingPractice(ctx context.Context, req ReadingGenerate
 	generated.Slug = slug
 	generated.CreatedAt = createdAt
 	generated.QuestionCount = len(generated.Questions)
+	s.invalidateReadingCache()
 	return generated, nil
 }
 

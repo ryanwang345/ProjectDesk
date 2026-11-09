@@ -152,7 +152,13 @@ func noteQuota(err error) error {
 
 func quotaLimited(err error) bool {
 	var providerErr *ErrProvider
-	if err == nil || !errors.As(err, &providerErr) || providerErr.Status != http.StatusTooManyRequests {
+	if err == nil || !errors.As(err, &providerErr) {
+		return false
+	}
+	if providerErr.Status == http.StatusPaymentRequired {
+		return true
+	}
+	if providerErr.Status != http.StatusTooManyRequests {
 		return false
 	}
 	body := strings.ToLower(providerErr.Body)

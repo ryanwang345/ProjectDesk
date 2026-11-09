@@ -240,8 +240,8 @@ func (s *Store) CompleteVocabularyLesson(ctx context.Context, lesson, correct in
 	if lesson < 0 || correct < 0 || correct > 10 {
 		return LearningProgress{}, fmt.Errorf("%w: invalid lesson completion", ErrInvalid)
 	}
-	var count int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM english_cards`).Scan(&count); err != nil {
+	count, err := s.englishCardCount(ctx)
+	if err != nil {
 		return LearningProgress{}, err
 	}
 	if lesson >= (count+4)/5 {
@@ -292,6 +292,7 @@ func (s *Store) CompleteVocabularyLesson(ctx context.Context, lesson, correct in
 	if err := tx.Commit(ctx); err != nil {
 		return LearningProgress{}, err
 	}
+	s.EnrollLessonWordsInSRS(ctx, lesson, correct)
 	progress, err := s.GetLearningProgress(ctx, zone)
 	progress.AwardedXP = &xp
 	return progress, err

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -34,6 +35,8 @@ type BandNote struct {
 	Examples     []string `json:"examples"`
 	ExamplesZh   []string `json:"examplesZh"`
 	Weak         string   `json:"weak"`
+	WeakFixed    string   `json:"weakFixed,omitempty"`
+	WeakFixedZh  string   `json:"weakFixedZh,omitempty"`
 	Fix          string   `json:"fix"`
 	FixZh        string   `json:"fixZh"`
 	Paraphrases  []string `json:"paraphrases"`
@@ -59,25 +62,132 @@ type EnglishInput struct {
 	Examples []string
 }
 
-func (s *Store) ListEnglish(ctx context.Context) ([]EnglishCard, error) {
+func (s *Store) ensureEnglishCache(ctx context.Context) error {
+	s.englishMu.RLock()
+	if s.englishCached {
+		s.englishMu.RUnlock()
+		return nil
+	}
+	s.englishMu.RUnlock()
+
+	s.englishMu.Lock()
+	defer s.englishMu.Unlock()
+	if s.englishCached {
+		return nil
+	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT `+englishColumns+`
 		FROM english_cards
 		ORDER BY updated_at DESC`)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rows.Close()
 
-	cards := []EnglishCard{}
+	cards := make([]EnglishCard, 0, 4600)
+	byID := make(map[string]EnglishCard, 4600)
+	byWord := make(map[string]EnglishCard, 4600)
 	for rows.Next() {
 		card, err := scanEnglish(rows)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		cards = append(cards, card)
+		byID[card.ID] = card
+		lower := strings.ToLower(card.Word)
+		if _, exists := byWord[lower]; !exists {
+			byWord[lower] = card
+		}
 	}
-	return cards, rows.Err()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	sorted := make([]EnglishCard, len(cards))
+	copy(sorted, cards)
+	sort.Slice(sorted, func(i, j int) bool {
+		return strings.ToLower(sorted[i].Word) < strings.ToLower(sorted[j].Word)
+	})
+	rawJSON, err := json.Marshal(cards)
+	if err != nil {
+		return err
+	}
+	s.englishVersion++
+	s.englishCards = cards
+	s.englishSorted = sorted
+	s.englishByID = byID
+	s.englishByWord = byWord
+	s.englishJSON = rawJSON
+	s.englishETag = fmt.Sprintf(`"e-%d-%d"`, s.englishVersion, len(rawJSON))
+	s.englishCached = true
+	return nil
+}
+
+func (s *Store) ListEnglish(ctx context.Context) ([]EnglishCard, error) {
+	if err := s.ensureEnglishCache(ctx); err != nil {
+		return nil, err
+	}
+	s.englishMu.RLock()
+	out := make([]EnglishCard, len(s.englishCards))
+	copy(out, s.englishCards)
+	s.englishMu.RUnlock()
+	return out, nil
+}
+
+func (s *Store) ListEnglishJSON(ctx context.Context) ([]byte, string, error) {
+	if err := s.ensureEnglishCache(ctx); err != nil {
+		return nil, "", err
+	}
+	s.englishMu.RLock()
+	raw := s.englishJSON
+	etag := s.englishETag
+	s.englishMu.RUnlock()
+	return raw, etag, nil
+}
+
+func (s *Store) listEnglishSorted(ctx context.Context) ([]EnglishCard, error) {
+	if err := s.ensureEnglishCache(ctx); err != nil {
+		return nil, err
+	}
+	s.englishMu.RLock()
+	out := s.englishSorted
+	s.englishMu.RUnlock()
+	return out, nil
+}
+
+func (s *Store) englishCardByID(ctx context.Context, id string) (EnglishCard, bool) {
+	if err := s.ensureEnglishCache(ctx); err == nil {
+		s.englishMu.RLock()
+		card, ok := s.englishByID[id]
+		s.englishMu.RUnlock()
+		if ok {
+			return card, true
+		}
+	}
+	return EnglishCard{}, false
+}
+
+func (s *Store) englishCardByWord(ctx context.Context, word string) (EnglishCard, bool) {
+	if err := s.ensureEnglishCache(ctx); err == nil {
+		s.englishMu.RLock()
+		card, ok := s.englishByWord[strings.ToLower(strings.TrimSpace(word))]
+		s.englishMu.RUnlock()
+		if ok {
+			return card, true
+		}
+	}
+	return EnglishCard{}, false
+}
+
+func (s *Store) englishCardCount(ctx context.Context) (int, error) {
+	if err := s.ensureEnglishCache(ctx); err != nil {
+		var count int
+		err := s.pool.QueryRow(ctx, `SELECT count(*) FROM english_cards`).Scan(&count)
+		return count, err
+	}
+	s.englishMu.RLock()
+	n := len(s.englishCards)
+	s.englishMu.RUnlock()
+	return n, nil
 }
 
 func (s *Store) DeleteEnglish(ctx context.Context, id string) error {
@@ -91,6 +201,7 @@ func (s *Store) DeleteEnglish(ctx context.Context, id string) error {
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
+	s.invalidateEnglishCache()
 	return nil
 }
 
@@ -104,6 +215,19 @@ func (s *Store) SetEnglishReview(ctx context.Context, id string, inReview bool) 
 	card, err := scanEnglish(row)
 	if errors.Is(err, pgx.ErrNoRows) || isInvalidUUID(err) {
 		return EnglishCard{}, ErrNotFound
+	}
+	if err == nil {
+		if inReview {
+			_, _ = s.pool.Exec(ctx, `
+				INSERT INTO vocabulary_srs (card_id, stability, difficulty, state, due_at, updated_at)
+				VALUES ($1, 0.8, 5.5, 'learning', now(), now())
+				ON CONFLICT (card_id) DO UPDATE SET
+					due_at = LEAST(vocabulary_srs.due_at, now()),
+					state = CASE WHEN vocabulary_srs.reps = 0 THEN 'learning' ELSE 'relearning' END,
+					updated_at = now()
+			`, id)
+		}
+		s.invalidateEnglishCache()
 	}
 	return card, err
 }

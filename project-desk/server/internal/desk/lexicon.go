@@ -75,20 +75,50 @@ func (s *Store) WriteSenses(ctx context.Context, sealer *Sealer) {
 	}
 }
 
+type sensesFlightCall struct {
+	done chan struct{}
+	card EnglishCard
+	err  error
+}
+
 // AttachSenses fills the dictionary entry for one new or renamed word.
 func (s *Store) AttachSenses(ctx context.Context, provider ai.Provider, card EnglishCard) (EnglishCard, error) {
 	if len(card.Senses) > 0 || !realPronunciationModel(provider) {
 		return card, nil
 	}
-	got, err := requestSensesRetry(ctx, provider, []EnglishCard{card})
+	call := &sensesFlightCall{done: make(chan struct{})}
+	if actual, loaded := s.sensesFlight.LoadOrStore(card.ID, call); loaded {
+		existing := actual.(*sensesFlightCall)
+		select {
+		case <-existing.done:
+			return existing.card, existing.err
+		case <-ctx.Done():
+			return card, ctx.Err()
+		}
+	}
+	defer func() {
+		close(call.done)
+		s.sensesFlight.Delete(card.ID)
+	}()
+
+	doneInteractive := s.beginInteractiveAI()
+	defer doneInteractive()
+
+	got, err := requestSensesFast(ctx, provider, []EnglishCard{card})
 	if err != nil {
+		call.card = card
+		call.err = err
 		return card, err
 	}
 	senses := got[strings.ToLower(card.Word)]
 	if len(senses) == 0 {
+		call.card = card
 		return card, nil
 	}
-	return s.saveSenses(ctx, card.ID, senses)
+	saved, saveErr := s.saveSenses(ctx, card.ID, senses)
+	call.card = saved
+	call.err = saveErr
+	return saved, saveErr
 }
 
 // FillSenses writes entries for cards whose senses are still empty.
@@ -111,8 +141,8 @@ func (s *Store) FillSenses(ctx context.Context, provider ai.Provider) error {
 			log.Printf("writing dictionary senses for %d words", len(missing))
 		}
 		for start := 0; start < len(missing); start += senseBatch {
-			if ctx.Err() != nil {
-				return ctx.Err()
+			if err := s.waitInteractiveAI(ctx); err != nil {
+				return err
 			}
 			end := start + senseBatch
 			if end > len(missing) {
@@ -189,6 +219,9 @@ func (s *Store) saveSenses(ctx context.Context, id string, senses WordSenses) (E
 		row = s.pool.QueryRow(ctx, `SELECT `+englishColumns+` FROM english_cards WHERE id = $1`, id)
 		return scanEnglish(row)
 	}
+	if err == nil {
+		s.invalidateEnglishCache()
+	}
 	return card, err
 }
 
@@ -232,6 +265,28 @@ func requestSensesRetry(ctx context.Context, provider ai.Provider, cards []Engli
 	return nil, last
 }
 
+func requestSensesFast(ctx context.Context, provider ai.Provider, cards []EnglishCard) (map[string]WordSenses, error) {
+	var last error
+	for try := 0; try < 2; try++ {
+		if try > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(400 * time.Millisecond):
+			}
+		}
+		got, err := requestSenses(ctx, provider, cards)
+		if err == nil {
+			return got, nil
+		}
+		last = err
+		if ctx.Err() != nil || providerBusy(err) {
+			return nil, err
+		}
+	}
+	return nil, last
+}
+
 func requestSenses(ctx context.Context, provider ai.Provider, cards []EnglishCard) (map[string]WordSenses, error) {
 	notes := dictionaryBriefs(ctx, cards)
 	var draft senseDraft
@@ -240,7 +295,7 @@ func requestSenses(ctx context.Context, provider ai.Provider, cards []EnglishCar
 			{Role: "system", Content: senseSystem},
 			{Role: "user", Content: senseUser(cards, notes)},
 		},
-		MaxTokens:   1000 + 600*len(cards),
+		MaxTokens:   min(3500, 300+280*len(cards)),
 		Temperature: 0.2,
 	}, &draft)
 	if err != nil {
@@ -363,9 +418,14 @@ func normalizePos(pos string) string {
 	}
 }
 
-var dictionaryClient = &http.Client{Timeout: 8 * time.Second}
+var (
+	dictionaryClient = &http.Client{Timeout: 1500 * time.Millisecond}
+	dictCache        sync.Map
+)
 
 func dictionaryBriefs(ctx context.Context, cards []EnglishCard) map[string]string {
+	dictCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	defer cancel()
 	notes := map[string]string{}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -373,7 +433,7 @@ func dictionaryBriefs(ctx context.Context, cards []EnglishCard) map[string]strin
 		wg.Add(1)
 		go func(word string) {
 			defer wg.Done()
-			note := dictionaryNotes(ctx, word)
+			note := dictionaryNotes(dictCtx, word)
 			if note == "" {
 				return
 			}
@@ -387,11 +447,20 @@ func dictionaryBriefs(ctx context.Context, cards []EnglishCard) map[string]strin
 }
 
 func dictionaryNotes(ctx context.Context, word string) string {
+	key := strings.ToLower(strings.TrimSpace(word))
+	if key == "" {
+		return ""
+	}
+	if cached, ok := dictCache.Load(key); ok {
+		return cached.(string)
+	}
 	for _, candidate := range dictionaryCandidates(word) {
 		if note := fetchDictionaryNotes(ctx, candidate); note != "" {
+			dictCache.Store(key, note)
 			return note
 		}
 	}
+	dictCache.Store(key, "")
 	return ""
 }
 

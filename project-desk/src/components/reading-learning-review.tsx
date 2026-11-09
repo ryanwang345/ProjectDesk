@@ -55,9 +55,27 @@ export function ReadingLearningReview({ data, analytics, module, busy, onReview,
         </div>
         {error ? <p role="alert" className="mt-4 text-sm text-destructive">{zh ? '无法加载错题和词汇，请稍后重试。' : 'Could not load review and vocabulary. Please try again.'}</p> : loading ? <p className="mt-4 text-sm text-muted-foreground">{zh ? '正在加载已保存的作答…' : 'Loading saved answers…'}</p> : mistakes.length === 0 ? <p className="mt-4 text-sm text-muted-foreground">{resolved ? (zh ? '重做错题并答对后，进步记录会出现在这里。' : 'Correct retries will appear here as your review grows.') : (zh ? '该分组暂无待复习错题。完成阅读后，需巩固的题目会保存在这里。' : 'No open mistakes in this group. After a reading session, questions to revisit will be saved here.')}</p> : <div className="mt-4 divide-y divide-border">
           {mistakes.map((item) => <article key={item.id} className="py-4 first:pt-0" data-testid={`reading-mistake-${item.id}`}>
-            <p className="text-[11px] font-medium text-primary">{QUESTION_TYPE_LABELS[item.question.type][zh ? 'zh' : 'en']}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[11px] font-medium text-primary">{QUESTION_TYPE_LABELS[item.question.type][zh ? 'zh' : 'en']}</p>
+              {item.diagnosis ? (
+                <span className="rounded-full border border-primary/25 bg-primary/8 px-2.5 py-0.5 text-[11px] font-medium text-primary" data-testid="mistake-diagnosis-badge">
+                  {zh ? item.diagnosis.labelZh : item.diagnosis.label}
+                </span>
+              ) : null}
+            </div>
             <h3 className="mt-1 text-sm font-medium leading-relaxed">{item.question.prompt}</h3>
             <p className="mt-1 text-xs text-muted-foreground">{item.passage.title} · {item.retryCount} {zh ? '次重做' : 'retries'} · {item.correctRetries} {zh ? '次答对' : 'correct'}</p>
+            {item.diagnosis ? (
+              <div className="mt-2.5 rounded-2xl border border-border/80 bg-background/60 p-3 text-xs leading-relaxed">
+                <p className="font-medium text-foreground">
+                  {zh ? '苏格拉底定位提示（看答案前先自检）：' : 'Socratic Self-Check (Before revealing answer): '}
+                  <span className="font-normal text-muted-foreground">{zh ? item.diagnosis.socraticHintZh : item.diagnosis.socraticHint}</span>
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {zh ? `常见错因：${item.diagnosis.whyItHappensZh}` : `Why this trap happens: ${item.diagnosis.whyItHappens}`}
+                </p>
+              </div>
+            ) : null}
             <details className="mt-3 text-sm">
               <summary className="cursor-pointer text-primary focus-visible:rounded focus-visible:outline-2">{zh ? '查看原作答与证据' : 'See your answer and the evidence'}</summary>
               <div className="mt-3 space-y-2 rounded-2xl bg-muted/40 p-4">

@@ -506,7 +506,11 @@ func (s *Store) seedIelts(ctx context.Context) error {
 		WHERE generated = false AND cardinality(examples) = 10`); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	s.invalidateEnglishCache()
+	return nil
 }
 
 func insertVocab(ctx context.Context, tx pgx.Tx, entries []ieltsEntry, have map[string]bool, varied bool) error {

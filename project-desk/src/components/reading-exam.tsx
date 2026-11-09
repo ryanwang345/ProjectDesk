@@ -854,8 +854,8 @@ export function ReadingExamView({
           <div className="flex flex-col gap-5">
             {passageQuestions.map((q, idx) => {
               const prevQ = idx > 0 ? passageQuestions[idx - 1] : null
-              const showGroupHeader = q.groupInstruction && q.groupInstruction !== prevQ?.groupInstruction
-              const showContextBox = Boolean(q.contextText)
+              const showGroupHeader = Boolean(q.groupInstruction && q.groupInstruction !== prevQ?.groupInstruction)
+              const showContextBox = Boolean(q.contextText && q.contextText !== prevQ?.contextText)
               const currentAnswer = answers[q.id] ?? ''
               const isFlagged = Boolean(flags[q.id])
               const isActive = q.id === activeQuestionId
@@ -870,17 +870,24 @@ export function ReadingExamView({
               return (
                 <div key={q.id} className="flex flex-col gap-3">
                   {showGroupHeader ? (
-                    <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3">
+                    <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3.5">
                       <p className="text-xs font-semibold tracking-wide text-primary uppercase">
                         {QUESTION_TYPE_LABELS[q.type]?.[isZh ? 'zh' : 'en'] ?? q.type}
                       </p>
-                      <p className="mt-1 text-sm leading-relaxed text-foreground">{q.groupInstruction}</p>
+                      <p className="mt-1 font-serif text-sm leading-relaxed text-foreground whitespace-pre-line font-medium">
+                        {q.groupInstruction}
+                      </p>
                     </div>
                   ) : null}
 
                   {showContextBox ? (
-                    <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm leading-relaxed whitespace-pre-line">
-                      {q.contextText}
+                    <div className="rounded-2xl border-2 border-border/90 bg-card/90 p-4.5 shadow-xs">
+                      <div className="font-mono text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                        {isZh ? '配对特征库 / 选项清单' : 'Feature Options List'}
+                      </div>
+                      <div className="mt-2 text-sm leading-relaxed font-serif whitespace-pre-line text-foreground">
+                        {q.contextText}
+                      </div>
                     </div>
                   ) : null}
 

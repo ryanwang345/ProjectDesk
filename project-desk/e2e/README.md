@@ -29,6 +29,7 @@ The target desk holds real projects. The cards spec only creates projects named 
 | `cypress/e2e/projects.cy.ts` | `@regression` | Validates the form, then adds, edits, moves, and removes one card |
 | `cypress/e2e/reading.cy.ts` | `@regression` | Reading library and existing practice/exam flows; session writes require the flag below |
 | `cypress/e2e/reading-learning.cy.ts` | `@regression` | Dashboard order, mobile/keyboard navigation, load recovery, daily persistence, rewards, mistakes and passage vocabulary |
+| `cypress/e2e/lesson-feedback.cy.ts` | `@regression` | Isolated lesson fixtures: selected answers, corrections, heart counts, capitalization, and Chinese mobile feedback; no learner data writes |
 
 Reading session write tests are disabled unless `E2E_ALLOW_LEARNING_WRITES=true`.
 Use that flag only against a fresh disposable application database: these tests

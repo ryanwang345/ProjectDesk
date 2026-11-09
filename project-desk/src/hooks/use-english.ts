@@ -71,5 +71,5 @@ export function useEnglish() {
     setCards((current) => current.map((card) => (card.id === saved.id ? saved : card)))
   }, [])
 
-  return { cards, ready, problem, markReview, removeCard, adoptCard }
+  return { cards, ready, problem, markReview, removeCard, adoptCard, reload: load }
 }

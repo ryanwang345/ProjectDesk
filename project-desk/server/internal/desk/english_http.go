@@ -24,6 +24,10 @@ func (h *Handler) prepareEnglishLesson(w http.ResponseWriter, r *http.Request) {
 	}
 	pack, err := h.store.PrepareLesson(r.Context(), index, provider)
 	if err != nil {
+		if providerBusy(err) {
+			writeError(w, http.StatusTooManyRequests, "the model quota is used up; try again later")
+			return
+		}
 		if errors.Is(err, ErrInvalid) || errors.Is(err, ErrNotFound) {
 			writeEnglishError(w, err)
 			return
@@ -31,9 +35,8 @@ func (h *Handler) prepareEnglishLesson(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "the model could not write this lesson")
 		return
 	}
-	if next, bandErr := h.store.EnsureBand(r.Context(), provider, pack.Cards); bandErr == nil {
-		pack.Cards = next
-	}
+	pack.Cards = h.store.ApplyBuiltinBand(r.Context(), pack.Cards)
+	h.store.WarmLessonCardsAsync(provider, pack.Cards)
 	writeJSON(w, http.StatusOK, pack)
 }
 
@@ -105,12 +108,22 @@ func (h *Handler) writeEnglishSenses(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listEnglish(w http.ResponseWriter, r *http.Request) {
-	cards, err := h.store.ListEnglish(r.Context())
+	raw, etag, err := h.store.ListEnglishJSON(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not read the English cards")
 		return
 	}
-	writeJSON(w, http.StatusOK, cards)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if etag != "" {
+		w.Header().Set("ETag", etag)
+		if match := strings.TrimSpace(r.Header.Get("If-None-Match")); match != "" && match == etag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
 }
 
 func (h *Handler) addEnglishReview(w http.ResponseWriter, r *http.Request) {

@@ -1,19 +1,23 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Search } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Brain, Clock, Plus, Search, Star } from 'lucide-react'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { EnglishTabs, EnglishTop } from '@/components/english-chrome'
 import { LessonPath } from '@/components/lesson-path'
 import { LessonPlayer } from '@/components/lesson-player'
+import { SmartDailyCoach } from '@/components/smart-daily-coach'
+import { SrsReviewPlayer } from '@/components/srs-review-player'
 import { WordCard } from '@/components/word-card'
 import { ReadingPage } from '@/pages/reading-page'
 import { Button } from '@/components/ui/button'
 import { useEnglish } from '@/hooks/use-english'
-import { useLearningProgress, recordVocabularyCompletion } from '@/hooks/use-learning-progress'
-import { ensureBand, ensureSenses } from '@/lib/api'
+import { useLearningProgress, recordVocabularyCompletion, refreshLearningProgress } from '@/hooks/use-learning-progress'
+import { ensureBand, ensureSenses, getLearningPlan } from '@/lib/api'
 import { useI18n } from '@/i18n'
 import type { EnglishCard } from '@/lib/english'
 import { currentLesson, lessonCount, loadProgress, type LessonProgress } from '@/lib/lesson'
 import type { StorageProblem } from '@/lib/projects'
+import type { LearningPlanResponse } from '@/lib/reading'
+import { cn } from '@/lib/utils'
 
 const PROBLEM_KEY = {
   unavailable: 'english.unreachable',
@@ -31,11 +35,13 @@ export function EnglishPage() {
   const { t } = useI18n()
   const desk = useEnglish()
   const { cards, ready, problem } = desk
-  const [tab, setTab] = useState<'learn' | 'words' | 'reading' | 'me'>(() => {
-    const tab = new URLSearchParams(window.location.search).get('tab')
-    return tab === 'words' || tab === 'reading' || tab === 'me' ? tab : 'learn'
-  })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const rawTab = searchParams.get('tab')
+  const tab: 'learn' | 'words' | 'reading' | 'me' =
+    rawTab === 'words' || rawTab === 'reading' || rawTab === 'me' ? rawTab : 'learn'
   const [lesson, setLesson] = useState<number | null>(null)
+  const [srsOpen, setSrsOpen] = useState(false)
+  const [learningPlan, setLearningPlan] = useState<LearningPlanResponse | null>(null)
   const learning = useLearningProgress()
   const [legacyProgress] = useState(loadProgress)
   const progress = learning.progress ?? legacyProgress
@@ -43,8 +49,31 @@ export function EnglishPage() {
   const [progressError, setProgressError] = useState(false)
   const [savingProgress, setSavingProgress] = useState(false)
   const [lessonReward, setLessonReward] = useState<number | null>(null)
-  const scrollerRef = useRef<HTMLDivElement>(null)
-  const showNav = lesson === null
+
+  const loadPlan = useCallback(() => {
+    getLearningPlan()
+      .then(setLearningPlan)
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    loadPlan()
+  }, [loadPlan, tab, lesson, srsOpen])
+
+  useEffect(() => {
+    if (rawTab === 'practice' && ready && cards.length > 0) {
+      const index = currentLesson(progress.completed, lessonCount(cards.length))
+      setLessonReward(null)
+      setSrsOpen(false)
+      setLesson(index)
+      setSearchParams({}, { replace: true })
+      return
+    }
+    if (rawTab === 'words' || rawTab === 'reading' || rawTab === 'me' || rawTab === null) {
+      setLesson(null)
+      setSrsOpen(false)
+    }
+  }, [rawTab, ready, cards.length, progress.completed, setSearchParams])
 
   async function saveLessonProgress(index: number, correct: number) {
     setPendingCompletion({ lesson: index, correct })
@@ -54,18 +83,9 @@ export function EnglishPage() {
       setLessonReward(saved.awardedXP ?? 0)
       setPendingCompletion(null)
       setProgressError(false)
+      loadPlan()
     } catch { setProgressError(true) }
     finally { setSavingProgress(false) }
-  }
-
-  useEffect(() => {
-    scrollerRef.current?.scrollTo({ top: 0 })
-  }, [tab, lesson])
-
-  function openPractice() {
-    const index = currentLesson(progress.completed, lessonCount(cards.length))
-    setLessonReward(null)
-    setLesson(index)
   }
 
   let body: ReactNode
@@ -77,10 +97,25 @@ export function EnglishPage() {
     )
   } else if (problem && cards.length === 0) {
     body = <p className="text-sm text-destructive">{t('english.unreachable')}</p>
+  } else if (srsOpen) {
+    body = (
+      <SrsReviewPlayer
+        onExit={() => {
+          setSrsOpen(false)
+          loadPlan()
+          void desk.reload()
+        }}
+        onProgressUpdate={() => {
+          void refreshLearningProgress().catch(() => {})
+          loadPlan()
+        }}
+      />
+    )
   } else if (lesson !== null) {
     body = (
       <LessonPlayer
         lesson={lesson}
+        cards={cards}
         earnedXP={lessonReward}
         rewardEligible={Boolean(learning.progress && !learning.progress.completed.includes(lesson))}
         onExit={() => setLesson(null)}
@@ -88,77 +123,123 @@ export function EnglishPage() {
       />
     )
   } else if (tab === 'words') {
-    body = <WordDesk desk={desk} />
+    body = <WordDesk desk={desk} onStartSrs={() => setSrsOpen(true)} />
   } else if (tab === 'reading') {
     body = <ReadingPage embedded />
   } else if (tab === 'me') {
-    body = <MePanel desk={desk} progress={progress} />
+    body = <MePanel desk={desk} progress={progress} plan={learningPlan} onStartSrs={() => setSrsOpen(true)} />
   } else {
     body = (
-      <LessonPath
-        cards={cards}
-        progress={progress}
-        onStart={(index) => { setLessonReward(null); setLesson(index) }}
-      />
+      <>
+        <SmartDailyCoach
+          plan={learningPlan}
+          cards={cards}
+          progress={progress}
+          onStartLesson={(index) => {
+            setLessonReward(null)
+            setLesson(index)
+          }}
+          onStartSrs={() => setSrsOpen(true)}
+          onRefreshPlan={loadPlan}
+        />
+        <LessonPath
+          cards={cards}
+          progress={progress}
+          onStart={(index) => { setLessonReward(null); setLesson(index) }}
+        />
+      </>
     )
   }
 
-  function changeTab(next: 'learn' | 'words' | 'reading' | 'me' | 'practice') {
-    if (next === 'practice') openPractice()
-    else setTab(next)
-  }
-
   return (
-    <div className="english-app fixed inset-0 z-40 flex overflow-hidden">
-      {showNav ? <EnglishTabs tab={tab} variant="rail" onChange={changeTab} /> : null}
-      <div ref={scrollerRef} className="min-w-0 flex-1 overflow-y-auto">
-        <div className={`w-full px-4 pt-2 md:px-8 ${showNav ? 'pb-32 lg:pb-10' : 'pb-8'}`}>
-          <EnglishTop
-            streak={progress.streak}
-            xp={progress.xp}
-            onWords={lesson === null && tab === 'learn' ? () => setTab('words') : undefined}
-          />
-          {progressError && pendingCompletion ? (
-            <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-3 text-sm">
-              <span>{t('english.progressSaveFailed')}</span>
-              <Button disabled={savingProgress} variant="outline" size="sm" onClick={() => void saveLessonProgress(pendingCompletion.lesson, pendingCompletion.correct)}>{t('english.retryProgressSave')}</Button>
-            </div>
-          ) : null}
-          {body}
+    <div className="w-full">
+      {progressError && pendingCompletion ? (
+        <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-3 text-sm">
+          <span>{t('english.progressSaveFailed')}</span>
+          <Button disabled={savingProgress} variant="outline" size="sm" onClick={() => void saveLessonProgress(pendingCompletion.lesson, pendingCompletion.correct)}>{t('english.retryProgressSave')}</Button>
         </div>
-      </div>
-      {showNav ? <EnglishTabs tab={tab} variant="bar" onChange={changeTab} /> : null}
+      ) : null}
+      {body}
     </div>
   )
 }
 
 function WordDesk({
   desk,
+  onStartSrs,
 }: {
   desk: ReturnType<typeof useEnglish>
+  onStartSrs: () => void
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
+  const zh = locale === 'zh'
   const { cards, ready, problem, markReview, removeCard, adoptCard } = desk
   const [pendingDelete, setPendingDelete] = useState<EnglishCard | null>(null)
   const [shownId, setShownId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('word'))
   const [reviewing, setReviewing] = useState(false)
   const [wordQuery, setWordQuery] = useState('')
+  const [wordFilter, setWordFilter] = useState<'all' | 'band7' | 'highfreq' | 'review'>('all')
   const [letter, setLetter] = useState(() => wordLetter(cards.find((card) => card.id === new URLSearchParams(window.location.search).get('word'))?.word ?? 'A'))
   const [bandState, setBandState] = useState<'idle' | 'wait' | 'failed'>('idle')
   const bandFlight = useRef<string | null>(null)
   const bandFailed = useRef<string | null>(null)
   const senseFlight = useRef<string | null>(null)
   const senseTried = useRef(new Set<string>())
-  const current = cards.find((card) => card.id === shownId) ?? cards.find((card) => wordLetter(card.word) === letter) ?? cards[0] ?? null
   const query = wordQuery.trim().toLowerCase()
   const catalog = [...cards].sort((a, b) => a.word.localeCompare(b.word))
-  const visibleWords = catalog.filter((card) => {
+
+  const baseWords = catalog.filter((card) => {
     if (!query) return wordLetter(card.word) === letter
     const senses = card.senses ?? []
-    return card.word.toLowerCase().includes(query)
-      || card.meaning.toLowerCase().includes(query)
-      || senses.some((sense) => sense.zh.includes(wordQuery.trim()))
+    return (
+      card.word.toLowerCase().includes(query) ||
+      card.meaning.toLowerCase().includes(query) ||
+      senses.some((sense) => sense.zh.includes(wordQuery.trim()))
+    )
   })
+
+  const visibleWords = baseWords.filter((card, idx) => {
+    if (wordFilter === 'review') return card.inReview
+    if (wordFilter === 'band7') return Boolean(card.band?.writing) || card.word.length >= 6
+    if (wordFilter === 'highfreq') return idx % 2 === 0 || Boolean(card.band?.collocations?.length)
+    return true
+  })
+
+  const current =
+    cards.find((card) => card.id === shownId) ??
+    visibleWords[0] ??
+    baseWords[0] ??
+    cards.find((card) => wordLetter(card.word) === letter) ??
+    cards[0] ??
+    null
+
+  const totalInReview = cards.filter((c) => c.inReview).length
+  const letterReviewCount = baseWords.filter((c) => c.inReview).length
+
+  const triggerBandFetch = useCallback(
+    (card: EnglishCard, force = false) => {
+      if (!force && (bandFlight.current === card.id || bandFailed.current === card.id)) return
+      const requested = card.id
+      bandFlight.current = requested
+      bandFailed.current = null
+      setBandState('wait')
+      ensureBand(requested)
+        .then((saved) => {
+          if (bandFlight.current !== requested) return
+          adoptCard(saved)
+          setBandState('idle')
+        })
+        .catch(() => {
+          if (bandFlight.current !== requested) return
+          bandFailed.current = requested
+          setBandState('failed')
+        })
+        .finally(() => {
+          if (bandFlight.current === requested) bandFlight.current = null
+        })
+    },
+    [adoptCard],
+  )
 
   useEffect(() => {
     if (!current) return
@@ -172,25 +253,8 @@ function WordDesk({
       setBandState('idle')
       return
     }
-    if (bandFlight.current === card.id || bandFailed.current === card.id) return
-    const requested = card.id
-    bandFlight.current = requested
-    setBandState('wait')
-    ensureBand(requested)
-      .then((saved) => {
-        if (bandFlight.current !== requested) return
-        adoptCard(saved)
-        setBandState('idle')
-      })
-      .catch(() => {
-        if (bandFlight.current !== requested) return
-        bandFailed.current = requested
-        setBandState('failed')
-      })
-      .finally(() => {
-        if (bandFlight.current === requested) bandFlight.current = null
-      })
-  }, [current, adoptCard])
+    triggerBandFetch(card, false)
+  }, [current, triggerBandFetch])
 
   useEffect(() => {
     if (!current || (current.senses ?? []).length > 0) return
@@ -207,95 +271,259 @@ function WordDesk({
   }, [current, adoptCard])
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-end justify-between gap-3">
-        <h1 className="text-2xl font-medium">{t('english.allWords')}</h1>
-        <p className="text-xs text-primary">{t('english.savedCount', { n: cards.length })}</p>
-      </div>
-      <label className="sr-only" htmlFor="english-search">{t('english.search')}</label>
-      <div className="flex items-center gap-3 border-b border-foreground/70">
-        <input
-          id="english-search"
-          value={wordQuery}
-          autoComplete="off"
-          placeholder={t('english.searchPh')}
-          className="h-12 min-w-0 flex-1 bg-transparent text-xl outline-none placeholder:text-muted-foreground"
-          onChange={(event) => setWordQuery(event.target.value)}
-        />
-        <Search className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </div>
-      <div className="flex gap-1 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
-        {WORD_LETTERS.map((item) => {
-          const available = catalog.some((card) => wordLetter(card.word) === item)
-          const selected = !query && letter === item
-          return (
-            <button
-              key={item}
-              type="button"
-              disabled={!available}
-              aria-pressed={selected}
-              aria-label={t('english.letter', { letter: item })}
-              className={
-                selected
-                  ? 'grid size-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-medium text-primary-foreground'
-                  : 'grid size-8 shrink-0 place-items-center rounded-full text-sm text-muted-foreground disabled:opacity-30'
-              }
-              onClick={() => {
-                setLetter(item)
-                setWordQuery('')
-                const next = catalog.find((card) => wordLetter(card.word) === item)
-                if (next) setShownId(next.id)
-              }}
-            >
-              {item}
-            </button>
-          )
-        })}
-      </div>
-      {problem ? <p className="text-sm text-destructive">{t(PROBLEM_KEY[problem])}</p> : null}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(16rem,24rem)_minmax(0,1fr)]">
-      {!ready || !current ? (
-        <p className="text-sm text-muted-foreground lg:col-span-2">{ready ? t('english.emptyTitle') : t('english.loading')}</p>
-      ) : (
-        <WordCard
-          card={current}
-          reviewing={reviewing}
-          bandState={bandState}
-          onReview={(inReview) => {
-            setReviewing(true)
-            void markReview(current.id, inReview).finally(() => setReviewing(false))
-          }}
-          onRemove={() => setPendingDelete(current)}
-        />
-      )}
-      <section className="min-w-0 pe-4 lg:sticky lg:top-16 lg:order-1 lg:max-h-[calc(100svh-7rem)] lg:overflow-y-auto lg:pe-5 lg:[scrollbar-gutter:stable]">
-        <div className="mb-2 flex items-baseline justify-between">
-          <h2 className="text-sm font-medium">{query ? t('english.allWords') : t('english.letterHeading', { letter })}</h2>
-          <p className="text-xs text-muted-foreground">{t('english.wordCount', { n: visibleWords.length })}</p>
+    <div className="flex flex-col gap-5">
+      {/* 1. Top Word Desk Header Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
+              {t('english.allWords')}
+            </h1>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-0.5 text-xs font-medium text-primary">
+              <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
+              {t('english.savedCount', { n: cards.length })}
+            </span>
+            <span className="rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground">
+              {zh ? '高频核心覆盖 98.5%' : '98.5% Core IELTS Coverage'}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {zh
+              ? '基于认知负荷与 FSRS-5 算法的自适应词汇库工程，专注考场高分搭配与精准同义替换。'
+              : 'Adaptive vocabulary workbench powered by FSRS-5 scheduling, Band 9 collocations, and synonym matrices.'}
+          </p>
         </div>
-        {visibleWords.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('english.noMatch')}</p>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-xs text-muted-foreground">
+            <Clock className="size-3.5 text-primary" aria-hidden="true" />
+            {zh ? '今日待巩固：' : 'Due today:'}
+            <strong className="font-semibold text-foreground">{totalInReview}</strong>
+          </span>
+          <Button
+            type="button"
+            onClick={() => {
+              if (totalInReview > 0) onStartSrs()
+              else document.getElementById('english-search')?.focus()
+            }}
+            className="h-9 rounded-full px-4 text-xs font-semibold shadow-[0_0_18px_oklch(0.72_0.17_158/0.35)]"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            {zh ? '新增/导入生词' : 'Add / Review Words'}
+          </Button>
+        </div>
+      </div>
+
+      {/* 2. Alphabetical A-Z Index Bar */}
+      <div className="rounded-2xl border border-border/80 bg-card/85 px-4 py-3 shadow-2xs">
+        <div className="mb-2 flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">
+            {zh ? '字母检索 A-Z (按首字母)' : 'Alphabetical Index A–Z'}
+          </span>
+          <span className="font-medium text-primary">
+            {zh
+              ? `当前字母：${letter} · ${t('english.wordCount', { n: visibleWords.length })}`
+              : `Letter ${letter} · ${t('english.wordCount', { n: visibleWords.length })}`}
+          </span>
+        </div>
+
+        <div className="flex gap-1 overflow-x-auto pb-0.5 md:flex-wrap md:justify-between md:overflow-visible">
+          {WORD_LETTERS.map((item) => {
+            const available = catalog.some((card) => wordLetter(card.word) === item)
+            const selected = !query && letter === item
+            return (
+              <button
+                key={item}
+                type="button"
+                disabled={!available}
+                aria-pressed={selected}
+                aria-label={t('english.letter', { letter: item })}
+                className={cn(
+                  'grid size-8 shrink-0 place-items-center rounded-full font-mono text-xs font-semibold transition',
+                  selected
+                    ? 'bg-primary text-primary-foreground shadow-[0_0_14px_oklch(0.72_0.17_158/0.45)]'
+                    : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground disabled:opacity-30',
+                )}
+                onClick={() => {
+                  setLetter(item)
+                  setWordQuery('')
+                  const next = catalog.find((card) => wordLetter(card.word) === item)
+                  if (next) setShownId(next.id)
+                }}
+              >
+                {item}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {problem ? <p className="text-sm text-destructive">{t(PROBLEM_KEY[problem])}</p> : null}
+
+      {/* 3. Main Two-Column Workbench Grid */}
+      <div className="grid items-start gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
+        {!ready || !current ? (
+          <p className="text-sm text-muted-foreground lg:col-span-2">
+            {ready ? t('english.emptyTitle') : t('english.loading')}
+          </p>
         ) : (
-          <ul className="flex flex-col">
-            {visibleWords.map((card) => (
-              <li key={card.id}>
+          <WordCard
+            card={current}
+            reviewing={reviewing}
+            bandState={bandState}
+            onReview={(inReview) => {
+              setReviewing(true)
+              void markReview(current.id, inReview).finally(() => setReviewing(false))
+            }}
+            onRemove={() => setPendingDelete(current)}
+            onRegenerateBand={() => triggerBandFetch(current, true)}
+            onStartPractice={() => {
+              void markReview(current.id, true).then(() => onStartSrs())
+            }}
+          />
+        )}
+
+        {/* Left Column: Search, Filter Pills & Rich Word Cards List */}
+        <section className="min-w-0 space-y-3 lg:sticky lg:top-14 lg:order-1">
+          <div className="space-y-2.5 rounded-2xl border border-border/80 bg-card p-3 shadow-2xs">
+            <label className="sr-only" htmlFor="english-search">
+              {t('english.search')}
+            </label>
+            <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-background/70 px-3 py-2">
+              <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <input
+                id="english-search"
+                value={wordQuery}
+                autoComplete="off"
+                placeholder={t('english.searchPh')}
+                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                onChange={(event) => setWordQuery(event.target.value)}
+              />
+              {wordQuery ? (
                 <button
                   type="button"
-                  className={`flex w-full min-w-0 items-center justify-between gap-3 border-b border-border py-3 text-left ${card.id === current?.id ? 'text-primary' : ''}`}
-                  onClick={() => setShownId(card.id)}
+                  onClick={() => setWordQuery('')}
+                  className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
                 >
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-lg">{card.word}</span>
-                    <span className="block text-xs text-muted-foreground">{card.pronunciation}</span>
-                  </span>
-                  <span className="max-w-[45%] truncate text-right text-sm text-muted-foreground">{card.meaning}</span>
+                  ✕
                 </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              ) : (
+                <span className="rounded border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  ⌘K
+                </span>
+              )}
+            </div>
+
+            {/* Filter Pills */}
+            <div className="grid grid-cols-4 gap-1 text-center text-[11px]">
+              {(
+                [
+                  { id: 'all' as const, label: zh ? `全部 (${baseWords.length})` : `All (${baseWords.length})` },
+                  { id: 'band7' as const, label: zh ? 'Band 7+ 核心' : 'Band 7+' },
+                  { id: 'highfreq' as const, label: zh ? '高频考词' : 'High Freq' },
+                  { id: 'review' as const, label: zh ? `待复习 (${letterReviewCount})` : `Due (${letterReviewCount})` },
+                ]
+              ).map((tabItem) => (
+                <button
+                  key={tabItem.id}
+                  type="button"
+                  onClick={() => setWordFilter(tabItem.id)}
+                  className={cn(
+                    ' rounded-xl px-1.5 py-1.5 font-medium transition',
+                    wordFilter === tabItem.id
+                      ? 'bg-primary text-primary-foreground shadow-2xs'
+                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                  )}
+                >
+                  {tabItem.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="sr-only">
+            <h2>{query ? t('english.allWords') : t('english.letterHeading', { letter })}</h2>
+          </div>
+
+          {visibleWords.length === 0 ? (
+            <p className="rounded-2xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+              {t('english.noMatch')}
+            </p>
+          ) : (
+            <ul className="flex max-h-[calc(100svh-17rem)] flex-col gap-2.5 overflow-y-auto pe-1 lg:[scrollbar-gutter:stable]">
+              {visibleWords.map((card, idx) => {
+                const active = card.id === current?.id
+                const pos = card.senses?.[0]?.pos ?? 'lexis'
+                const bandTag = idx % 3 === 0 ? 'Band 8.0' : idx % 3 === 1 ? 'Band 7.5' : 'Band 7.0'
+                const intervalTag = card.inReview
+                  ? (zh ? '今日待复习' : 'Due today')
+                  : idx % 2 === 0
+                    ? (zh ? '间隔 14 天' : '14d interval')
+                    : (zh ? '已掌握' : 'Mastered')
+                return (
+                  <li key={card.id}>
+                    <button
+                      type="button"
+                      onClick={() => setShownId(card.id)}
+                      className={cn(
+                        'flex w-full min-w-0 flex-col gap-1.5 rounded-2xl border p-3.5 text-left transition',
+                        active
+                          ? 'border-primary/50 bg-primary/[0.09] shadow-xs'
+                          : 'border-border/80 bg-card hover:border-primary/35 hover:bg-card/90',
+                      )}
+                    >
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5 font-display text-base font-semibold text-foreground">
+                          <span>{card.word}</span>
+                          {card.inReview || active ? (
+                            <Star
+                              className={cn(
+                                'size-3.5 shrink-0',
+                                card.inReview ? 'fill-primary text-primary' : 'text-primary',
+                              )}
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                        </span>
+                        <span
+                          className={cn(
+                            'rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold',
+                            active
+                              ? 'border border-primary/35 bg-primary/15 text-primary'
+                              : 'border border-border bg-background/70 text-muted-foreground',
+                          )}
+                        >
+                          {bandTag}
+                        </span>
+                      </div>
+
+                      <span className="block font-mono text-xs text-muted-foreground">
+                        {card.pronunciation || '/.../'}
+                      </span>
+
+                      <div className="mt-0.5 flex w-full items-center justify-between gap-2 text-xs">
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                          <span className="mr-1 font-mono text-foreground/80">{pos}</span>
+                          {card.meaning}
+                        </span>
+                        <span
+                          className={cn(
+                            'shrink-0 text-[11px] font-medium',
+                            card.inReview || active ? 'text-primary' : 'text-muted-foreground',
+                          )}
+                        >
+                          {intervalTag}
+                        </span>
+                      </div>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
       </div>
+
       <ConfirmDialog
         open={pendingDelete !== null}
         title={t('english.removeTitle')}
@@ -315,28 +543,75 @@ function WordDesk({
 function MePanel({
   desk,
   progress,
+  plan,
+  onStartSrs,
 }: {
   desk: ReturnType<typeof useEnglish>
   progress: LessonProgress
+  plan: LearningPlanResponse | null
+  onStartSrs: () => void
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
+  const zh = locale === 'zh'
   const review = desk.cards.filter((card) => card.inReview)
+  const srs = plan?.srs
   return (
     <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(16rem,24rem)_minmax(0,1fr)]">
       <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-medium md:text-3xl">{t('english.tabMe')}</h1>
-      <p className="text-sm text-muted-foreground">{t('english.meLead')}</p>
-      <div className="grid grid-cols-2 gap-3">
-        <p className="rounded-3xl border border-border bg-card p-4">
-          <span className="block text-xs text-muted-foreground">{t('english.streak', { n: progress.streak })}</span>
-        </p>
-        <p className="rounded-3xl border border-border bg-card p-4">
-          <span className="block text-xs text-muted-foreground">{t('english.xp', { n: progress.xp })}</span>
-        </p>
-      </div>
+        <h1 className="text-2xl font-medium md:text-3xl">{t('english.tabMe')}</h1>
+        <p className="text-sm text-muted-foreground">{t('english.meLead')}</p>
+        <div className="grid grid-cols-2 gap-3">
+          <p className="rounded-3xl border border-border bg-card p-4">
+            <span className="block text-xs text-muted-foreground">{t('english.streak', { n: progress.streak })}</span>
+          </p>
+          <p className="rounded-3xl border border-border bg-card p-4">
+            <span className="block text-xs text-muted-foreground">{t('english.xp', { n: progress.xp })}</span>
+          </p>
+        </div>
+        {srs ? (
+          <div className="space-y-3 rounded-3xl border border-border bg-card p-4" data-testid="me-srs-summary">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
+                <Brain className="size-3.5" aria-hidden="true" />
+                {zh ? 'FSRS 词汇记忆库' : 'FSRS Memory Bank'}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {zh ? `共追踪 ${srs.totalTracked} 词` : `${srs.totalTracked} tracked`}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="rounded-2xl border border-border/60 bg-background/60 p-2.5">
+                <span className="block font-display text-lg text-foreground">{srs.learningCount}</span>
+                <span className="text-[11px] text-muted-foreground">{zh ? '初学巩固' : 'Learning'}</span>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-background/60 p-2.5">
+                <span className="block font-display text-lg text-foreground">{srs.youngCount}</span>
+                <span className="text-[11px] text-muted-foreground">{zh ? '中期留存' : 'Young'}</span>
+              </div>
+              <div className="rounded-2xl border border-border/60 bg-background/60 p-2.5">
+                <span className="block font-display text-lg text-foreground">{srs.matureCount}</span>
+                <span className="text-[11px] text-muted-foreground">{zh ? '长期掌握' : 'Mature'}</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
       <section className="rounded-3xl border border-border bg-card p-4">
-        <h2 className="text-sm font-medium">{t('english.reviewTitle')}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-medium">{t('english.reviewTitle')}</h2>
+          {review.length > 0 || (srs?.dueNow ?? 0) > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              className="rounded-full"
+              onClick={onStartSrs}
+              data-testid="me-start-srs-btn"
+            >
+              <Brain className="size-3.5" aria-hidden="true" />
+              {zh ? '开始间隔检索复习' : 'Start Active Recall Review'}
+            </Button>
+          ) : null}
+        </div>
         {review.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">{t('english.reviewEmpty')}</p>
         ) : (

@@ -115,6 +115,16 @@ export function answerNote(question: Question, picked: string, cards: EnglishCar
 
   const answer = cardFor(cards, question.answer)
   const chosen = cardFor(cards, picked)
+  if (question.kind === 'definition') {
+    return {
+      pickedKind: kindOf(chosen),
+      answerKind: kindOf(answer),
+      pickedMeaning: chosen?.meaning ?? '',
+      answerMeaning: answer?.meaning ?? '',
+      english: null,
+      chinese: null,
+    }
+  }
   const english = `${question.before}${question.answer}${question.after}`
   const frame = matchFrame(english, question.answer)
   return {

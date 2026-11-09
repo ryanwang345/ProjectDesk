@@ -49,3 +49,19 @@ func TestAcceptBandKeepsPreciseUse(t *testing.T) {
 		t.Fatalf("paraphrases = %#v", got.Paraphrases)
 	}
 }
+
+func TestAcceptWeakFixReplacesTheGeneralTip(t *testing.T) {
+	note := BandNote{Weak: "He is aboard the train now very happy.", Fix: "Use aboard as a preposition."}
+	got, ok := acceptWeakFix("aboard", note, weakFix{
+		Corrected:   "He is aboard the train now and feels very happy.",
+		CorrectedZh: "他现在已经上了火车，感觉非常开心。",
+		Problem:     "The sentence joins two ideas without a verb.",
+		ProblemZh:   "句子把两个意思连在一起，却缺少动词。",
+	})
+	if !ok || got.WeakFixed != "He is aboard the train now and feels very happy." || got.Fix != "The sentence joins two ideas without a verb." {
+		t.Fatalf("note = %#v", got)
+	}
+	if _, ok := acceptWeakFix("aboard", note, weakFix{Corrected: note.Weak, CorrectedZh: "x", Problem: "x", ProblemZh: "x"}); ok {
+		t.Fatal("an unchanged sentence was accepted as a correction")
+	}
+}

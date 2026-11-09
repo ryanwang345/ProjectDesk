@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -42,6 +44,65 @@ var (
 
 type Store struct {
 	pool *pgxpool.Pool
+
+	englishMu      sync.RWMutex
+	englishCached  bool
+	englishCards   []EnglishCard
+	englishSorted  []EnglishCard
+	englishByID    map[string]EnglishCard
+	englishByWord  map[string]EnglishCard
+	englishJSON    []byte
+	englishETag    string
+	englishVersion uint64
+
+	readingMu     sync.RWMutex
+	readingCached bool
+	readingTests  []ReadingTest
+	readingByKey  map[string]ReadingTest
+
+	lessonFlight  sync.Map
+	bandFlight    sync.Map
+	sensesFlight  sync.Map
+	interactiveAI atomic.Int32
+}
+
+func (s *Store) beginInteractiveAI() func() {
+	s.interactiveAI.Add(1)
+	return func() {
+		s.interactiveAI.Add(-1)
+	}
+}
+
+func (s *Store) waitInteractiveAI(ctx context.Context) error {
+	for s.interactiveAI.Load() > 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(150 * time.Millisecond):
+		}
+	}
+	return nil
+}
+
+func (s *Store) invalidateEnglishCache() {
+	s.englishMu.Lock()
+	s.englishCached = false
+	s.englishCards = nil
+	s.englishSorted = nil
+	s.englishByID = nil
+	s.englishByWord = nil
+	s.englishJSON = nil
+	s.englishETag = ""
+	s.englishVersion++
+	s.englishMu.Unlock()
+}
+
+func (s *Store) invalidateReadingCache() {
+	s.readingMu.Lock()
+	s.readingCached = false
+	s.readingTests = nil
+	s.readingByKey = nil
+	s.readingMu.Unlock()
 }
 
 func Connect(ctx context.Context, databaseURL string) (*Store, error) {

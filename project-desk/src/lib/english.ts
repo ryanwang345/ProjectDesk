@@ -13,6 +13,8 @@ export type BandNote = {
   examples?: string[]
   examplesZh?: string[]
   weak: string
+  weakFixed?: string
+  weakFixedZh?: string
   fix: string
   fixZh?: string
   paraphrases: string[]

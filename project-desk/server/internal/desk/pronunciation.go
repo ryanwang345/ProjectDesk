@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
@@ -69,8 +70,8 @@ func (s *Store) FillPronunciations(ctx context.Context, provider ai.Provider) er
 			log.Printf("writing pronunciations for %d words", len(missing))
 		}
 		for start := 0; start < len(missing); start += 40 {
-			if ctx.Err() != nil {
-				return ctx.Err()
+			if err := s.waitInteractiveAI(ctx); err != nil {
+				return err
 			}
 			end := start + 40
 			if end > len(missing) {
@@ -90,6 +91,11 @@ func (s *Store) FillPronunciations(ctx context.Context, provider ai.Provider) er
 					return err
 				}
 				saved++
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(150 * time.Millisecond):
 			}
 		}
 	}
@@ -139,6 +145,9 @@ func (s *Store) savePronunciation(ctx context.Context, id, ipa string) (EnglishC
 	if errors.Is(err, pgx.ErrNoRows) {
 		row = s.pool.QueryRow(ctx, `SELECT `+englishColumns+` FROM english_cards WHERE id = $1`, id)
 		return scanEnglish(row)
+	}
+	if err == nil {
+		s.invalidateEnglishCache()
 	}
 	return card, err
 }

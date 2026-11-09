@@ -26,17 +26,18 @@ type ReadingRecommendation struct {
 }
 
 type ReadingMistake struct {
-	ID             string          `json:"id"`
-	Module         string          `json:"module"`
-	Question       ReadingQuestion `json:"question"`
-	Passage        ReadingPassage  `json:"passage"`
-	UserAnswer     string          `json:"userAnswer"`
-	IncorrectCount int             `json:"incorrectCount"`
-	RetryCount     int             `json:"retryCount"`
-	CorrectRetries int             `json:"correctRetries"`
-	FirstWrongAt   time.Time       `json:"firstWrongAt"`
-	LastWrongAt    time.Time       `json:"lastWrongAt"`
-	ResolvedAt     *time.Time      `json:"resolvedAt,omitempty"`
+	ID             string                   `json:"id"`
+	Module         string                   `json:"module"`
+	Question       ReadingQuestion          `json:"question"`
+	Passage        ReadingPassage           `json:"passage"`
+	UserAnswer     string                   `json:"userAnswer"`
+	IncorrectCount int                      `json:"incorrectCount"`
+	RetryCount     int                      `json:"retryCount"`
+	CorrectRetries int                      `json:"correctRetries"`
+	FirstWrongAt   time.Time                `json:"firstWrongAt"`
+	LastWrongAt    time.Time                `json:"lastWrongAt"`
+	ResolvedAt     *time.Time               `json:"resolvedAt,omitempty"`
+	Diagnosis      *ReadingMistakeDiagnosis `json:"diagnosis,omitempty"`
 }
 
 type MistakeTypeSummary struct {
@@ -69,20 +70,17 @@ type ReadingLearningDashboard struct {
 }
 
 func (s *Store) readingLearningTests(ctx context.Context) ([]ReadingTest, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+readingTestColumns+` FROM reading_tests WHERE NOT hidden ORDER BY slug`)
-	if err != nil {
+	if err := s.ensureReadingCache(ctx); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	tests := []ReadingTest{}
-	for rows.Next() {
-		test, err := scanReadingTest(rows, true)
-		if err != nil {
-			return nil, err
-		}
-		tests = append(tests, test)
-	}
-	return tests, rows.Err()
+	s.readingMu.RLock()
+	tests := make([]ReadingTest, len(s.readingTests))
+	copy(tests, s.readingTests)
+	s.readingMu.RUnlock()
+	sort.Slice(tests, func(i, j int) bool {
+		return tests[i].Slug < tests[j].Slug
+	})
+	return tests, nil
 }
 
 // Select five related extractive questions. Their evidence paragraphs form a
@@ -357,8 +355,12 @@ func scanReadingMistake(row scanner) (ReadingMistake, error) {
 	if err := json.Unmarshal(question, &item.Question); err != nil {
 		return item, err
 	}
-	err = json.Unmarshal(passage, &item.Passage)
-	return item, err
+	if err := json.Unmarshal(passage, &item.Passage); err != nil {
+		return item, err
+	}
+	diag := DiagnoseReadingMistake(item)
+	item.Diagnosis = &diag
+	return item, nil
 }
 
 func (s *Store) ListReadingMistakes(ctx context.Context, module, kind string, resolved bool) ([]ReadingMistake, error) {

@@ -39,6 +39,7 @@ func (s *Store) seedReading(ctx context.Context) error {
 			return err
 		}
 	}
+	s.invalidateReadingCache()
 	return nil
 }
 

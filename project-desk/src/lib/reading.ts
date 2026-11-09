@@ -225,6 +225,16 @@ export type ReadingRecommendation = {
   questionCount: number
   durationSeconds: number
 }
+export type ReadingMistakeDiagnosis = {
+  category: string
+  label: string
+  labelZh: string
+  whyItHappens: string
+  whyItHappensZh: string
+  socraticHint: string
+  socraticHintZh: string
+}
+
 export type ReadingMistake = {
   id: string
   module: 'academic' | 'general'
@@ -237,6 +247,7 @@ export type ReadingMistake = {
   firstWrongAt: string
   lastWrongAt: string
   resolvedAt?: string
+  diagnosis?: ReadingMistakeDiagnosis
 }
 export type ReadingLearningDashboard = {
   progress: LearningProgress
@@ -261,4 +272,131 @@ export type ReadingSavedWord = {
   context: string
   passageTitle: string
   createdAt: string
+}
+
+export type LearnerProfileSettings = {
+  dailyMinutes: number
+  targetBand: number
+  preferredModule: 'academic' | 'general'
+  timezone: string
+}
+
+export type BestNextActivity = {
+  id: string
+  kind: 'srs' | 'mistakes' | 'reading_daily' | 'vocab_lesson' | 'reading_practice'
+  title: string
+  titleZh: string
+  reason: string
+  reasonZh: string
+  cognitivePrinciple: string
+  cognitivePrincipleZh: string
+  estimatedMinutes: number
+  ctaLabel: string
+  ctaLabelZh: string
+  lessonIndex?: number
+  mistakeType?: ReadingQuestionType
+  testId?: string
+  dueCount?: number
+}
+
+export type DailyStudyStep = {
+  id: string
+  kind: 'srs' | 'vocab_lesson' | 'reading_daily' | 'mistakes'
+  stepNumber: number
+  title: string
+  titleZh: string
+  subtitle: string
+  subtitleZh: string
+  minutes: number
+  status: 'completed' | 'ready' | 'up_next'
+  lessonIndex?: number
+  dueCount?: number
+  openMistakes?: number
+}
+
+export type DailyStudySession = {
+  targetMinutes: number
+  completedMinutes: number
+  steps: DailyStudyStep[]
+}
+
+export type SrsSummary = {
+  dueNow: number
+  totalTracked: number
+  learningCount: number
+  youngCount: number
+  matureCount: number
+  retention7d?: number
+  reviewsToday: number
+}
+
+export type ProficiencyEstimate = {
+  sufficientEvidence: boolean
+  questionsAnswered: number
+  readingAccuracy?: number
+  estimatedBandRange: string
+  cefrLevel: string
+  confidenceNote: string
+  confidenceNoteZh: string
+  weakestSkill?: ReadingQuestionType
+  strongestSkill?: ReadingQuestionType
+}
+
+export type LearningPlanResponse = {
+  profile: LearnerProfileSettings
+  progress: LearningProgress
+  nextActivity: BestNextActivity
+  dailySession: DailyStudySession
+  srs: SrsSummary
+  proficiency: ProficiencyEstimate
+}
+
+export type VocabularySRSState = {
+  cardId: string
+  stability: number
+  difficulty: number
+  reps: number
+  lapses: number
+  state: 'new' | 'learning' | 'review' | 'relearning'
+  lastRating: number
+  recognitionReps: number
+  productiveReps: number
+  lastReviewedAt?: string
+  dueAt: string
+}
+
+export type SrsReviewItem = {
+  cardId: string
+  word: string
+  pronunciation: string
+  meaning: string
+  mode: 'recognition' | 'productive'
+  prompt: string
+  promptZh: string
+  contextSentence: string
+  blankedSentence: string
+  passageTitle?: string
+  options: string[]
+  answerIndex: number
+  state: VocabularySRSState
+  retrievability: number
+  intervals: Record<'again' | 'hard' | 'good' | 'easy', string>
+}
+
+export type SrsReviewInput = {
+  cardId: string
+  rating: 1 | 2 | 3 | 4
+  mode: 'recognition' | 'productive'
+  elapsedMs: number
+}
+
+export type SrsReviewResponse = {
+  schedule: {
+    next: VocabularySRSState
+    retrievability: number
+    scheduledDays: number
+    keepInReviewTab: boolean
+  }
+  awardedXp: number
+  progress: LearningProgress
 }

@@ -457,6 +457,65 @@ CREATE TABLE reading_vocabulary (
     UNIQUE (card_id, session_id, passage_id, paragraph_label)
 );
 `},
+	{14, `
+ALTER TABLE english_quizzes ADD COLUMN IF NOT EXISTS version INT NOT NULL DEFAULT 1;
+`},
+	{15, `
+CREATE INDEX IF NOT EXISTS english_cards_lower_word_idx ON english_cards (lower(word));
+CREATE INDEX IF NOT EXISTS english_cards_updated_at_idx ON english_cards (updated_at DESC);
+CREATE INDEX IF NOT EXISTS reading_tests_visible_idx ON reading_tests (hidden, module, category, created_at ASC);
+CREATE INDEX IF NOT EXISTS reading_sessions_module_status_idx ON reading_sessions (module, status, updated_at DESC);
+`},
+	{16, `
+ALTER TABLE learning_profile
+    ADD COLUMN IF NOT EXISTS daily_minutes INT NOT NULL DEFAULT 15 CHECK (daily_minutes BETWEEN 5 AND 60),
+    ADD COLUMN IF NOT EXISTS target_band NUMERIC(2,1) NOT NULL DEFAULT 7.0 CHECK (target_band >= 4.0 AND target_band <= 9.0),
+    ADD COLUMN IF NOT EXISTS preferred_module TEXT NOT NULL DEFAULT 'academic' CHECK (preferred_module IN ('academic', 'general'));
+
+CREATE TABLE IF NOT EXISTS vocabulary_srs (
+    card_id UUID PRIMARY KEY REFERENCES english_cards(id) ON DELETE CASCADE,
+    stability DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    difficulty DOUBLE PRECISION NOT NULL DEFAULT 5.0,
+    reps INT NOT NULL DEFAULT 0,
+    lapses INT NOT NULL DEFAULT 0,
+    state TEXT NOT NULL DEFAULT 'learning' CHECK (state IN ('new', 'learning', 'review', 'relearning')),
+    last_rating INT NOT NULL DEFAULT 0,
+    recognition_reps INT NOT NULL DEFAULT 0,
+    productive_reps INT NOT NULL DEFAULT 0,
+    last_reviewed_at TIMESTAMPTZ,
+    due_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS vocabulary_srs_due_idx ON vocabulary_srs (due_at ASC);
+
+CREATE TABLE IF NOT EXISTS vocabulary_review_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    card_id UUID NOT NULL REFERENCES english_cards(id) ON DELETE CASCADE,
+    rating INT NOT NULL CHECK (rating BETWEEN 1 AND 4),
+    mode TEXT NOT NULL CHECK (mode IN ('recognition', 'productive')),
+    stability_before DOUBLE PRECISION NOT NULL,
+    stability_after DOUBLE PRECISION NOT NULL,
+    difficulty_before DOUBLE PRECISION NOT NULL,
+    difficulty_after DOUBLE PRECISION NOT NULL,
+    scheduled_days DOUBLE PRECISION NOT NULL,
+    elapsed_ms INT NOT NULL DEFAULT 0,
+    reviewed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS vocabulary_review_logs_reviewed_at_idx ON vocabulary_review_logs (reviewed_at DESC);
+
+INSERT INTO vocabulary_srs (card_id, stability, difficulty, state, due_at)
+SELECT id, 0.8, 5.5, 'learning', now()
+FROM english_cards
+WHERE in_review = true
+ON CONFLICT (card_id) DO NOTHING;
+
+INSERT INTO vocabulary_srs (card_id, stability, difficulty, state, due_at)
+SELECT DISTINCT card_id, 1.0, 5.5, 'learning', now()
+FROM reading_vocabulary
+ON CONFLICT (card_id) DO NOTHING;
+`},
 }
 
 func migrate(ctx context.Context, s *Store) error {

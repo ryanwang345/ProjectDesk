@@ -98,9 +98,19 @@ func (s *Store) SaveReadingWord(ctx context.Context, input SaveReadingWordReques
 	if _, err := tx.Exec(ctx, `INSERT INTO reading_vocabulary (card_id,session_id,passage_id,paragraph_label,context) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (card_id,session_id,passage_id,paragraph_label) DO NOTHING`, id, input.SessionID, input.PassageID, input.ParagraphLabel, paragraph); err != nil {
 		return EnglishCard{}, err
 	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO vocabulary_srs (card_id, stability, difficulty, state, due_at, updated_at)
+		VALUES ($1, 1.0, 5.5, 'learning', now(), now())
+		ON CONFLICT (card_id) DO UPDATE SET
+			due_at = LEAST(vocabulary_srs.due_at, now()),
+			updated_at = now()
+	`, id); err != nil {
+		return EnglishCard{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return EnglishCard{}, err
 	}
+	s.invalidateEnglishCache()
 	return card, nil
 }
 

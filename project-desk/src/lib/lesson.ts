@@ -35,7 +35,21 @@ export type ClozeQuestion = {
   chinese: string
 }
 
-export type Question = MeaningQuestion | ClozeQuestion
+export type DefinitionQuestion = {
+  id: string
+  kind: 'definition'
+  prompt: string
+  answer: string
+  choices: string[]
+  why: string
+  chinese: string
+}
+
+export type Question = MeaningQuestion | ClozeQuestion | DefinitionQuestion
+
+export function matchesLessonAnswer(choice: string, answer: string): boolean {
+  return choice.trim().toLowerCase() === answer.trim().toLowerCase()
+}
 
 const emptyProgress = (): LessonProgress => ({ xp: 0, streak: 0, lastDay: '', completed: [] })
 
@@ -135,8 +149,11 @@ function blank(sentence: string, word: string): { before: string; after: string 
 
 export function buildQuestions(words: EnglishCard[], pool: EnglishCard[], random: () => number = Math.random): Question[] {
   const questions: Question[] = []
+  const poolMeanings = pool.map((item) => item.meaning)
+  const poolWords = pool.map((item) => item.word)
+
   for (const card of words) {
-    const meanings = others(pool.map((item) => item.meaning), card.meaning, random)
+    const meanings = others(poolMeanings, card.meaning, random)
     if (meanings.length >= 3) {
       questions.push({
         id: `${card.id}-meaning`,
@@ -144,25 +161,47 @@ export function buildQuestions(words: EnglishCard[], pool: EnglishCard[], random
         prompt: card.word,
         answer: card.meaning,
         choices: shuffle([card.meaning, ...meanings.slice(0, 3)], random),
-        why: '',
+        why: `${card.word} 的核心考点释义为：${card.meaning}`,
         chinese: card.meaning,
       })
     }
-    const sentence = card.examples.find((example) => example.toLowerCase().includes(card.word.toLowerCase()))
+
+    // Look for sentence in examples or band writing
+    const allExamples: string[] = [
+      ...(card.examples || []),
+      ...(card.band?.examples || []),
+      ...(card.band?.writing ? [card.band.writing] : []),
+    ]
+    const sentence = allExamples.find((example) => example.toLowerCase().includes(card.word.toLowerCase()))
     const parts = sentence ? blank(sentence, card.word) : null
-    const words = others(pool.map((item) => item.word), card.word, random)
-    if (parts && words.length >= 3) {
+    const otherWords = others(poolWords, card.word, random)
+
+    if (parts && otherWords.length >= 3) {
       questions.push({
         id: `${card.id}-cloze`,
         kind: 'cloze',
         before: parts.before,
         after: parts.after,
         answer: card.word,
-        choices: shuffle([card.word, ...words.slice(0, 3)], random),
-        why: '',
-        chinese: '',
+        choices: shuffle([card.word, ...otherWords.slice(0, 3)], random),
+        why: `考点填空解析：在真题语境中，“${card.word}”作为正解填入，句意完整贴切。`,
+        chinese: card.meaning,
+      })
+    } else if (otherWords.length >= 3) {
+      // Fallback definition question to ensure 100% question availability
+      questions.push({
+        id: `${card.id}-def`,
+        kind: 'definition',
+        prompt: `下列哪个词表示：“${card.meaning}”？`,
+        answer: card.word,
+        choices: shuffle([card.word, ...otherWords.slice(0, 3)], random),
+        why: `精准对应词义：“${card.meaning}” 对应的目标学术词汇是 ${card.word}。`,
+        chinese: card.meaning,
       })
     }
   }
-  return shuffle(questions, random)
+
+  // Pick up to 5 questions
+  const shuffled = shuffle(questions, random)
+  return shuffled.slice(0, 5)
 }

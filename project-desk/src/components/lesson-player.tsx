@@ -1,26 +1,30 @@
-import { useEffect, useRef, useState } from 'react'
-import { Heart, Star, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Heart, Sparkles, Star, X } from 'lucide-react'
 import { BandDrill } from '@/components/band-notes'
 import { Pronunciation } from '@/components/pronunciation'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { ApiError, prepareLesson } from '@/lib/api'
 import type { EnglishCard } from '@/lib/english'
-import { translateExample } from '@/lib/example-zh'
 import {
   HEARTS,
   XP_PER_CORRECT,
+  buildQuestions,
+  lessonWords,
+  matchesLessonAnswer,
   type Question,
 } from '@/lib/lesson'
 
 export function LessonPlayer({
   lesson,
+  cards,
   onExit,
   onComplete,
   earnedXP = null,
   rewardEligible = true,
 }: {
   lesson: number
+  cards?: EnglishCard[]
   onExit: () => void
   onComplete: (correct: number) => void
   earnedXP?: number | null
@@ -43,35 +47,74 @@ export function LessonPlayer({
   const [bandStep, setBandStep] = useState(-1)
   const [bandPicked, setBandPicked] = useState<string | null>(null)
   const [bandChecked, setBandChecked] = useState(false)
+  const [bandDone, setBandDone] = useState(false)
+
+  const fallbackWords = useMemo(() => (cards ? lessonWords(cards, lesson) : []), [cards, lesson])
+  const fallbackQuestions = useMemo(
+    () => (cards && fallbackWords.length > 0 ? buildQuestions(fallbackWords, cards) : []),
+    [cards, fallbackWords],
+  )
 
   useEffect(() => {
     let cancel = false
+
+    // Quick safety timer: activate fallback questions if network/AI takes longer than 1200ms
+    const timer = window.setTimeout(() => {
+      if (cancel) return
+      if (fallbackQuestions.length > 0) {
+        setWords((prev) => (prev.length > 0 ? prev : fallbackWords))
+        setQuestions((prev) => (prev.length > 0 ? prev : fallbackQuestions))
+      }
+    }, 1200)
+
     prepareLesson(lesson)
       .then((pack) => {
         if (cancel) return
+        window.clearTimeout(timer)
         setWords(pack.cards)
         setQuestions(pack.questions)
       })
       .catch((error: unknown) => {
         if (cancel) return
-        setFailed(error instanceof ApiError ? error.message : t('english.writing'))
+        window.clearTimeout(timer)
+        if (fallbackQuestions.length > 0) {
+          setWords(fallbackWords)
+          setQuestions(fallbackQuestions)
+        } else {
+          setFailed(error instanceof ApiError ? error.message : t('english.writing'))
+        }
       })
     return () => {
       cancel = true
+      window.clearTimeout(timer)
     }
-  }, [lesson, t])
+  }, [lesson, cards, fallbackWords, fallbackQuestions, t])
 
   const question = questions[step]
-  const correct = checked && picked === question?.answer
+  const correct = checked && picked !== null && Boolean(question && matchesLessonAnswer(picked, question.answer))
   const progress = questions.length === 0 ? 0 : Math.round(((step + (checked ? 1 : 0)) / questions.length) * 100)
 
   useEffect(() => {
     if (checked) resultRef.current?.scrollIntoView({ block: 'nearest' })
   }, [checked, step])
 
+  useEffect(() => {
+    if (finished !== 'done') return
+    if (!words.some((card) => !card.band?.writing || !card.band?.weak)) return
+    let cancel = false
+    prepareLesson(lesson)
+      .then((pack) => {
+        if (!cancel) setWords(pack.cards)
+      })
+      .catch(() => {})
+    return () => {
+      cancel = true
+    }
+  }, [finished, lesson, words])
+
   function check() {
     if (!question || picked === null || checked) return
-    const right = picked === question.answer
+    const right = matchesLessonAnswer(picked, question.answer)
     setChecked(true)
     if (right) {
       correctTotal.current += 1
@@ -89,11 +132,6 @@ export function LessonPlayer({
       return
     }
     if (step + 1 >= questions.length) {
-      const drills = words.filter((card) => Boolean(card.band?.writing && card.band?.weak))
-      if (drills.length > 0 && bandStep < 0) {
-        setBandStep(0)
-        return
-      }
       onComplete(correctTotal.current)
       setFinished('done')
       return
@@ -114,8 +152,39 @@ export function LessonPlayer({
 
   if (questions.length === 0) {
     return (
-      <div aria-busy="true" className="flex h-48 w-full items-center justify-center rounded-xl bg-muted">
-        <p className="text-sm text-muted-foreground">{t('english.writing')}</p>
+      <div
+        aria-busy="true"
+        className="flex min-h-[320px] w-full flex-col items-center justify-center gap-4 rounded-3xl border border-border/80 bg-card p-8 text-center shadow-xs"
+      >
+        <div className="relative flex size-14 items-center justify-center">
+          <div className="absolute size-14 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+          <Sparkles className="size-6 text-primary" />
+        </div>
+        <div className="space-y-1">
+          <p className="font-display text-base font-semibold text-foreground">
+            {t('english.writing')}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            正在准备学术语境与真题题干，预备即刻开始…
+          </p>
+        </div>
+        <div className="flex items-center gap-2 pt-2">
+          {fallbackQuestions.length > 0 ? (
+            <Button
+              type="button"
+              className="rounded-full px-5 text-xs font-semibold shadow-sm"
+              onClick={() => {
+                setWords(fallbackWords)
+                setQuestions(fallbackQuestions)
+              }}
+            >
+              直接进入练习
+            </Button>
+          ) : null}
+          <Button type="button" variant="ghost" className="rounded-full text-xs" onClick={onExit}>
+            {t('english.backToPath')}
+          </Button>
+        </div>
       </div>
     )
   }
@@ -139,8 +208,8 @@ export function LessonPlayer({
         <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {words.map((card) => {
             const cloze = questions.find((item) => item.kind === 'cloze' && item.answer.toLowerCase() === card.word.toLowerCase())
-            const example = cloze && cloze.kind === 'cloze' ? `${cloze.before}${cloze.answer}${cloze.after}` : (card.examples[0] ?? '')
-            const chinese = cloze?.chinese || translateExample(example, card.word, card.meaning)
+            const example = cloze && cloze.kind === 'cloze' ? `${cloze.before}${cloze.answer}${cloze.after}` : ''
+            const chinese = cloze?.chinese ?? ''
             const senses = card.senses ?? []
             return (
               <li key={card.id} className="rounded-3xl border border-border bg-card px-4 py-4">
@@ -187,7 +256,7 @@ export function LessonPlayer({
   }
 
   const bandCards = words.filter((card) => Boolean(card.band?.writing && card.band?.weak))
-  const bandCard = started ? bandCards[bandStep] : undefined
+  const bandCard = finished === 'done' ? bandCards[bandStep] : undefined
   if (bandCard) {
     return (
       <BandDrill
@@ -200,15 +269,15 @@ export function LessonPlayer({
         onCheck={() => setBandChecked(true)}
         onContinue={() => {
           if (bandStep + 1 >= bandCards.length) {
-            onComplete(correctTotal.current)
-            setFinished('done')
+            setBandStep(-1)
+            setBandDone(true)
             return
           }
           setBandStep((current) => current + 1)
           setBandPicked(null)
           setBandChecked(false)
         }}
-        onExit={onExit}
+        onExit={() => setBandStep(-1)}
       />
     )
   }
@@ -221,6 +290,30 @@ export function LessonPlayer({
         <p className="text-muted-foreground">
           {won ? earnedXP === null ? t('english.lessonProgressPending') : t('english.lessonScore', { correct: correctCount, total: questions.length, xp: earnedXP }) : t('english.tryAgain')}
         </p>
+        {won && bandCards.length > 0 ? (
+          bandDone ? (
+            <p className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm text-primary">✓ {t('english.bandDone')}</p>
+          ) : (
+            <div className="mt-2 flex w-full max-w-md flex-col gap-3 rounded-3xl border border-primary/30 bg-card p-4 text-left">
+              <div>
+                <p className="font-medium">{t('english.bandOffer')}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t('english.bandOfferNote', { n: bandCards.length })}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-full"
+                onClick={() => {
+                  setBandPicked(null)
+                  setBandChecked(false)
+                  setBandStep(0)
+                }}
+              >
+                {t('english.bandStart')}
+              </Button>
+            </div>
+          )
+        ) : null}
         <Button type="button" className="mt-2 h-12 px-8 text-base" onClick={onExit}>{t('english.backToPath')}</Button>
       </div>
     )
@@ -229,6 +322,9 @@ export function LessonPlayer({
   const promptCard = question.kind === 'meaning'
     ? words.find((card) => card.word.toLowerCase() === question.prompt.toLowerCase())
     : words.find((card) => card.word.toLowerCase() === question.answer.toLowerCase())
+  const pickedCard = question.kind !== 'meaning' && picked
+    ? words.find((card) => matchesLessonAnswer(card.word, picked))
+    : undefined
 
   return (
     <div className="flex w-full flex-col gap-5">
@@ -253,7 +349,7 @@ export function LessonPlayer({
       <div className="flex items-center justify-end text-xs text-muted-foreground">
         <p className="rounded-full border border-border px-2 py-0.5">{t('english.choiceKind')}</p>
       </div>
-      <h1 className="text-xl font-medium">{question.kind === 'meaning' ? t('english.promptMeaning') : t('english.promptCloze')}</h1>
+      <h1 className="text-xl font-medium">{question.kind === 'meaning' ? t('english.promptMeaning') : question.kind === 'definition' ? t('english.promptDefinition') : t('english.promptCloze')}</h1>
       {question.kind === 'meaning' && promptCard ? (
         <div className="flex items-center justify-between rounded-3xl border border-primary/30 bg-card px-4 py-4">
           <div>
@@ -268,8 +364,8 @@ export function LessonPlayer({
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {question.choices.map((choice, index) => {
           const selected = picked === choice
-          const showCorrect = checked && choice === question.answer
-          const showWrong = checked && selected && choice !== question.answer
+          const showCorrect = checked && matchesLessonAnswer(choice, question.answer)
+          const showWrong = checked && selected && !showCorrect
           const letter = 'ABCD'[index] ?? ''
           return (
             <button
@@ -296,7 +392,9 @@ export function LessonPlayer({
         })}
       </div>
       <div ref={resultRef}>
-        {checked && picked ? <Result question={question} correct={correct} card={promptCard} rewardEligible={rewardEligible} /> : null}
+        {checked && picked ? (
+          <Result question={question} picked={picked} correct={correct} card={promptCard} pickedCard={pickedCard} rewardEligible={rewardEligible} />
+        ) : null}
         {checked ? (
           <Button type="button" className="mt-3 h-12 w-full rounded-full text-base" onClick={continueLesson}>{t('english.continueNext')}</Button>
         ) : (
@@ -308,10 +406,17 @@ export function LessonPlayer({
   )
 }
 
-function Result({ question, correct, card, rewardEligible }: { question: Question; correct: boolean; card?: EnglishCard; rewardEligible: boolean }) {
+function Result({ question, picked, correct, card, pickedCard, rewardEligible }: {
+  question: Question
+  picked: string
+  correct: boolean
+  card?: EnglishCard
+  pickedCard?: EnglishCard
+  rewardEligible: boolean
+}) {
   const { t } = useI18n()
   return (
-    <div className={`rounded-3xl border px-4 py-4 ${correct ? 'border-primary/40 bg-primary/10' : 'border-destructive/40 bg-destructive/10'}`}>
+    <div role="status" data-testid="lesson-answer-feedback" className={`rounded-3xl border px-4 py-4 ${correct ? 'border-primary/40 bg-primary/10' : 'border-destructive/40 bg-destructive/10'}`}>
       <div className="flex items-center justify-between gap-3">
         <p className="inline-flex items-center gap-2 font-medium">
           <span className={`grid size-5 place-items-center rounded-full text-xs ${correct ? 'bg-primary text-primary-foreground' : 'bg-destructive text-white'}`}>{correct ? '✓' : '×'}</span>
@@ -319,6 +424,13 @@ function Result({ question, correct, card, rewardEligible }: { question: Questio
         </p>
         {correct && rewardEligible ? <span className="text-sm text-primary">{t('english.points', { n: XP_PER_CORRECT })}</span> : null}
       </div>
+      {!correct ? (
+        <div className="mt-3 space-y-2 text-sm" data-testid="lesson-answer-comparison">
+          <p><span className="text-muted-foreground">{t('english.youChose')}: </span><strong>{picked}</strong>{pickedCard ? ` · ${pickedCard.meaning}` : ''}</p>
+          <p>{t('english.correctAnswer', { answer: question.answer })}{question.kind !== 'meaning' && card ? ` · ${card.meaning}` : ''}</p>
+          {question.kind === 'cloze' ? <p className="rounded-xl bg-background/60 px-3 py-2 leading-relaxed" data-testid="lesson-corrected-sentence">{question.before}<strong className="font-semibold text-primary">{question.answer}</strong>{question.after}</p> : null}
+        </div>
+      ) : null}
       {question.why ? <p className="mt-3 text-sm leading-relaxed">{question.why}</p> : null}
       {question.chinese ? <p className="mt-2 text-sm text-primary">{question.chinese}</p> : null}
       {card ? (
@@ -349,6 +461,7 @@ function wordPronunciation(words: EnglishCard[], word: string) {
 }
 
 function Prompt({ question, words, picked, checked }: { question: Question; words: EnglishCard[]; picked: string | null; checked: boolean }) {
+  const { t } = useI18n()
   if (question.kind === 'meaning') {
     return (
       <h1 className="flex items-baseline gap-3 font-display text-5xl tracking-tight">
@@ -357,12 +470,22 @@ function Prompt({ question, words, picked, checked }: { question: Question; word
       </h1>
     )
   }
-  const filled = checked ? question.answer : picked
+  if (question.kind === 'definition') {
+    return (
+      <p className="rounded-3xl border border-primary/30 bg-card px-4 py-4 text-xl leading-relaxed" data-testid="lesson-definition">
+        {question.prompt}
+      </p>
+    )
+  }
+  const filled = picked
+  const wrong = checked && picked !== null && !matchesLessonAnswer(picked, question.answer)
+  const intendedMeaning = words.find((card) => card.word.toLowerCase() === question.answer.toLowerCase())?.meaning
   return (
     <div>
-      <p className="text-2xl leading-relaxed">
+      {intendedMeaning ? <p className="mb-3 text-sm text-muted-foreground" data-testid="lesson-intended-meaning">{t('english.intendedMeaning')}: <span className="font-medium text-foreground">{intendedMeaning}</span></p> : null}
+      <p className="text-2xl leading-relaxed" data-testid="lesson-cloze-sentence">
         {question.before}
-        <span className={`mx-1 inline-block min-w-20 border-b-2 px-1 text-center font-display ${filled ? 'border-primary text-primary' : 'border-muted-foreground/40'}`}>
+        <span data-testid="lesson-cloze-selection" className={`mx-1 inline-block min-w-20 border-b-2 px-1 text-center font-display ${wrong ? 'border-destructive text-destructive' : filled ? 'border-primary text-primary' : 'border-muted-foreground/40'}`}>
           {filled || '\u00a0'}
         </span>
         {question.after}
