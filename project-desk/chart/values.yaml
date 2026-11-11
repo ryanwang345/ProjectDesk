@@ -5,12 +5,14 @@ postgres:
   password: projectdesk
   database: projectdesk
   storage: 1Gi
+  storageClassName: ""
   fsGroup: 70
   backup:
     enabled: true
     schedule: "0 8 * * *"
     keep: 7
     storage: 1Gi
+    storageClassName: ""
 
 api:
   image: docker.io/rwang345/project-desk-api

@@ -12,6 +12,9 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  {{- if .Values.postgres.backup.storageClassName }}
+  storageClassName: {{ .Values.postgres.backup.storageClassName | quote }}
+  {{- end }}
   resources:
     requests:
       storage: {{ .Values.postgres.backup.storage }}
