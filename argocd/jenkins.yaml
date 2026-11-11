@@ -31,6 +31,16 @@ spec:
             enabled: true
             ingressClassName: nginx
             hostName: jenkins.k8s.local
+          terminationGracePeriodSeconds: 10
+          tolerations:
+            - key: "node.kubernetes.io/unreachable"
+              operator: "Exists"
+              effect: "NoExecute"
+              tolerationSeconds: 10
+            - key: "node.kubernetes.io/not-ready"
+              operator: "Exists"
+              effect: "NoExecute"
+              tolerationSeconds: 10
           resources:
             requests:
               cpu: 500m
