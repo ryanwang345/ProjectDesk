@@ -1,4 +1,5 @@
 import {
+  BookMarked,
   BookOpen,
   Compass,
   Flame,
@@ -38,6 +39,13 @@ const learningLinks: NavItem[] = [
     label: 'english.tabWords',
     icon: Tag,
     match: (pathname, tab) => (pathname === '/english' && tab === 'words') || pathname === '/words' || pathname === '/vocabulary',
+  },
+  {
+    id: 'grammar',
+    to: '/grammar',
+    label: 'nav.grammar',
+    icon: BookMarked,
+    match: (pathname) => pathname === '/grammar',
   },
   {
     id: 'reading',

@@ -585,6 +585,16 @@ WHERE NOT EXISTS (
     SELECT 1 FROM english_cards WHERE lower(english_cards.word) = lower(v.word)
 );
 `},
+{18, `
+UPDATE english_cards SET pronunciation = '/klɒɡ/' WHERE lower(word) = 'clog' AND (pronunciation = '' OR pronunciation LIKE '%...%');
+UPDATE english_cards SET meaning = '堵塞，阻塞；阻碍；木屐' WHERE lower(word) = 'clog' AND (meaning LIKE '%堵塞阻碍障碍碍%' OR meaning = '');
+UPDATE english_cards SET pronunciation = '/pəˈdes.tri.ə.naɪzd/' WHERE lower(word) = 'pedestrianized' AND (pronunciation = '' OR pronunciation LIKE '%...%');
+UPDATE english_cards SET pronunciation = '/ˈbaɪ.lɔː/' WHERE lower(word) = 'bylaw' AND (pronunciation = '' OR pronunciation LIKE '%...%');
+UPDATE english_cards SET pronunciation = '/ˈslʌɡ.ɪʃ/' WHERE lower(word) = 'sluggish' AND (pronunciation = '' OR pronunciation LIKE '%...%');
+UPDATE english_cards SET pronunciation = '/prɪˌsɪp.ɪˈteɪ.ʃən/' WHERE lower(word) = 'precipitation' AND (pronunciation = '' OR pronunciation LIKE '%...%');
+UPDATE english_cards SET pronunciation = '/kəˈmjuːt/' WHERE lower(word) = 'commute' AND (pronunciation = '' OR pronunciation LIKE '%...%');
+UPDATE english_cards SET pronunciation = '/ˈkrɒs.wɪnd/' WHERE lower(word) = 'crosswind' AND (pronunciation = '' OR pronunciation LIKE '%...%');
+`},
 }
 
 func migrate(ctx context.Context, s *Store) error {

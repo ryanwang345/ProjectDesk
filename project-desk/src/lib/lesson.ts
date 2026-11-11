@@ -147,20 +147,35 @@ function blank(sentence: string, word: string): { before: string; after: string 
   return { before: sentence.slice(0, match), after: sentence.slice(match + word.length) }
 }
 
-export function buildQuestions(words: EnglishCard[], pool: EnglishCard[], random: () => number = Math.random): Question[] {
+export function createSeededRandom(seed: number | string = 42): () => number {
+  let h = typeof seed === 'number' ? seed : 0
+  if (typeof seed === 'string') {
+    for (let i = 0; i < seed.length; i++) {
+      h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0
+    }
+  }
+  return () => {
+    h = Math.imul(h ^ (h >>> 15), 1 | h)
+    h ^= h + Math.imul(h ^ (h >>> 7), 61 | h) ^ h
+    return ((h ^ (h >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+export function buildQuestions(words: EnglishCard[], pool: EnglishCard[], random?: () => number): Question[] {
+  const rng = random ?? createSeededRandom(words.map((w) => w.word).join('_') || 42)
   const questions: Question[] = []
   const poolMeanings = pool.map((item) => item.meaning)
   const poolWords = pool.map((item) => item.word)
 
   for (const card of words) {
-    const meanings = others(poolMeanings, card.meaning, random)
+    const meanings = others(poolMeanings, card.meaning, rng)
     if (meanings.length >= 3) {
       questions.push({
         id: `${card.id}-meaning`,
         kind: 'meaning',
         prompt: card.word,
         answer: card.meaning,
-        choices: shuffle([card.meaning, ...meanings.slice(0, 3)], random),
+        choices: shuffle([card.meaning, ...meanings.slice(0, 3)], rng),
         why: `${card.word} 的核心考点释义为：${card.meaning}`,
         chinese: card.meaning,
       })
@@ -174,7 +189,7 @@ export function buildQuestions(words: EnglishCard[], pool: EnglishCard[], random
     ]
     const sentence = allExamples.find((example) => example.toLowerCase().includes(card.word.toLowerCase()))
     const parts = sentence ? blank(sentence, card.word) : null
-    const otherWords = others(poolWords, card.word, random)
+    const otherWords = others(poolWords, card.word, rng)
 
     if (parts && otherWords.length >= 3) {
       questions.push({
@@ -183,7 +198,7 @@ export function buildQuestions(words: EnglishCard[], pool: EnglishCard[], random
         before: parts.before,
         after: parts.after,
         answer: card.word,
-        choices: shuffle([card.word, ...otherWords.slice(0, 3)], random),
+        choices: shuffle([card.word, ...otherWords.slice(0, 3)], rng),
         why: `考点填空解析：在真题语境中，“${card.word}”作为正解填入，句意完整贴切。`,
         chinese: card.meaning,
       })
@@ -194,7 +209,7 @@ export function buildQuestions(words: EnglishCard[], pool: EnglishCard[], random
         kind: 'definition',
         prompt: `下列哪个词表示：“${card.meaning}”？`,
         answer: card.word,
-        choices: shuffle([card.word, ...otherWords.slice(0, 3)], random),
+        choices: shuffle([card.word, ...otherWords.slice(0, 3)], rng),
         why: `精准对应词义：“${card.meaning}” 对应的目标学术词汇是 ${card.word}。`,
         chinese: card.meaning,
       })
@@ -202,6 +217,6 @@ export function buildQuestions(words: EnglishCard[], pool: EnglishCard[], random
   }
 
   // Pick up to 5 questions
-  const shuffled = shuffle(questions, random)
+  const shuffled = shuffle(questions, rng)
   return shuffled.slice(0, 5)
 }

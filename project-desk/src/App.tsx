@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { AboutPage } from '@/pages/about-page'
 import { BoardPage } from '@/pages/board-page'
 import { EnglishPage } from '@/pages/english-page'
+import { GrammarPage } from '@/pages/grammar-page'
 import { ListeningPage } from '@/pages/listening-page'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { RadioNewsPage } from '@/pages/radio-news-page'
@@ -118,6 +119,7 @@ function Frame() {
           <Routes>
             <Route index element={<EnglishPage />} />
             <Route path="english" element={<EnglishPage />} />
+            <Route path="grammar" element={<GrammarPage />} />
             <Route path="reading" element={<ReadingPage />} />
             <Route path="listening" element={<ListeningPage />} />
             <Route path="radio" element={<RadioNewsPage />} />

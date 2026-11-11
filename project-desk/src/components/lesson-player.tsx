@@ -10,6 +10,7 @@ import {
   HEARTS,
   XP_PER_CORRECT,
   buildQuestions,
+  createSeededRandom,
   lessonWords,
   matchesLessonAnswer,
   type Question,
@@ -49,46 +50,91 @@ export function LessonPlayer({
   const [bandChecked, setBandChecked] = useState(false)
   const [bandDone, setBandDone] = useState(false)
 
+  const cardsRef = useRef(cards)
+  cardsRef.current = cards
+  const loadedLessonRef = useRef<number | null>(null)
+  const isStartedRef = useRef(false)
+  isStartedRef.current = started
+  const questionsRef = useRef(questions)
+  questionsRef.current = questions
+
   const fallbackWords = useMemo(() => (cards ? lessonWords(cards, lesson) : []), [cards, lesson])
   const fallbackQuestions = useMemo(
-    () => (cards && fallbackWords.length > 0 ? buildQuestions(fallbackWords, cards) : []),
-    [cards, fallbackWords],
+    () =>
+      cards && fallbackWords.length > 0
+        ? buildQuestions(fallbackWords, cards, createSeededRandom(lesson * 1000 + 42))
+        : [],
+    [cards, fallbackWords, lesson],
   )
 
   useEffect(() => {
-    let cancel = false
+    // If questions for this lesson are already loaded and the user has started, do not re-run
+    if (loadedLessonRef.current === lesson && questionsRef.current.length > 0) return
 
-    // Quick safety timer: activate fallback questions if network/AI takes longer than 1200ms
+    let cancel = false
+    setStep(0)
+    setPicked(null)
+    setChecked(false)
+    setStarted(false)
+    setFinished(null)
+    setCorrectCount(0)
+    setHearts(HEARTS)
+    heartsLeft.current = HEARTS
+    correctTotal.current = 0
+    setFailed('')
+
+    const currentCards = cardsRef.current || []
+    const fallbackW = lessonWords(currentCards, lesson)
+    const fallbackQ = fallbackW.length > 0 ? buildQuestions(fallbackW, currentCards, createSeededRandom(lesson * 1000 + 42)) : []
+
+    // Pre-populate words for preview screen immediately
+    if (fallbackW.length > 0) {
+      setWords(fallbackW)
+    }
+
+    let isResolved = false
+
+    // Safety fallback timer if network request hangs
     const timer = window.setTimeout(() => {
-      if (cancel) return
-      if (fallbackQuestions.length > 0) {
-        setWords((prev) => (prev.length > 0 ? prev : fallbackWords))
-        setQuestions((prev) => (prev.length > 0 ? prev : fallbackQuestions))
+      if (cancel || isResolved) return
+      if (fallbackQ.length > 0) {
+        setWords((prev) => (prev.length > 0 ? prev : fallbackW))
+        setQuestions((prev) => (prev.length > 0 ? prev : fallbackQ))
+        loadedLessonRef.current = lesson
       }
-    }, 1200)
+    }, 1500)
 
     prepareLesson(lesson)
       .then((pack) => {
         if (cancel) return
+        isResolved = true
         window.clearTimeout(timer)
+        // If the user has already started answering fallback questions, do NOT disrupt the ongoing quiz
+        if (isStartedRef.current && loadedLessonRef.current === lesson) {
+          return
+        }
         setWords(pack.cards)
         setQuestions(pack.questions)
+        loadedLessonRef.current = lesson
       })
       .catch((error: unknown) => {
         if (cancel) return
+        isResolved = true
         window.clearTimeout(timer)
-        if (fallbackQuestions.length > 0) {
-          setWords(fallbackWords)
-          setQuestions(fallbackQuestions)
+        if (fallbackQ.length > 0) {
+          setWords((prev) => (prev.length > 0 ? prev : fallbackW))
+          setQuestions((prev) => (prev.length > 0 ? prev : fallbackQ))
+          loadedLessonRef.current = lesson
         } else {
           setFailed(error instanceof ApiError ? error.message : t('english.writing'))
         }
       })
+
     return () => {
       cancel = true
       window.clearTimeout(timer)
     }
-  }, [lesson, cards, fallbackWords, fallbackQuestions, t])
+  }, [lesson, t])
 
   const question = questions[step]
   const correct = checked && picked !== null && Boolean(question && matchesLessonAnswer(picked, question.answer))

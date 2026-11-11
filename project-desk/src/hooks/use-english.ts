@@ -38,7 +38,15 @@ export function useEnglish() {
         window.clearInterval(timer)
         return
       }
-      void listEnglish().then(setCards).catch(() => {})
+      void listEnglish().then((fresh) => {
+        setCards((prev) => {
+          if (prev.length !== fresh.length) return fresh
+          const prevMissing = prev.reduce((count, card) => count + (!card.pronunciation ? 1 : 0), 0)
+          const freshMissing = fresh.reduce((count, card) => count + (!card.pronunciation ? 1 : 0), 0)
+          if (prevMissing !== freshMissing) return fresh
+          return prev
+        })
+      }).catch(() => {})
     }, 4000)
     return () => window.clearInterval(timer)
   }, [awaitingDetail])

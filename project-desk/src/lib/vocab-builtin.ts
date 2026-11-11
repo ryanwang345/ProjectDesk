@@ -381,7 +381,7 @@ export const BUILTIN_VOCAB_CARDS: EnglishCard[] = [
   {
     id: 'seed-clog',
     word: 'clog',
-    meaning: '堵塞，阻碍；木屐',
+    meaning: '堵塞，阻塞；阻碍；木屐',
     pronunciation: '/klɒɡ/',
     inReview: false,
     generated: true,

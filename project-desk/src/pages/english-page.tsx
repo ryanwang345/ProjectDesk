@@ -12,12 +12,34 @@ import { Button } from '@/components/ui/button'
 import { useEnglish } from '@/hooks/use-english'
 import { useLearningProgress, recordVocabularyCompletion, refreshLearningProgress } from '@/hooks/use-learning-progress'
 import { ensureBand, ensureSenses, getLearningPlan } from '@/lib/api'
+import { getDictionaryEntry } from '@/lib/dictionary'
 import { useI18n } from '@/i18n'
 import type { EnglishCard } from '@/lib/english'
 import { currentLesson, lessonCount, loadProgress, type LessonProgress } from '@/lib/lesson'
 import type { StorageProblem } from '@/lib/projects'
 import type { LearningPlanResponse } from '@/lib/reading'
 import { cn } from '@/lib/utils'
+
+function shortPos(pos?: string) {
+  if (!pos) return 'n.'
+  const key = pos.trim().toLowerCase().replace(/\.$/, '')
+  const map: Record<string, string> = {
+    adjective: 'adj.',
+    adverb: 'adv.',
+    verb: 'v.',
+    noun: 'n.',
+    preposition: 'prep.',
+    conjunction: 'conj.',
+    pronoun: 'pron.',
+    interjection: 'int.',
+    determiner: 'det.',
+    v: 'v.',
+    n: 'n.',
+    adj: 'adj.',
+    adv: 'adv.',
+  }
+  return map[key] ?? (pos.endsWith('.') ? pos : `${pos}.`)
+}
 
 const PROBLEM_KEY = {
   unavailable: 'english.unreachable',
@@ -461,7 +483,14 @@ function WordDesk({
             <ul className="flex max-h-[calc(100svh-22rem)] flex-col gap-2.5 overflow-y-auto pe-1 lg:[scrollbar-gutter:stable]">
               {visibleWords.map((card, idx) => {
                 const active = card.id === current?.id
-                const pos = card.senses?.[0]?.pos ?? 'lexis'
+                const dict = getDictionaryEntry(card.word)
+                const rawPron = card.pronunciation?.trim() || ''
+                const validPron = (rawPron && rawPron !== '/.../' && rawPron !== '/ . . . /' && rawPron !== '/···/') ? rawPron : ''
+                const displayPron = validPron || (dict.ipa && dict.ipa !== `/${card.word}/` ? dict.ipa : '')
+                const rawPos = card.senses?.[0]?.pos ?? dict.pos ?? 'lexis'
+                const pos = shortPos(rawPos)
+                const isBadMeaning = !card.meaning || card.meaning === '堵塞阻碍障碍碍木屐阻塞不畅' || card.meaning.includes('堵塞阻碍障碍碍')
+                const meaning = isBadMeaning ? (dict.meaningZh || '堵塞，阻塞；阻碍；木屐') : card.meaning
                 const bandTag =
                   card.word === 'additional'
                     ? 'Band 6.5'
@@ -528,16 +557,16 @@ function WordDesk({
                         </span>
                       </div>
 
-                      {card.pronunciation ? (
+                      {displayPron ? (
                         <span className="block font-mono text-xs text-muted-foreground">
-                          {card.pronunciation}
+                          {displayPron}
                         </span>
                       ) : null}
 
                       <div className="mt-0.5 flex w-full items-center justify-between gap-2 text-xs">
                         <span className="min-w-0 flex-1 truncate text-muted-foreground">
                           <span className="mr-1 font-mono text-foreground/80">{pos}</span>
-                          {card.meaning}
+                          {meaning}
                         </span>
                         <span
                           className={cn(

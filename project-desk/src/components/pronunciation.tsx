@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { LoaderCircle, Square, Volume2 } from 'lucide-react'
 import { useI18n } from '@/i18n'
+import { getDictionaryEntry } from '@/lib/dictionary'
 import { getSpeechState, speakWord, stopSpeech, subscribeSpeech } from '@/lib/speech'
 
 export { speakWord } from '@/lib/speech'
@@ -20,7 +21,12 @@ export function Pronunciation({
 }) {
   const { t, locale } = useI18n()
   const state = useSyncExternalStore(subscribeSpeech, getSpeechState)
-  const ipa = pronunciation?.trim() ?? ''
+  const raw = pronunciation?.trim() ?? ''
+  const isPlaceholder = !raw || raw === '/.../' || raw === '/ . . . /' || raw === '/···/' || raw === `/${word}/`
+  const dictEntry = isPlaceholder ? getDictionaryEntry(word) : null
+  const ipa = isPlaceholder
+    ? (dictEntry?.ipa && dictEntry.ipa !== `/${word}/` ? dictEntry.ipa : '')
+    : raw
   const current = state.text === word.trim().replace(/\s+/g, ' ')
   const loading = current && state.status === 'loading'
   const playing = current && state.status === 'playing'

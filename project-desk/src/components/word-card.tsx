@@ -20,8 +20,10 @@ import { Pronunciation } from '@/components/pronunciation'
 import { InteractiveGlossText } from '@/components/interactive-gloss-text'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
+import { getDictionaryEntry } from '@/lib/dictionary'
 import type { EnglishCard, WordSense } from '@/lib/english'
 import { translateExample } from '@/lib/example-zh'
+import { translateCollocation } from '@/lib/collocations-zh'
 import { cn } from '@/lib/utils'
 
 const POS_SHORT: Record<string, string> = {
@@ -117,14 +119,22 @@ export function WordCard({
   const { t, locale } = useI18n()
   const zh = locale === 'zh'
   const senses = card.senses ?? []
+  const dict = getDictionaryEntry(card.word)
+  const isCloggedOrBad = !card.meaning || card.meaning === '堵塞阻碍障碍碍木屐阻塞不畅' || card.meaning.includes('堵塞阻碍障碍碍')
+  const cleanCardMeaning = isCloggedOrBad ? (dict.meaningZh || '堵塞，阻塞；阻碍；木屐') : card.meaning
   const groups = groupSenses(senses)
   const gloss =
     senses
       .map((sense) => sense.zh.trim())
       .filter(Boolean)
       .slice(0, 3)
-      .join('；') || card.meaning
-  const primaryPos = shortPos(groups[0]?.pos ?? 'adj.')
+      .join('；') || cleanCardMeaning
+  const primaryPos = shortPos(groups[0]?.pos ?? dict.pos ?? 'adj.')
+  const rawPron = card.pronunciation?.trim() || ''
+  const validPron = (rawPron && rawPron !== '/.../' && rawPron !== '/ . . . /' && rawPron !== '/···/') ? rawPron : ''
+  const baseIpa = validPron || (dict.ipa && dict.ipa !== `/${card.word}/` ? dict.ipa : '')
+  const ukIpa = baseIpa || undefined
+  const usIpa = card.word.toLowerCase() === 'clog' ? '/klɑːɡ/' : (baseIpa || undefined)
   const examples = card.examples.filter((sentence) => sentence.trim() !== '')
   const [sensesOpen, setSensesOpen] = useState(true)
   const [examplesOpen, setExamplesOpen] = useState(false)
@@ -254,13 +264,13 @@ export function WordCard({
 
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="inline-flex items-center gap-2 rounded-2xl border border-border/80 bg-background/65 px-3.5 py-2 text-xs">
-                <Pronunciation word={card.word} pronunciation={card.pronunciation || undefined} />
+                <Pronunciation word={card.word} pronunciation={ukIpa} />
                 <span className="rounded bg-card px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
                   UK
                 </span>
               </div>
               <div className="inline-flex items-center gap-2 rounded-2xl border border-border/80 bg-background/65 px-3.5 py-2 text-xs">
-                <Pronunciation word={card.word} pronunciation={card.pronunciation || undefined} />
+                <Pronunciation word={card.word} pronunciation={usIpa} />
                 <span className="rounded bg-card px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
                   US
                 </span>
@@ -363,9 +373,9 @@ export function WordCard({
         </div>
 
         <div className="mt-4 space-y-3">
-          {(groups.length > 0 ? groups : [{ pos: primaryPos, items: [{ pos: primaryPos, zh: card.meaning, en: '' }] }]).map(
+          {(groups.length > 0 ? groups : [{ pos: primaryPos, items: [{ pos: primaryPos, zh: cleanCardMeaning, en: '' }] }]).map(
             (group) => {
-              const zhLine = group.items.map((s) => s.zh).filter(Boolean).join('；') || card.meaning
+              const zhLine = group.items.map((s) => s.zh).filter(Boolean).join('；') || cleanCardMeaning
               const enLine = group.items.map((s) => s.en).filter(Boolean).join('; ')
               return (
                 <div
@@ -449,8 +459,8 @@ export function WordCard({
                   </div>
                   <ArrowUpRight className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  {zh ? `${gloss.split('；')[0]}搭配 · 高分学术语块` : 'Academic lexical chunk'}
+                <p className="text-[12px] font-medium text-foreground/80 dark:text-foreground/75">
+                  {zh ? translateCollocation(phrase, card.word, gloss) : 'Academic lexical chunk'}
                 </p>
                 <div className="space-y-1.5 pt-1">
                   <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
@@ -662,6 +672,9 @@ export function WordCard({
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {paraphrases.slice(0, 4).map((syn, idx) => {
             const reg = SYNONYM_REGISTERS[idx % SYNONYM_REGISTERS.length]
+            const pairedCollocationWord = collocations[idx]?.split(' ').slice(1).join(' ') || 'context'
+            const synPhrase = `${syn} ${pairedCollocationWord}`
+            const synPhraseZh = translateCollocation(synPhrase, syn)
             return (
               <div
                 key={syn}
@@ -678,9 +691,16 @@ export function WordCard({
                     {zh ? reg.noteZh : reg.noteEn}
                   </p>
                 </div>
-                <span className="block truncate border-t border-border/60 pt-2 font-mono text-[11px] text-foreground/85">
-                  {syn} {collocations[idx]?.split(' ').slice(1).join(' ') || 'context'}
-                </span>
+                <div className="border-t border-border/60 pt-2 space-y-0.5">
+                  <span className="block truncate font-mono text-[11px] text-foreground/85">
+                    {synPhrase}
+                  </span>
+                  {zh && synPhraseZh ? (
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {synPhraseZh}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             )
           })}
