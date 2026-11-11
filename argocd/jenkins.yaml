@@ -37,6 +37,7 @@ spec:
             - kubernetes
             - workflow-aggregator
             - git
+            - github-branch-source
             - configuration-as-code
             - job-dsl
             - credentials-binding
@@ -78,29 +79,34 @@ spec:
               projectdesk-job: |
                 jobs:
                   - script: |
-                      pipelineJob('ProjectDesk') {
+                      multibranchPipelineJob('ProjectDesk') {
                         description('Build, test, push images and bump Helm tags; ArgoCD deploys.')
-                        properties {
-                          pipelineTriggers {
-                            triggers {
-                              pollSCM {
-                                scmpoll_spec('H/2 * * * *')
+                        branchSources {
+                          branchSource {
+                            source {
+                              git {
+                                id('project-desk-git')
+                                remote('https://github.com/ryanwang345/ProjectDesk.git')
+                                traits {
+                                  gitBranchDiscovery()
+                                }
                               }
                             }
                           }
                         }
-                        definition {
-                          cpsScm {
-                            scm {
-                              git {
-                                remote {
-                                  url('https://github.com/ryanwang345/ProjectDesk.git')
-                                }
-                                branch('*/main')
-                              }
-                            }
+                        triggers {
+                          periodicFolderTrigger {
+                            interval('1m')
+                          }
+                        }
+                        orphanedItemStrategy {
+                          discardOldItems {
+                            numToKeep(10)
+                          }
+                        }
+                        factory {
+                          workflowBranchProjectFactory {
                             scriptPath('Jenkinsfile')
-                            lightweight(true)
                           }
                         }
                       }
