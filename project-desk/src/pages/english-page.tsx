@@ -187,7 +187,7 @@ function WordDesk({
   })
   const [reviewing, setReviewing] = useState(false)
   const [wordQuery, setWordQuery] = useState('')
-  const [wordFilter, setWordFilter] = useState<'all' | 'band67' | 'highfreq' | 'mastered'>('all')
+  const [wordFilter, setWordFilter] = useState<'all' | 'band67' | 'highfreq' | 'unmarked'>('all')
   const [letter, setLetter] = useState(() => wordLetter(cards.find((card) => card.id === new URLSearchParams(window.location.search).get('word'))?.word ?? 'A'))
   const [bandState, setBandState] = useState<'idle' | 'wait' | 'failed'>('idle')
   const bandFlight = useRef<string | null>(null)
@@ -208,7 +208,7 @@ function WordDesk({
   })
 
   const visibleWords = baseWords.filter((card, idx) => {
-    if (wordFilter === 'mastered') return !card.inReview
+    if (wordFilter === 'unmarked') return !card.inReview
     if (wordFilter === 'band67') return Boolean(card.band?.writing) || (card.word.length >= 6 && card.word.length <= 11)
     if (wordFilter === 'highfreq') return idx % 2 === 0 || Boolean(card.band?.collocations?.length)
     return true
@@ -290,7 +290,7 @@ function WordDesk({
             </h1>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-0.5 text-xs font-medium text-primary">
               <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
-              {zh ? '可复习 4,120 词' : t('english.savedCount', { n: cards.length })}
+              <span data-testid="vocabulary-total">{t('english.savedCount', { n: cards.length })}</span>
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground">
               <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
@@ -307,8 +307,8 @@ function WordDesk({
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-xs text-muted-foreground">
             <Clock className="size-3.5 text-primary" aria-hidden="true" />
-            {zh ? '今日待巩固：' : 'Due today:'}
-            <strong className="font-semibold text-foreground">{totalInReview > 0 ? `${totalInReview}词` : '28词'}</strong>
+            {zh ? '已加入复习：' : 'Marked for review:'}
+            <strong className="font-semibold text-foreground" data-testid="vocabulary-review-total">{totalInReview} {zh ? '词' : 'words'}</strong>
           </span>
         </div>
       </div>
@@ -321,7 +321,7 @@ function WordDesk({
           </span>
           <span className="font-medium text-primary">
             {zh
-              ? `当前字母：${letter} · 共 ${visibleWords.length > 0 ? visibleWords.length : 343} 词`
+              ? `当前字母：${letter} · 共 ${visibleWords.length} 词`
               : `Letter ${letter} · ${visibleWords.length} words`}
           </span>
         </div>
@@ -429,7 +429,7 @@ function WordDesk({
                   { id: 'all' as const, label: zh ? '全部' : 'All' },
                   { id: 'band67' as const, label: zh ? 'Band 6-7 雅思' : 'Band 6–7' },
                   { id: 'highfreq' as const, label: zh ? '高频' : 'High Freq' },
-                  { id: 'mastered' as const, label: zh ? '已掌握' : 'Mastered' },
+                  { id: 'unmarked' as const, label: zh ? '未加入复习' : 'Not marked' },
                 ]
               ).map((tabItem) => (
                 <button
@@ -479,22 +479,9 @@ function WordDesk({
                                 ? 'Band 6.0'
                                 : (idx % 3 === 0 ? 'Band 6.5' : idx % 3 === 1 ? 'Band 7.0' : 'Band 7.5')
 
-                const intervalTag =
-                  card.word === 'additional'
-                    ? (zh ? '复习 14天' : '14d due')
-                    : card.word === 'abandon'
-                      ? (zh ? '已掌握' : 'Mastered')
-                      : card.word === 'abandonment'
-                        ? (zh ? '复习 7天' : '7d due')
-                        : card.word === 'abbey'
-                          ? (zh ? '未复习' : 'New')
-                          : card.word === 'ability'
-                            ? (zh ? '已掌握' : 'Mastered')
-                            : card.word === 'abnormal'
-                              ? (zh ? '复习 3天' : '3d due')
-                              : card.word === 'aboard'
-                                ? (zh ? '复习 21天' : '21d due')
-                                : (card.inReview ? (zh ? '今日待复习' : 'Due today') : idx % 2 === 0 ? (zh ? '已掌握' : 'Mastered') : (zh ? '未复习' : 'New'))
+                const intervalTag = card.inReview
+                  ? (zh ? '已加入复习' : 'In review')
+                  : (zh ? '未加入复习' : 'Not marked')
 
                 return (
                   <li key={card.id}>
@@ -522,12 +509,9 @@ function WordDesk({
                       <div className="flex w-full items-center justify-between gap-2">
                         <span className="flex items-center gap-1.5 font-display text-base font-semibold text-foreground">
                           <span>{card.word}</span>
-                          {card.inReview || active ? (
+                          {card.inReview ? (
                             <Star
-                              className={cn(
-                                'size-3.5 shrink-0',
-                                card.inReview ? 'fill-primary text-primary' : 'text-primary',
-                              )}
+                              className="size-3.5 shrink-0 fill-primary text-primary"
                               aria-hidden="true"
                             />
                           ) : null}
@@ -544,9 +528,11 @@ function WordDesk({
                         </span>
                       </div>
 
-                      <span className="block font-mono text-xs text-muted-foreground">
-                        {card.pronunciation || '/.../'}
-                      </span>
+                      {card.pronunciation ? (
+                        <span className="block font-mono text-xs text-muted-foreground">
+                          {card.pronunciation}
+                        </span>
+                      ) : null}
 
                       <div className="mt-0.5 flex w-full items-center justify-between gap-2 text-xs">
                         <span className="min-w-0 flex-1 truncate text-muted-foreground">
@@ -556,9 +542,7 @@ function WordDesk({
                         <span
                           className={cn(
                             'shrink-0 text-[11px] font-medium',
-                            intervalTag === '已掌握' || intervalTag === 'Mastered'
-                              ? 'text-muted-foreground'
-                              : 'text-primary',
+                            card.inReview ? 'text-primary' : 'text-muted-foreground',
                           )}
                         >
                           {intervalTag}

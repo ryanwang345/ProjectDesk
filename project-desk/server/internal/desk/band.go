@@ -24,6 +24,36 @@ func (b BandNote) ready() bool {
 }
 
 var builtinBand = map[string]BandNote{
+	"clog": {
+		Collocations: []string{
+			"clog the drain",
+			"clog arterial roads",
+			"clog waterways",
+			"clog up the system",
+			"clog pores",
+		},
+		Writing:    "Without adequate municipal waste segregation, non-biodegradable plastics inevitably clog urban stormwater conduits.",
+		WritingZh:  "如果缺乏妥善的市政垃圾分类，不可降解塑料势必会堵塞城市雨水管道。",
+		Speaking:   "During rush hour, roadside delivery vans often clog up narrow commercial streets.",
+		SpeakingZh: "在早晚高峰时段，路边卸货的货车常常会堵塞狭窄的商业街。",
+		Examples: []string{
+			"Debris began to clog the stormwater drainage network after the heavy rainfall.",
+			"Accumulated sediment can clog filtration membranes if not regularly flushed.",
+			"Broken-down vehicles rapidly clog traffic flow along single-lane mountain passes.",
+			"Grease poured down sinks will cool and clog plumbing lines over time.",
+		},
+		ExamplesZh: []string{
+			"强降雨过后，瓦砾杂物开始堵塞雨水排水管网。",
+			"如果不定期冲洗，积聚的沉淀物会堵塞过滤膜。",
+			"发生故障的车辆会在单车道山路上迅速堵塞车流。",
+			"倒进水槽的油脂久而久之会冷却并堵塞水管。",
+		},
+		Weak:        "Trash makes the pipes full and water cannot flow.",
+		Fix:         "Use clog municipal drainage conduits or obstruct effluent outflow.",
+		FixZh:       "在学术写作中使用 clog municipal drainage conduits 或 obstruct effluent outflow。",
+		WeakFixed:   "Solid municipal waste tends to clog stormwater infrastructure and impede drainage.",
+		Paraphrases: []string{"obstruct", "congest", "choke", "blockade"},
+	},
 	"administrative": {
 		Collocations: []string{
 			"administrative burden",

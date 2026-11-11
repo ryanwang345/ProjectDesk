@@ -477,6 +477,14 @@ func (s *Store) seedIelts(ctx context.Context) error {
 	if err := insertVocab(ctx, tx, extra, have, true); err != nil {
 		return err
 	}
+	if err := seedWorldVocabulary(ctx, tx, have); err != nil {
+		return err
+	}
+	for key, pron := range builtinPronunciations {
+		if _, err := tx.Exec(ctx, `UPDATE english_cards SET pronunciation = $2 WHERE lower(word) = $1 AND pronunciation = ''`, key, pron); err != nil {
+			return err
+		}
+	}
 	for _, entry := range ieltsEntries {
 		if entry.Kind == "custom" || !have[strings.ToLower(entry.Word)] {
 			continue
@@ -545,6 +553,11 @@ func insertVocab(ctx context.Context, tx pgx.Tx, entries []ieltsEntry, have map[
 				return err
 			}
 			if _, err := tx.Exec(ctx, `UPDATE english_cards SET band = $2::jsonb WHERE lower(word) = $1`, key, raw); err != nil {
+				return err
+			}
+		}
+		if pron, ok := builtinPronunciations[key]; ok {
+			if _, err := tx.Exec(ctx, `UPDATE english_cards SET pronunciation = $2 WHERE lower(word) = $1`, key, pron); err != nil {
 				return err
 			}
 		}

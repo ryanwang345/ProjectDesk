@@ -105,12 +105,6 @@ import { BUILTIN_VOCAB_CARDS } from '@/lib/vocab-builtin'
 let englishETagCache = ''
 let englishCardsCache: EnglishCard[] | null = null
 
-function mergeWithBuiltinCards(serverCards: EnglishCard[]): EnglishCard[] {
-  const wordsSet = new Set(serverCards.map((c) => c.word.trim().toLowerCase()))
-  const additions = BUILTIN_VOCAB_CARDS.filter((b) => !wordsSet.has(b.word.trim().toLowerCase()))
-  return [...serverCards, ...additions]
-}
-
 export async function listEnglish(): Promise<EnglishCard[]> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (englishETagCache && englishCardsCache) {
@@ -125,8 +119,7 @@ export async function listEnglish(): Promise<EnglishCard[]> {
       if (englishCardsCache && englishCardsCache.length > 0) return englishCardsCache
       return BUILTIN_VOCAB_CARDS
     }
-    const rawCards = (await response.json()) as EnglishCard[]
-    const cards = mergeWithBuiltinCards(rawCards)
+    const cards = (await response.json()) as EnglishCard[]
     const etag = response.headers.get('ETag')
     if (etag) {
       englishETagCache = etag

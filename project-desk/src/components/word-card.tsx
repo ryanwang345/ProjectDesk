@@ -244,21 +244,23 @@ export function WordCard({
               <h2 className="font-display text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
                 {card.word}
               </h2>
-              <Star
-                className="size-5 shrink-0 fill-primary text-primary"
-                aria-hidden="true"
-              />
+              {card.inReview ? (
+                <Star
+                  className="size-5 shrink-0 fill-primary text-primary"
+                  aria-hidden="true"
+                />
+              ) : null}
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="inline-flex items-center gap-2 rounded-2xl border border-border/80 bg-background/65 px-3.5 py-2 text-xs">
-                <Pronunciation word={card.word} pronunciation={card.pronunciation || "/ə'dɪʃ.ən.əl/"} />
+                <Pronunciation word={card.word} pronunciation={card.pronunciation || undefined} />
                 <span className="rounded bg-card px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
                   UK
                 </span>
               </div>
               <div className="inline-flex items-center gap-2 rounded-2xl border border-border/80 bg-background/65 px-3.5 py-2 text-xs">
-                <Pronunciation word={card.word} pronunciation={card.pronunciation || "/ə'dɪʃ.ən.əl/"} />
+                <Pronunciation word={card.word} pronunciation={card.pronunciation || undefined} />
                 <span className="rounded bg-card px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
                   US
                 </span>

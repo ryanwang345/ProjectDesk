@@ -7,9 +7,13 @@ func TestFullVocabularyIsInTheIeltsRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	total := len(ieltsEntries) + len(extra)
-	if total < 4500 || total > 5000 {
-		t.Fatalf("vocabulary should be between 4500 and 5000 headwords, got %d", total)
+	world, err := worldVocabulary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := len(ieltsEntries) + len(extra) + len(world)
+	if total < 8800 || total > 12000 {
+		t.Fatalf("vocabulary should be between 8800 and 12000 headwords (Longman dictionary scale), got %d", total)
 	}
 	for _, entry := range extra {
 		examples, err := variedExamples(entry.Word, entry.Kind)

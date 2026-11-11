@@ -60,6 +60,13 @@ func (h *Handler) writeEnglishBand(w http.ResponseWriter, r *http.Request) {
 			writeEnglishError(w, saveErr)
 			return
 		}
+		if saved.Pronunciation == "" {
+			if pron, ok := builtinPronunciations[strings.ToLower(saved.Word)]; ok {
+				if withPron, pronErr := h.store.savePronunciation(r.Context(), saved.ID, pron); pronErr == nil {
+					saved = withPron
+				}
+			}
+		}
 		writeJSON(w, http.StatusOK, saved)
 		return
 	}

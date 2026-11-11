@@ -5,6 +5,7 @@ import {
   GraduationCap,
   Headphones,
   LayoutGrid,
+  Radio,
   SlidersHorizontal,
   Tag,
   UserRound,
@@ -51,6 +52,13 @@ const learningLinks: NavItem[] = [
     label: 'nav.listening',
     icon: Headphones,
     match: (pathname) => pathname === '/listening',
+  },
+  {
+    id: 'radio',
+    to: '/radio',
+    label: 'nav.radio',
+    icon: Radio,
+    match: (pathname) => pathname === '/radio',
   },
   {
     id: 'me',

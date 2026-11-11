@@ -52,6 +52,18 @@ const IELTS_DICTIONARY: Record<string, MiniDictionaryEntry> = {
     examParaphrase: 'abandon = discard = drop = relinquish',
     synonyms: ['discard', 'relinquish', 'drop'],
   },
+  clog: {
+    id: 'seed-clog',
+    word: 'clog',
+    ipa: '/klɒɡ/',
+    band: 'Band 6.5',
+    pos: 'v.',
+    contextNote: '管道受阻与交通拥堵',
+    meaningZh: '堵塞，阻塞；阻碍；木屐 (block or become blocked)',
+    meaningEn: 'to block or become blocked with an accumulation of something',
+    examParaphrase: 'clog = obstruct = congest = choke',
+    synonyms: ['obstruct', 'congest', 'choke', 'blockade'],
+  },
   apprentice: {
     word: 'apprentice',
     ipa: '/əˈprentɪs/',

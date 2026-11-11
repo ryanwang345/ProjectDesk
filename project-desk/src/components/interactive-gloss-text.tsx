@@ -11,6 +11,15 @@ export type InteractiveGlossTextProps = {
   contextSentence?: string
 }
 
+/** Trivial non-content words that do not need dictionary tooltips */
+const TRIVIAL_STOP_WORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'nor', 'so',
+  'in', 'on', 'at', 'to', 'for', 'of', 'by', 'with', 'from', 'as',
+  'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am',
+  'it', 'its', 'this', 'that', 'these', 'those',
+  'he', 'she', 'they', 'them', 'his', 'her', 'their', 'we', 'us', 'our', 'you', 'your', 'my', 'me',
+])
+
 export function InteractiveGlossText({
   text,
   className,
@@ -82,7 +91,7 @@ export function InteractiveGlossText({
   function handleWordClick(word: string, e: React.MouseEvent<HTMLSpanElement>) {
     e.stopPropagation()
     const cleanWord = word.trim().toLowerCase()
-    if (!cleanWord || cleanWord.length < 2) return
+    if (!cleanWord || cleanWord.length < 2 || TRIVIAL_STOP_WORDS.has(cleanWord)) return
 
     // If already active, toggle off
     if (activeWord === cleanWord) {
@@ -130,6 +139,12 @@ export function InteractiveGlossText({
         }
 
         const lower = token.toLowerCase()
+
+        // Skip non-necessary trivial stopwords (the, a, is, of, etc.)
+        if (TRIVIAL_STOP_WORDS.has(lower)) {
+          return <span key={idx}>{token}</span>
+        }
+
         const isKeyIeltsWord =
           lower === 'complimentary' ||
           lower === 'additional' ||

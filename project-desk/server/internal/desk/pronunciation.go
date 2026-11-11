@@ -14,6 +14,20 @@ import (
 	"projectdesk/internal/ai"
 )
 
+var builtinPronunciations = map[string]string{
+	"clog":          "/klɒɡ/",
+	"additional":    "/əˈdɪʃ.ən.əl/",
+	"complimentary": "/ˌkɒm.plɪˈmen.tər.i/",
+	"abandon":       "/əˈbæn.dən/",
+	"abandonment":   "/əˈbæn.dən.mənt/",
+	"abbey":         "/ˈæb.i/",
+	"ability":       "/əˈbɪl.ə.ti/",
+	"abnormal":      "/æbˈnɔː.məl/",
+	"aboard":        "/əˈbɔːd/",
+	"abolish":       "/əˈbɒl.ɪʃ/",
+	"abortion":      "/əˈbɔː.ʃən/",
+}
+
 // WritePronunciations asks the configured model for a British IPA transcription
 // of every card that does not have one yet, then stores it. A later start
 // skips words that are already saved.
@@ -31,7 +45,13 @@ func (s *Store) WritePronunciations(ctx context.Context, sealer *Sealer) {
 // AttachPronunciation fills one card when it has no saved transcription.
 // Creating or renaming a word uses this so the reply already includes it.
 func (s *Store) AttachPronunciation(ctx context.Context, provider ai.Provider, card EnglishCard) (EnglishCard, error) {
-	if card.Pronunciation != "" || !realPronunciationModel(provider) {
+	if card.Pronunciation != "" {
+		return card, nil
+	}
+	if ipa, ok := builtinPronunciations[strings.ToLower(card.Word)]; ok {
+		return s.savePronunciation(ctx, card.ID, ipa)
+	}
+	if !realPronunciationModel(provider) {
 		return card, nil
 	}
 	got, err := requestPronunciations(ctx, provider, []EnglishCard{card})

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -17,6 +18,7 @@ import {
   MapPin,
   Pause,
   Play,
+  Radio,
   RotateCcw,
   Rewind,
   Sparkles,
@@ -1921,6 +1923,40 @@ export function ListeningPage() {
               </button>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Local Radio News Highlight Banner */}
+      <section className="relative overflow-hidden rounded-3xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/30 via-card/90 to-background p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div className="flex items-center gap-4">
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-400 shadow-inner">
+              <Radio className="size-6 animate-pulse" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
+                  {zh ? '新功能 · 泛听与精听电台' : 'New Feature · Radio News'}
+                </span>
+                <span className="font-mono text-xs text-muted-foreground">98.5 FM / 91.3 FM / 104.2 FM</span>
+              </div>
+              <h2 className="mt-1 font-display text-lg font-bold text-foreground">
+                {zh ? '本地英语新闻电台：市民生活、前沿生态与全球要闻' : 'Local Radio News: Metropolitan Life, Eco-Science & World Dispatch'}
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {zh
+                  ? '支持双语对照、时间戳无级滑动、单句复读、句子朗读影子跟读与划词全局词典。'
+                  : 'Featuring synchronized bilingual transcripts, loop repeater, speech shadowing, and one-click wordbook.'}
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/radio"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-emerald-500 active:scale-95"
+          >
+            <Radio className="size-4" />
+            <span>{zh ? '立即收听本地电台' : 'Tune in to Radio'}</span>
+          </Link>
         </div>
       </section>
 

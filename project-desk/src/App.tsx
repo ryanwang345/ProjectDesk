@@ -12,6 +12,7 @@ import { BoardPage } from '@/pages/board-page'
 import { EnglishPage } from '@/pages/english-page'
 import { ListeningPage } from '@/pages/listening-page'
 import { NotFoundPage } from '@/pages/not-found-page'
+import { RadioNewsPage } from '@/pages/radio-news-page'
 import { ReadingPage } from '@/pages/reading-page'
 
 export default function App() {
@@ -119,6 +120,7 @@ function Frame() {
             <Route path="english" element={<EnglishPage />} />
             <Route path="reading" element={<ReadingPage />} />
             <Route path="listening" element={<ListeningPage />} />
+            <Route path="radio" element={<RadioNewsPage />} />
             <Route path="desk" element={<BoardPage />} />
             <Route path="board" element={<BoardPage />} />
             <Route path="about" element={<AboutPage />} />

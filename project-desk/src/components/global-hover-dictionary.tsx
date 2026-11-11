@@ -43,6 +43,15 @@ export function useHoverDictionaryToggle() {
   return { enabled, toggle }
 }
 
+/** Trivial non-content words that do not need dictionary tooltips */
+const TRIVIAL_STOP_WORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'nor', 'so',
+  'in', 'on', 'at', 'to', 'for', 'of', 'by', 'with', 'from', 'as',
+  'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am',
+  'it', 'its', 'this', 'that', 'these', 'those',
+  'he', 'she', 'they', 'them', 'his', 'her', 'their', 'we', 'us', 'our', 'you', 'your', 'my', 'me',
+])
+
 /** Check if character is a valid English word character */
 function isWordChar(char: string | undefined): boolean {
   if (!char) return false
@@ -55,18 +64,93 @@ function isWordBoundaryChar(char: string | undefined): boolean {
   return /[-a-zA-Z']/.test(char)
 }
 
+/**
+ * Filter out buttons, links, form controls, navigation bars, headers, footers,
+ * badges, and other non-reading UI chrome elements so tooltips never appear on them.
+ */
+function isInteractiveOrUiControl(element: Element | null): boolean {
+  if (!element) return true
+
+  // 1. Direct interactive tags & roles (Buttons, links, inputs, selects, tabs, menus, dialogs)
+  if (
+    element.closest('button') ||
+    element.closest('a') ||
+    element.closest('input') ||
+    element.closest('textarea') ||
+    element.closest('select') ||
+    element.closest('option') ||
+    element.closest('[role="button"]') ||
+    element.closest('[role="tab"]') ||
+    element.closest('[role="tablist"]') ||
+    element.closest('[role="link"]') ||
+    element.closest('[role="menu"]') ||
+    element.closest('[role="menuitem"]') ||
+    element.closest('[role="switch"]') ||
+    element.closest('[role="checkbox"]') ||
+    element.closest('[role="radio"]') ||
+    element.closest('[role="dialog"]') ||
+    element.closest('[role="tooltip"]') ||
+    element.closest('[data-no-dict-hover]') ||
+    element.closest('[data-interactive-gloss]')
+  ) {
+    return true
+  }
+
+  // 2. UI Chrome / Layout Containers (Navigation, header, footer, sidebar, badges)
+  if (
+    element.closest('nav') ||
+    element.closest('header') ||
+    element.closest('footer') ||
+    element.closest('aside') ||
+    element.closest('[data-sidebar]') ||
+    element.closest('.site-header') ||
+    element.closest('.badge') ||
+    element.closest('[data-slot="badge"]')
+  ) {
+    return true
+  }
+
+  // 3. Any element with cursor: pointer or explicit clickable semantics
+  let cur: HTMLElement | null = element as HTMLElement
+  let depth = 0
+  while (cur && depth < 5 && cur !== document.body) {
+    if (
+      cur.tagName === 'BUTTON' ||
+      cur.tagName === 'A' ||
+      cur.getAttribute('role') === 'button' ||
+      cur.getAttribute('role') === 'tab'
+    ) {
+      return true
+    }
+    const style = window.getComputedStyle(cur)
+    if (style.cursor === 'pointer') {
+      return true
+    }
+    cur = cur.parentElement
+    depth++
+  }
+
+  return false
+}
+
 /** Find word under coordinate using caret position or element text traversal */
 function getWordAtPoint(
   x: number,
   y: number,
 ): { word: string; rect: DOMRect; sentence: string } | null {
+  // 1. Check topmost element under cursor - ignore buttons & non-reading UI controls immediately
+  const topElem = document.elementFromPoint(x, y)
+  if (!topElem || isInteractiveOrUiControl(topElem)) {
+    return null
+  }
+
   let range: Range | null = null
 
-  // 1. Try standard caretRangeFromPoint (Chromium / WebKit)
+  // Standard caretRangeFromPoint (Chromium / WebKit)
   if (document.caretRangeFromPoint) {
     range = document.caretRangeFromPoint(x, y)
   } else if ('caretPositionFromPoint' in document) {
-    // 2. Try caretPositionFromPoint (Firefox / Modern standard)
+    // caretPositionFromPoint (Firefox / Modern standard)
     const pos = (
       document as unknown as {
         caretPositionFromPoint: (x: number, y: number) => { offsetNode: Node; offset: number } | null
@@ -79,38 +163,12 @@ function getWordAtPoint(
     }
   }
 
-  // 3. Fallback: inspect element under point
-  if (!range) {
-    const elem = document.elementFromPoint(x, y)
-    if (
-      !elem ||
-      elem.closest('[role="tooltip"]') ||
-      elem.closest('input') ||
-      elem.closest('textarea') ||
-      elem.closest('[data-interactive-gloss]')
-    ) {
-      return null
-    }
-  }
-
   if (!range) return null
   const node = range.startContainer
   if (node.nodeType !== Node.TEXT_NODE || !node.textContent) return null
 
   const parent = node.parentElement
-  if (!parent) return null
-
-  // Ignore form controls, interactive gloss (handled directly), buttons, or inside tooltip
-  if (
-    parent.closest('[role="tooltip"]') ||
-    parent.closest('input') ||
-    parent.closest('textarea') ||
-    parent.closest('select') ||
-    parent.closest('[data-no-dict-hover]') ||
-    parent.closest('[data-interactive-gloss]')
-  ) {
-    return null
-  }
+  if (!parent || isInteractiveOrUiControl(parent)) return null
 
   const text = node.textContent
   const offset = range.startOffset
@@ -137,9 +195,9 @@ function getWordAtPoint(
   const rawWord = text.slice(start, end).replace(/^[-']+|[-']+$/g, '')
   if (!rawWord || rawWord.length < 2 || !/^[a-zA-Z]+$/.test(rawWord)) return null
 
-  // Ignore tiny common stopwords
+  // Ignore tiny common stopwords that are not meaningful dictionary lookups
   const lower = rawWord.toLowerCase()
-  if (['the', 'and', 'or', 'to', 'in', 'of', 'at', 'on', 'a', 'an', 'is', 'it', 'for', 'by', 'as'].includes(lower)) {
+  if (TRIVIAL_STOP_WORDS.has(lower)) {
     return null
   }
 
@@ -225,7 +283,7 @@ export function GlobalHoverDictionary() {
         return
       }
 
-      // Check if user clicked on an English word
+      // Check if user clicked on an English word in reading text
       const found = getWordAtPoint(e.clientX, e.clientY)
       if (found) {
         const cleanWord = found.word.toLowerCase()
