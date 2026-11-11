@@ -20,6 +20,13 @@ spec:
           hostNetwork: true
           # Required with hostNetwork so the controller can resolve internal cluster DNS (*.svc.cluster.local)
           dnsPolicy: ClusterFirstWithHostNet
+          # On a single-node cluster with hostNetwork, maxSurge MUST be 0
+          # to prevent port 80/443 collision when replacing pods
+          updateStrategy:
+            type: RollingUpdate
+            rollingUpdate:
+              maxSurge: 0
+              maxUnavailable: 1
           service:
             # When hostNetwork is enabled, NodePort/LoadBalancer is no longer needed
             type: ClusterIP
@@ -34,3 +41,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
