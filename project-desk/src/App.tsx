@@ -115,7 +115,7 @@ function Frame() {
           </div>
         </header>
 
-        <main className="w-full flex-1 px-4 py-5 pb-24 sm:px-6 lg:px-8 lg:py-6 lg:pb-8">
+        <main className="w-full flex-1 px-4 py-5 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] sm:px-6 lg:px-8 lg:py-6 lg:pb-8">
           <Routes>
             <Route index element={<EnglishPage />} />
             <Route path="english" element={<EnglishPage />} />
@@ -130,7 +130,7 @@ function Frame() {
           </Routes>
         </main>
 
-        <footer className="w-full px-4 pt-2 pb-24 sm:px-6 lg:px-8 lg:pb-5">
+        <footer className="w-full px-4 pt-2 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] sm:px-6 lg:px-8 lg:pb-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-3 text-[11px] text-muted-foreground">
             <p className="inline-flex items-center gap-1.5">
               <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
