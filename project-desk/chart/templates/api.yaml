@@ -67,14 +67,18 @@ spec:
             httpGet:
               path: /api/readyz
               port: {{ .Values.api.port }}
-            initialDelaySeconds: 3
-            periodSeconds: 5
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           livenessProbe:
             httpGet:
               path: /api/healthz
               port: {{ .Values.api.port }}
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
             periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
       # The worker stops claiming jobs on SIGTERM and finishes in-flight
       # work; anything cut off is requeued by the stale sweep.
       terminationGracePeriodSeconds: 45
