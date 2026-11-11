@@ -27,6 +27,10 @@ spec:
           cloudName: local-k8s
           serviceType: NodePort
           nodePort: 32000
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hostName: jenkins.k8s.local
           resources:
             requests:
               cpu: 500m

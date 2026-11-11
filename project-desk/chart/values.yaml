@@ -55,4 +55,5 @@ ingress:
     kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: vault-issuer
   host: rwang.ingress.k8s-test.sf.vailsys.net
+  additionalHost: desk.k8s.local
   tlsSecretName: project-desk-tls
