@@ -17,6 +17,9 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: rwang
+  # Image updates are GitOps-driven: Jenkins pushes a new immutable tag to
+  # project-desk/chart/values.yaml on main, ArgoCD detects the commit and
+  # auto-syncs, and Kubernetes performs a rolling update of api/web.
   syncPolicy:
     automated:
       prune: true

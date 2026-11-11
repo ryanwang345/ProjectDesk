@@ -44,6 +44,12 @@ spec:
     }
   }
 
+  // The VM Jenkins is not reachable by GitHub webhooks, so poll for new
+  // commits. CI's own "[skip ci]" tag commits skip every stage.
+  triggers {
+    pollSCM('H/2 * * * *')
+  }
+
   options {
     timestamps()
     buildDiscarder(logRotator(numToKeepStr: '10'))
@@ -162,7 +168,12 @@ spec:
 
                 set -- "--destination=${IMAGE}:${BUILD_NUMBER}"
 
-                if [ "${BRANCH_NAME:-}" = "main" ]; then
+                # BRANCH_NAME is set by multibranch jobs, GIT_BRANCH by plain
+                # pipeline jobs ("origin/main").
+                BRANCH="${BRANCH_NAME:-${GIT_BRANCH:-}}"
+                BRANCH="${BRANCH#origin/}"
+
+                if [ "$BRANCH" = "main" ]; then
                   set -- "$@" "--destination=${IMAGE}:latest"
                 fi
 
@@ -188,9 +199,15 @@ spec:
     }
 
     stage('Update Helm Image Tags') {
+      // GitOps hand-off: Jenkins writes the new immutable tag to values.yaml
+      // on main, and ArgoCD (auto-sync) rolls it out to the cluster.
       when {
         allOf {
-          branch 'main'
+          // `branch` only works in multibranch jobs; GIT_BRANCH covers
+          // plain pipeline jobs ("origin/main").
+          expression {
+            (env.BRANCH_NAME ?: env.GIT_BRANCH ?: '').replaceFirst('^origin/', '') == 'main'
+          }
           not { changelog '\\[skip ci\\]' }
         }
       }
@@ -209,31 +226,12 @@ spec:
 
               cd "$WORKSPACE"
 
-              VALUES="project-desk/chart/values.yaml"
-
-              awk -v tag="$BUILD_NUMBER" '
-                /^[^ ]/ { section=$1 }
-                (section == "api:" || section == "web:") && $1 == "tag:" {
-                  q=sprintf("%c",34)
-                  print "  tag: " q tag q
-                  next
-                }
-                { print }
-              ' "$VALUES" > "${VALUES}.new"
-
-              mv "${VALUES}.new" "$VALUES"
-
-              git -c safe.directory="$WORKSPACE" add "$VALUES"
-
-              if git -c safe.directory="$WORKSPACE" diff --cached --quiet; then
-                echo "Helm image tags are already up to date"
-                exit 0
-              fi
-
-              git -c safe.directory="$WORKSPACE" \
-                -c user.name="ProjectDesk CI" \
-                -c user.email="ci@users.noreply.github.com" \
-                commit -m "ci: update image tag to ${BUILD_NUMBER} [skip ci]"
+              g() {
+                git -c safe.directory="$WORKSPACE" \
+                  -c user.name="ProjectDesk CI" \
+                  -c user.email="ci@users.noreply.github.com" \
+                  "$@"
+              }
 
               ASKPASS="$WORKSPACE/.git-askpass"
               trap 'rm -f "$ASKPASS"' EXIT
@@ -244,14 +242,50 @@ spec:
 
               chmod 700 "$ASKPASS"
 
-              GIT_ASKPASS="$ASKPASS" \
-              GIT_TERMINAL_PROMPT=0 \
-                git -c safe.directory="$WORKSPACE" \
-                push \
-                "https://x-access-token@github.com/ryanwang345/ProjectDesk.git" \
-                HEAD:main
+              export GIT_ASKPASS="$ASKPASS"
+              export GIT_TERMINAL_PROMPT=0
 
-              echo "Helm image tags updated"
+              REMOTE="https://x-access-token@github.com/ryanwang345/ProjectDesk.git"
+              VALUES="project-desk/chart/values.yaml"
+
+              # Rebase onto the latest main each attempt so a commit pushed
+              # while this build ran does not reject the tag update.
+              for attempt in 1 2 3; do
+                g fetch --quiet "$REMOTE" main
+                g checkout --quiet --force -B ci-image-tag FETCH_HEAD
+
+                awk -v tag="$BUILD_NUMBER" '
+                  /^[^ ]/ { section=$1 }
+                  (section == "api:" || section == "web:") && $1 == "tag:" {
+                    q=sprintf("%c",34)
+                    print "  tag: " q tag q
+                    next
+                  }
+                  { print }
+                ' "$VALUES" > "${VALUES}.new"
+
+                mv "${VALUES}.new" "$VALUES"
+
+                g add "$VALUES"
+
+                if g diff --cached --quiet; then
+                  echo "Helm image tags are already ${BUILD_NUMBER}"
+                  exit 0
+                fi
+
+                g commit --quiet -m "ci: update image tag to ${BUILD_NUMBER} [skip ci]"
+
+                if g push "$REMOTE" HEAD:main; then
+                  echo "Helm image tags updated to ${BUILD_NUMBER}; ArgoCD will roll it out"
+                  exit 0
+                fi
+
+                echo "Push rejected (attempt ${attempt}), retrying"
+                sleep 5
+              done
+
+              echo "Could not push the image tag update"
+              exit 1
             '''
           }
         }
