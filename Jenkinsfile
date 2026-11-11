@@ -1,68 +1,46 @@
+
 pipeline {
   agent {
     kubernetes {
-      inheritFrom 'kubernetes-teams-vail'
+      cloud 'local-k8s'
       defaultContainer 'node'
       yaml '''
-        apiVersion: v1
-        kind: Pod
-        spec:
-          containers:
-            - name: jnlp
-              resources:
-                requests:
-                  cpu: 100m
-                  memory: 256Mi
-                limits:
-                  cpu: "1"
-                  memory: 512Mi
-            - name: node
-              image: node:22-bookworm
-              command: ['cat']
-              tty: true
-              resources:
-                requests:
-                  cpu: 500m
-                  memory: 1Gi
-                limits:
-                  cpu: "1"
-                  memory: 2Gi
-            - name: golang
-              image: golang:1.22-bookworm
-              command: ['cat']
-              tty: true
-              resources:
-                requests:
-                  cpu: 500m
-                  memory: 512Mi
-                limits:
-                  cpu: "1"
-                  memory: 1Gi
-            - name: helm
-              image: alpine/helm:4.3.1
-              command: ['cat']
-              tty: true
-              resources:
-                requests:
-                  cpu: 100m
-                  memory: 128Mi
-                limits:
-                  cpu: 500m
-                  memory: 256Mi
-            - name: kaniko
-              image: gcr.io/kaniko-project/executor:v1.23.2-debug
-              command: ['/busybox/cat']
-              tty: true
-              securityContext:
-                runAsUser: 0
-              resources:
-                requests:
-                  cpu: 500m
-                  memory: 1Gi
-                limits:
-                  cpu: "2"
-                  memory: 3Gi
-      '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: node
+      image: node:22-bookworm
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          memory: 1Gi
+          cpu: 500m
+
+    - name: golang
+      image: golang:1.22-bookworm
+      command: ['cat']
+      tty: true
+
+    - name: helm
+      image: alpine/helm:4.3.1
+      command: ['cat']
+      tty: true
+
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:v1.23.2-debug
+      command: ['/busybox/cat']
+      tty: true
+      resources:
+        requests:
+          memory: 1Gi
+          cpu: 500m
+        limits:
+          memory: 3Gi
+      securityContext:
+        runAsUser: 0
+'''
     }
   }
 
@@ -73,22 +51,24 @@ pipeline {
   }
 
   stages {
-    stage('Check') {
+    stage('Validate') {
       when {
-        not {
-          changelog '\\[skip ci\\]' // Skip checking if the commit message contains "[skip ci]"
-        }
+        not { changelog '\\[skip ci\\]' }
       }
+
       parallel {
         stage('Web') {
           steps {
             dir('project-desk') {
-              sh 'npm ci'
-              sh 'npm run lint'
-              sh 'npm run build'
+              sh '''
+                npm ci
+                npm run lint
+                npm run build
+              '''
             }
           }
         }
+
         stage('API') {
           steps {
             container('golang') {
@@ -98,19 +78,29 @@ pipeline {
             }
           }
         }
-        stage('E2E') {
+
+        stage('E2E & Helm') {
           steps {
             dir('project-desk/e2e') {
-              // The Cypress binary is installed and verified in the image build.
-              sh 'CYPRESS_INSTALL_BINARY=0 npm ci'
-              sh 'npm run typecheck'
+              sh '''
+                CYPRESS_INSTALL_BINARY=0 npm ci
+                npm run typecheck
+              '''
+
               container('helm') {
                 sh '''
                   for env in dev staging prod; do
-                    helm lint ./chart -f "chart/values-${env}.yaml" --set image.tag="ci-${BUILD_NUMBER}" --set-file dotenv=.env
+                    helm lint ./chart \
+                      -f "chart/values-${env}.yaml" \
+                      --set image.tag="ci-${BUILD_NUMBER}" \
+                      --set-file dotenv=.env
                   done
-                  helm template project-desk-e2e ./chart --namespace rwang \
-                    -f chart/values-dev.yaml --set image.tag="${BUILD_NUMBER}" --set-file dotenv=.env > /dev/null
+
+                  helm template project-desk-e2e ./chart \
+                    --namespace rwang \
+                    -f chart/values-dev.yaml \
+                    --set image.tag="${BUILD_NUMBER}" \
+                    --set-file dotenv=.env > /dev/null
                 '''
               }
             }
@@ -119,96 +109,151 @@ pipeline {
       }
     }
 
-    stage('Push images') {
+    stage('Build & Push Images') {
       when {
-        not {
-          changelog '\\[skip ci\\]' // Skip pushing images if the commit message contains "[skip ci]"
-        }
+        not { changelog '\\[skip ci\\]' }
       }
+
       steps {
-        container('kaniko') {
-          sh '''
-            # Jenkins runs this script with xtrace. Turn it off before any
-            # command expands the Docker Hub token, or the console prints it.
-            set +x
-            if [ -z "$DOCKERHUB_USER" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
-              echo "DOCKERHUB_USER and DOCKERHUB_TOKEN must be set on the Project Desk job."
-              exit 1
-            fi
-            mkdir -p /kaniko/.docker
-            AUTH=$(printf "%s:%s" "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN" | base64 | tr -d '\n')
-            printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}\n' "$AUTH" > /kaniko/.docker/config.json
-            unset AUTH
-            set -x
+        withCredentials([
+          string(
+            credentialsId: 'DOCKERHUB_USER',
+            variable: 'DOCKERHUB_USER'
+          ),
+          string(
+            credentialsId: 'DOCKERHUB_TOKEN',
+            variable: 'DOCKERHUB_TOKEN'
+          )
+        ]) {
+          container('kaniko') {
+            sh '''
+              set +x
+              set -eu
 
-            ROOT="${WORKSPACE:-$(pwd)}"
-            WEB_DEST="--destination=docker.io/${DOCKERHUB_USER}/project-desk-web:${BUILD_NUMBER}"
-            API_DEST="--destination=docker.io/${DOCKERHUB_USER}/project-desk-api:${BUILD_NUMBER}"
-            E2E_DEST="--destination=docker.io/${DOCKERHUB_USER}/project-desk-e2e:${BUILD_NUMBER}"
-            if [ "$BRANCH_NAME" = "main" ]; then
-              WEB_DEST="$WEB_DEST --destination=docker.io/${DOCKERHUB_USER}/project-desk-web:latest"
-              API_DEST="$API_DEST --destination=docker.io/${DOCKERHUB_USER}/project-desk-api:latest"
-              E2E_DEST="$E2E_DEST --destination=docker.io/${DOCKERHUB_USER}/project-desk-e2e:latest"
-            fi
+              mkdir -p /kaniko/.docker
+              trap 'rm -f /kaniko/.docker/config.json' EXIT
 
-            /kaniko/executor --context="dir://${ROOT}/project-desk" --dockerfile="${ROOT}/project-desk/Dockerfile" $WEB_DEST
-            /kaniko/executor --context="dir://${ROOT}/project-desk/server" --dockerfile="${ROOT}/project-desk/server/Dockerfile" $API_DEST
-            # The Cypress image is about 3 GB unpacked; redo snapshots and no
-            # compressed caching keep Kaniko under its memory limit.
-            /kaniko/executor --context="dir://${ROOT}/project-desk/e2e" --dockerfile="${ROOT}/project-desk/e2e/Dockerfile" \
-              --snapshot-mode=redo --compressed-caching=false \
-              $E2E_DEST
-            echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-web:${BUILD_NUMBER}"
-            echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-api:${BUILD_NUMBER}"
-            echo "Pushed docker.io/${DOCKERHUB_USER}/project-desk-e2e:${BUILD_NUMBER}"
-          '''
+              AUTH=$(printf '%s:%s' \
+                "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN" \
+                | base64 | tr -d '[:space:]')
+
+              printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}' \
+                "$AUTH" > /kaniko/.docker/config.json
+
+              chmod 600 /kaniko/.docker/config.json
+              unset AUTH
+
+              ROOT="$WORKSPACE/project-desk"
+
+              for app in web api e2e; do
+                case "$app" in
+                  web)
+                    CONTEXT="$ROOT"
+                    ;;
+                  api)
+                    CONTEXT="$ROOT/server"
+                    ;;
+                  e2e)
+                    CONTEXT="$ROOT/e2e"
+                    ;;
+                esac
+
+                IMAGE="docker.io/${DOCKERHUB_USER}/project-desk-${app}"
+
+                set -- "--destination=${IMAGE}:${BUILD_NUMBER}"
+
+                if [ "${BRANCH_NAME:-}" = "main" ]; then
+                  set -- "$@" "--destination=${IMAGE}:latest"
+                fi
+
+                if [ "$app" = "e2e" ]; then
+                  set -- "$@" \
+                    --snapshot-mode=redo \
+                    --compressed-caching=false
+                fi
+
+                echo "Building project-desk-${app}"
+
+                /kaniko/executor \
+                  --context="dir://${CONTEXT}" \
+                  --dockerfile="${CONTEXT}/Dockerfile" \
+                  "$@"
+
+                echo "Published ${IMAGE}:${BUILD_NUMBER}"
+              done
+            '''
+          }
         }
       }
     }
 
-    stage('Record image tag') {
+    stage('Update Helm Image Tags') {
       when {
         allOf {
           branch 'main'
-          not {
-            changelog '\\[skip ci\\]'
-          }
+          not { changelog '\\[skip ci\\]' }
         }
       }
+
       steps {
-        container('jnlp') {
-          sh '''
-            # Keep xtrace off for this whole stage. The GitHub token is in the
-            # environment, and the askpass helper reads it.
-            set +x
-            if [ -z "$GITHUB_TOKEN" ]; then
-              echo "GITHUB_TOKEN must be set on the Project Desk job so the image tag can be committed."
-              echo "Open Project Desk, then Configure, then Properties, then Environment variables, and add GITHUB_TOKEN."
-              exit 1
-            fi
-            ROOT="${WORKSPACE:-$(pwd)}"
-            cd "$ROOT"
-            awk -v tag="$BUILD_NUMBER" '
-              $0 ~ /^[^ ]/ { section=$1 }
-              section ~ /^api:/ && $1 == "tag:" { print "  tag: \\"" tag "\\""; next }
-              section ~ /^web:/ && $1 == "tag:" { print "  tag: \\"" tag "\\""; next }
-              { print }
-            ' project-desk/chart/values.yaml > project-desk/chart/values.yaml.new
-            mv project-desk/chart/values.yaml.new project-desk/chart/values.yaml
-            git add project-desk/chart/values.yaml
-            if git diff --cached --quiet; then
-              echo "Image tags already match build ${BUILD_NUMBER}"
-              exit 0
-            fi
-            git -c safe.directory="$ROOT" -c user.email="rwang@vailsys.com" -c user.name="Ryan Wang" \
-              commit -m "Roll Project Desk to image ${BUILD_NUMBER} [skip ci]"
-            printf '%s\n' '#!/bin/sh' 'printf "%s" "$GITHUB_TOKEN"' > "$ROOT/.git-askpass"
-            chmod 700 "$ROOT/.git-askpass"
-            GIT_ASKPASS="$ROOT/.git-askpass" GIT_TERMINAL_PROMPT=0 \
-              git -c safe.directory="$ROOT" \
-              push "https://x-access-token@github.com/ryanwang345/ProjectDesk.git" HEAD:main
-            rm -f "$ROOT/.git-askpass"
-          '''
+        withCredentials([
+          string(
+            credentialsId: 'GITHUB_TOKEN',
+            variable: 'GITHUB_TOKEN'
+          )
+        ]) {
+          container('jnlp') {
+            sh '''
+              set +x
+              set -eu
+
+              cd "$WORKSPACE"
+
+              VALUES="project-desk/chart/values.yaml"
+
+              awk -v tag="$BUILD_NUMBER" '
+                /^[^ ]/ { section=$1 }
+                (section == "api:" || section == "web:") && $1 == "tag:" {
+                  q=sprintf("%c",34)
+                  print "  tag: " q tag q
+                  next
+                }
+                { print }
+              ' "$VALUES" > "${VALUES}.new"
+
+              mv "${VALUES}.new" "$VALUES"
+
+              git -c safe.directory="$WORKSPACE" add "$VALUES"
+
+              if git -c safe.directory="$WORKSPACE" diff --cached --quiet; then
+                echo "Helm image tags are already up to date"
+                exit 0
+              fi
+
+              git -c safe.directory="$WORKSPACE" \
+                -c user.name="ProjectDesk CI" \
+                -c user.email="ci@users.noreply.github.com" \
+                commit -m "ci: update image tag to ${BUILD_NUMBER} [skip ci]"
+
+              ASKPASS="$WORKSPACE/.git-askpass"
+              trap 'rm -f "$ASKPASS"' EXIT
+
+              printf '%s\\n' \
+                '#!/bin/sh' \
+                'printf "%s" "$GITHUB_TOKEN"' > "$ASKPASS"
+
+              chmod 700 "$ASKPASS"
+
+              GIT_ASKPASS="$ASKPASS" \
+              GIT_TERMINAL_PROMPT=0 \
+                git -c safe.directory="$WORKSPACE" \
+                push \
+                "https://x-access-token@github.com/ryanwang345/ProjectDesk.git" \
+                HEAD:main
+
+              echo "Helm image tags updated"
+            '''
+          }
         }
       }
     }
