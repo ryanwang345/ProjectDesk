@@ -1,4 +1,3 @@
-
 pipeline {
   agent {
     kubernetes {
@@ -50,6 +49,18 @@ spec:
     pollSCM('H/2 * * * *')
   }
 
+  parameters {
+    booleanParam(
+      name: 'FORCE_BUILD',
+      defaultValue: false,
+      description: 'Force build and push all components regardless of git changes'
+    )
+  }
+
+  environment {
+    FORCE_BUILD = "${params.FORCE_BUILD ?: false}"
+  }
+
   options {
     timestamps()
     buildDiscarder(logRotator(numToKeepStr: '10'))
@@ -57,13 +68,124 @@ spec:
   }
 
   stages {
+    stage('Detect Changes') {
+      steps {
+        container('jnlp') {
+          sh '''
+            set +x
+            set -eu
+            cd "$WORKSPACE"
+
+            # Clean up marker files from previous builds
+            rm -f .ci-build-*
+
+            g() {
+              git -c safe.directory="$WORKSPACE" "$@"
+            }
+
+            COMMIT_MSG="$(g log -1 --pretty=%B)"
+            echo "Current commit: $(g rev-parse --short HEAD)"
+            echo "Commit message: ${COMMIT_MSG}"
+
+            if echo "$COMMIT_MSG" | grep -q '\\[skip ci\\]'; then
+              echo "[CI] [skip ci] detected in commit message. Skipping build."
+              exit 0
+            fi
+
+            # Check if force build is requested via parameter or commit message
+            if [ "${FORCE_BUILD:-false}" = "true" ] || echo "$COMMIT_MSG" | grep -qiE '\\[(force build|build all)\\]'; then
+              echo "[CI] Force build requested. Marking all components for build."
+              touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
+              exit 0
+            fi
+
+            # Determine base commit to diff against
+            BASE_COMMIT=""
+            if [ -n "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" ] && g cat-file -e "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}^{commit}" 2>/dev/null; then
+              BASE_COMMIT="$GIT_PREVIOUS_SUCCESSFUL_COMMIT"
+              echo "[CI] Comparing against previous successful commit: ${BASE_COMMIT}"
+            elif [ -n "${GIT_PREVIOUS_COMMIT:-}" ] && g cat-file -e "${GIT_PREVIOUS_COMMIT}^{commit}" 2>/dev/null; then
+              BASE_COMMIT="$GIT_PREVIOUS_COMMIT"
+              echo "[CI] Comparing against previous build commit: ${BASE_COMMIT}"
+            elif g rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+              BASE_COMMIT="HEAD~1"
+              echo "[CI] Comparing against HEAD~1"
+            fi
+
+            if [ -z "$BASE_COMMIT" ]; then
+              echo "[CI] No base commit found (initial build). Marking all components for build."
+              touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
+              exit 0
+            fi
+
+            CHANGED_FILES="$(g diff --name-only "$BASE_COMMIT" HEAD || true)"
+            echo "========================================"
+            echo "[CI] Changed files since ${BASE_COMMIT}:"
+            if [ -z "$CHANGED_FILES" ]; then
+              echo "  (none)"
+            else
+              echo "$CHANGED_FILES" | sed 's/^/  /'
+            fi
+            echo "========================================"
+
+            # 1. API: changes under project-desk/server/
+            if echo "$CHANGED_FILES" | grep -q '^project-desk/server/'; then
+              echo "[CI] -> Detected API changes"
+              touch .ci-build-api .ci-build-any
+            fi
+
+            # 2. E2E: changes under project-desk/e2e/
+            if echo "$CHANGED_FILES" | grep -q '^project-desk/e2e/'; then
+              echo "[CI] -> Detected E2E changes"
+              touch .ci-build-e2e .ci-build-any
+            fi
+
+            # 3. Helm: changes under project-desk/chart/
+            if echo "$CHANGED_FILES" | grep -q '^project-desk/chart/'; then
+              echo "[CI] -> Detected Helm chart changes"
+              touch .ci-build-helm
+            fi
+
+            # 4. Web: changes in project-desk/ excluding server/, e2e/, chart/, docs/, README
+            if echo "$CHANGED_FILES" | grep '^project-desk/' \
+              | grep -v '^project-desk/server/' \
+              | grep -v '^project-desk/e2e/' \
+              | grep -v '^project-desk/chart/' \
+              | grep -v '^project-desk/docs/' \
+              | grep -v '^project-desk/README.md' \
+              | grep -q .; then
+              echo "[CI] -> Detected Web frontend changes"
+              touch .ci-build-web .ci-build-any
+            fi
+
+            if [ ! -f .ci-build-any ] && [ ! -f .ci-build-helm ]; then
+              echo "[CI] No relevant monorepo changes detected in project-desk/."
+              echo "[CI] Skipping all test stages, Docker builds, and image pushes."
+            else
+              echo "[CI] Execution plan:"
+              [ -f .ci-build-web ] && echo "  - Web: BUILD & TEST" || echo "  - Web: SKIP"
+              [ -f .ci-build-api ] && echo "  - API: BUILD & TEST" || echo "  - API: SKIP"
+              [ -f .ci-build-e2e ] && echo "  - E2E: BUILD & TEST" || echo "  - E2E: SKIP"
+              [ -f .ci-build-helm ] && echo "  - Helm: LINT" || echo "  - Helm: SKIP"
+            fi
+          '''
+        }
+      }
+    }
+
     stage('Validate') {
       when {
-        not { changelog '\\[skip ci\\]' }
+        allOf {
+          not { changelog '\\[skip ci\\]' }
+          expression { return fileExists('.ci-build-any') || fileExists('.ci-build-helm') }
+        }
       }
 
       parallel {
         stage('Web') {
+          when {
+            expression { return fileExists('.ci-build-web') }
+          }
           steps {
             dir('project-desk') {
               sh '''
@@ -76,6 +198,9 @@ spec:
         }
 
         stage('API') {
+          when {
+            expression { return fileExists('.ci-build-api') }
+          }
           steps {
             container('golang') {
               dir('project-desk/server') {
@@ -86,12 +211,19 @@ spec:
         }
 
         stage('E2E & Helm') {
+          when {
+            expression { return fileExists('.ci-build-e2e') || fileExists('.ci-build-helm') }
+          }
           steps {
             dir('project-desk/e2e') {
-              sh '''
-                CYPRESS_INSTALL_BINARY=0 npm ci
-                npm run typecheck
-              '''
+              container('node') {
+                sh '''
+                  if [ -f "$WORKSPACE/.ci-build-e2e" ]; then
+                    CYPRESS_INSTALL_BINARY=0 npm ci
+                    npm run typecheck
+                  fi
+                '''
+              }
 
               container('helm') {
                 sh '''
@@ -117,7 +249,10 @@ spec:
 
     stage('Build & Push Images') {
       when {
-        not { changelog '\\[skip ci\\]' }
+        allOf {
+          not { changelog '\\[skip ci\\]' }
+          expression { return fileExists('.ci-build-any') }
+        }
       }
 
       steps {
@@ -152,6 +287,11 @@ spec:
               ROOT="$WORKSPACE/project-desk"
 
               for app in web api e2e; do
+                if [ ! -f "$WORKSPACE/.ci-build-${app}" ]; then
+                  echo "[Kaniko] Skipping project-desk-${app}: no changes detected."
+                  continue
+                fi
+
                 case "$app" in
                   web)
                     CONTEXT="$ROOT"
@@ -183,14 +323,14 @@ spec:
                     --compressed-caching=false
                 fi
 
-                echo "Building project-desk-${app}"
+                echo "[Kaniko] Building and pushing project-desk-${app}..."
 
                 /kaniko/executor \
                   --context="dir://${CONTEXT}" \
                   --dockerfile="${CONTEXT}/Dockerfile" \
                   "$@"
 
-                echo "Published ${IMAGE}:${BUILD_NUMBER}"
+                echo "[Kaniko] Published ${IMAGE}:${BUILD_NUMBER}"
               done
             '''
           }
@@ -209,6 +349,7 @@ spec:
             (env.BRANCH_NAME ?: env.GIT_BRANCH ?: '').replaceFirst('^origin/', '') == 'main'
           }
           not { changelog '\\[skip ci\\]' }
+          expression { return fileExists('.ci-build-web') || fileExists('.ci-build-api') }
         }
       }
 
@@ -248,15 +389,25 @@ spec:
               REMOTE="https://x-access-token@github.com/ryanwang345/ProjectDesk.git"
               VALUES="project-desk/chart/values.yaml"
 
+              UPDATE_WEB="false"
+              UPDATE_API="false"
+              [ -f "$WORKSPACE/.ci-build-web" ] && UPDATE_WEB="true"
+              [ -f "$WORKSPACE/.ci-build-api" ] && UPDATE_API="true"
+
               # Rebase onto the latest main each attempt so a commit pushed
               # while this build ran does not reject the tag update.
               for attempt in 1 2 3; do
                 g fetch --quiet "$REMOTE" main
                 g checkout --quiet --force -B ci-image-tag FETCH_HEAD
 
-                awk -v tag="$BUILD_NUMBER" '
+                awk -v tag="$BUILD_NUMBER" -v updateWeb="$UPDATE_WEB" -v updateApi="$UPDATE_API" '
                   /^[^ ]/ { section=$1 }
-                  (section == "api:" || section == "web:") && $1 == "tag:" {
+                  section == "api:" && $1 == "tag:" && updateApi == "true" {
+                    q=sprintf("%c",34)
+                    print "  tag: " q tag q
+                    next
+                  }
+                  section == "web:" && $1 == "tag:" && updateWeb == "true" {
                     q=sprintf("%c",34)
                     print "  tag: " q tag q
                     next
@@ -269,11 +420,16 @@ spec:
                 g add "$VALUES"
 
                 if g diff --cached --quiet; then
-                  echo "Helm image tags are already ${BUILD_NUMBER}"
+                  echo "Helm image tags are already up to date"
                   exit 0
                 fi
 
-                g commit --quiet -m "ci: update image tag to ${BUILD_NUMBER} [skip ci]"
+                MSG="ci: update"
+                [ "$UPDATE_WEB" = "true" ] && MSG="${MSG} web"
+                [ "$UPDATE_API" = "true" ] && MSG="${MSG} api"
+                MSG="${MSG} image tag to ${BUILD_NUMBER} [skip ci]"
+
+                g commit --quiet -m "$MSG"
 
                 if g push "$REMOTE" HEAD:main; then
                   echo "Helm image tags updated to ${BUILD_NUMBER}; ArgoCD will roll it out"
