@@ -47,8 +47,8 @@ spec:
 
   options {
     timestamps()
-    buildDiscarder(logRotator(numToKeepStr: '20'))
-    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '5'))
+    disableConcurrentBuilds(abortPrevious: true)
   }
 
   stages {
