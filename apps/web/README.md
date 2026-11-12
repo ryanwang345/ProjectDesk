@@ -1,4 +1,4 @@
-# Project Desk
+# LinguaDesk (AI English Workbench)
 
 A small React desk for the projects you are actually working on. A Go API saves each card in Postgres. nginx serves the built page and forwards `/api` to Go.
 

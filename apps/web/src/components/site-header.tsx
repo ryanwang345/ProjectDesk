@@ -177,7 +177,7 @@ export function SiteHeader() {
                   {t('brand')}
                 </span>
                 <span className="mt-1 block text-[10px] font-semibold tracking-[0.18em] text-primary uppercase">
-                  SRS WORKBENCH
+                  AI ENGLISH WORKBENCH
                 </span>
               </span>
             </Link>

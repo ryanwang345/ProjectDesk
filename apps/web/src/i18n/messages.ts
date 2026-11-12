@@ -1,5 +1,5 @@
 export const en = {
-  brand: 'Project Desk',
+  brand: 'LinguaDesk',
   footer: 'Saved in Postgres. nginx serves the page and forwards /api to Go.',
   lang: 'Language',
   'theme.menu': 'Theme',
@@ -250,7 +250,7 @@ export const en = {
   'state.CANCELLED': 'Cancelled',
 
   'about.title': 'How it runs',
-  'about.lead': 'Project Desk is a React board, a Go API, and Postgres. nginx sits in front and sends each piece to the right place.',
+  'about.lead': 'LinguaDesk is an AI-powered English learning platform featuring an interactive study workbench, Go API, and Postgres. nginx sits in front and sends each piece to the right place.',
   'about.browser': 'Browser',
   'about.browserBody': 'React, Vite, and Tailwind. The language you pick is saved in this browser only.',
   'about.edge': 'nginx',
@@ -491,7 +491,7 @@ export const en = {
 export type MessageKey = keyof typeof en
 
 export const zh: Record<MessageKey, string> = {
-  brand: 'Project Desk',
+  brand: 'LinguaDesk',
   footer: '数据保存在 Postgres。nginx 提供这个页面，并把 /api 转发给 Go。',
   lang: '语言',
   'theme.menu': '主题',
@@ -742,7 +742,7 @@ export const zh: Record<MessageKey, string> = {
   'state.CANCELLED': '已取消',
 
   'about.title': '如何运行',
-  'about.lead': '这个页面是静态的 React 构建。nginx 提供页面，并把 /api 转发给 Go 服务。Go 把工作台和循环保存在 Postgres。',
+  'about.lead': 'LinguaDesk 是基于 React、Go 服务与 Postgres 构建的 AI 英语学习工作台。nginx 提供静态页面并将 /api 转发给后端服务。',
   'about.browser': '浏览器',
   'about.browserBody': 'React、Vite 和 Tailwind。你选的语言只保存在这个浏览器里。',
   'about.edge': 'nginx',

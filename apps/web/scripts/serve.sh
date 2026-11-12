@@ -41,5 +41,5 @@ if [[ -f "$PREFIX/logs/nginx.pid" ]]; then
 fi
 
 sed "s#__ROOT__#${ROOT}#g" "$TEMPLATE" > "$CONF"
-echo "Project Desk is being served at http://127.0.0.1:${PORT}"
+echo "LinguaDesk is being served at http://127.0.0.1:${PORT}"
 exec nginx -c "$CONF" -p "$PREFIX/"
