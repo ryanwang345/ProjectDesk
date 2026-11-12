@@ -1,5 +1,5 @@
-import type { EnglishCard } from '../../web/src/lib/english'
-import type { Question } from '../../web/src/lib/lesson'
+import type { EnglishCard } from '../../../web/src/lib/english'
+import type { Question } from '../../../web/src/lib/lesson'
 
 const cards: EnglishCard[] = [
   { word: 'abroad', meaning: '在国外' },
