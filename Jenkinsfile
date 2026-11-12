@@ -162,16 +162,17 @@ spec:
             fi
 
             # Determine base commit to diff against
+            HEAD_SHA="$(g rev-parse HEAD)"
             BASE_COMMIT=""
-            if [ -n "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" ] && g cat-file -e "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}^{commit}" 2>/dev/null; then
+            if [ -n "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" ] && [ "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}" != "$HEAD_SHA" ] && g cat-file -e "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}^{commit}" 2>/dev/null; then
               BASE_COMMIT="$GIT_PREVIOUS_SUCCESSFUL_COMMIT"
               echo "[CI] Comparing against previous successful commit: ${BASE_COMMIT}"
-            elif [ -n "${GIT_PREVIOUS_COMMIT:-}" ] && g cat-file -e "${GIT_PREVIOUS_COMMIT}^{commit}" 2>/dev/null; then
+            elif [ -n "${GIT_PREVIOUS_COMMIT:-}" ] && [ "${GIT_PREVIOUS_COMMIT}" != "$HEAD_SHA" ] && g cat-file -e "${GIT_PREVIOUS_COMMIT}^{commit}" 2>/dev/null; then
               BASE_COMMIT="$GIT_PREVIOUS_COMMIT"
               echo "[CI] Comparing against previous build commit: ${BASE_COMMIT}"
             elif g rev-parse --verify HEAD~1 >/dev/null 2>&1; then
               BASE_COMMIT="HEAD~1"
-              echo "[CI] Comparing against HEAD~1"
+              echo "[CI] Comparing against HEAD~1 (rebuild or re-triggered commit detected)"
             fi
 
             if [ -z "$BASE_COMMIT" ]; then
