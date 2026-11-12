@@ -17,18 +17,28 @@ spec:
       tty: true
       resources:
         requests:
-          memory: 1Gi
-          cpu: 500m
+          memory: 256Mi
+          cpu: 100m
+        limits:
+          memory: 2Gi
 
     - name: golang
       image: golang:1.22-bookworm
       command: ['cat']
       tty: true
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 100m
 
     - name: helm
       image: alpine/helm:4.3.1
       command: ['cat']
       tty: true
+      resources:
+        requests:
+          memory: 64Mi
+          cpu: 50m
 
     - name: buildkit
       image: moby/buildkit:v0.34.2-rootless
@@ -41,8 +51,8 @@ spec:
           value: --oci-worker-no-process-sandbox --oci-worker-snapshotter=native
       resources:
         requests:
-          memory: 1Gi
-          cpu: 500m
+          memory: 512Mi
+          cpu: 200m
         limits:
           memory: 3Gi
       securityContext:
