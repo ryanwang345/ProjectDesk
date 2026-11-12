@@ -134,7 +134,7 @@ spec:
                   exit 0
                 fi
 
-                MSG="deploy: update ${COMPONENT} image tag to ${TAG} [skip ci]"
+                MSG="release: update ${COMPONENT} image tag to ${TAG}"
                 g commit --quiet -m "$MSG"
 
                 if g push "$REMOTE" HEAD:main; then

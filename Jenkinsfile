@@ -214,8 +214,8 @@ spec:
               touch .ci-build-e2e .ci-build-any
             fi
 
-            # 3. Helm: changes under deploy/helm/ (or legacy project-desk/chart/)
-            if echo "$CHANGED_FILES" | grep -q -E '^(deploy/helm/|project-desk/chart/)'; then
+            # 3. Helm: chart structural/template changes (ignore pure values.yaml image tag updates)
+            if echo "$CHANGED_FILES" | grep -E '^(deploy/helm/|project-desk/chart/)' | grep -v -E 'values\.ya?ml$' | grep -q .; then
               echo "[CI] -> Detected Helm chart changes"
               touch .ci-build-helm
             fi
