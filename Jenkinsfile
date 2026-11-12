@@ -191,7 +191,7 @@ spec:
             echo "========================================"
 
             # Filter out documentation, markdown, diagrams, and assets from triggering container builds
-            CODE_CHANGED_FILES="$(echo "$CHANGED_FILES" | grep -v -E '\.(md|markdown|mmd|svg|png|jpg|jpeg|gif)$' || true)"
+            CODE_CHANGED_FILES="$(echo "$CHANGED_FILES" | grep -v -E '[.](md|markdown|mmd|svg|png|jpg|jpeg|gif)$' || true)"
 
             # Exercise builders when the pipeline itself changes.
             # Rebuild Web and API by default; skip E2E unless explicitly requested to prevent node disk exhaustion.
