@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   AlertTriangle,
   ArrowRight,
+  Award,
   BookCheck,
   BookMarked,
   BookOpen,
@@ -10,12 +11,16 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
+  Flame,
   GraduationCap,
   HelpCircle,
+  Layers,
   Lightbulb,
+  RefreshCw,
   RotateCcw,
   Search,
   Sparkles,
+  Target,
   XCircle,
   Zap,
 } from 'lucide-react'
@@ -26,7 +31,9 @@ import { useI18n } from '@/i18n'
 import {
   BAND_NINE_TEMPLATES,
   GRAMMAR_CATEGORIES,
+  GRAMMAR_QUESTION_BANK,
   GRAMMAR_TOPICS,
+  type GrammarBankQuestion,
   type GrammarCategory,
   type SentenceTemplate,
 } from '@/lib/grammar-data'
@@ -43,15 +50,20 @@ export function GrammarPage() {
   const [expandedTopicId, setExpandedTopicId] = useState<string | null>(GRAMMAR_TOPICS[0].id)
   const [copiedTemplateId, setCopiedTemplateId] = useState<string | null>(null)
 
-  // Interactive Quiz state
-  const [quizIdx, setQuizIdx] = useState(0)
-  const [selectedOption, setSelectedOption] = useState<number | null>(null)
-  const [isAnswerChecked, setIsAnswerChecked] = useState(false)
-  const [quizScore, setQuizScore] = useState(0)
-  const [quizFinished, setQuizFinished] = useState(false)
+  // In-topic mini-quiz state: topicId -> { qIdx: number, picked: number | null, checked: boolean }
+  const [topicQuizState, setTopicQuizState] = useState<
+    Record<string, { qIdx: number; picked: number | null; checked: boolean }>
+  >({})
 
-  // Inline topic quiz states (topicId -> { picked: number, checked: boolean })
-  const [topicQuizState, setTopicQuizState] = useState<Record<string, { picked: number | null; checked: boolean }>>({})
+  // Question bank quiz states
+  const [bankMode, setBankMode] = useState<'5-sprint' | '10-focus' | 'all' | 'mistakes'>('5-sprint')
+  const [bankCategoryFilter, setBankCategoryFilter] = useState<GrammarCategory | 'all'>('all')
+  const [bankCurrentIdx, setBankCurrentIdx] = useState(0)
+  const [bankSelectedOpt, setBankSelectedOpt] = useState<number | null>(null)
+  const [bankIsChecked, setBankIsChecked] = useState(false)
+  const [bankScore, setBankScore] = useState(0)
+  const [bankFinished, setBankFinished] = useState(false)
+  const [wrongQuestionIds, setWrongQuestionIds] = useState<string[]>([])
 
   // Filter topics
   const filteredTopics = useMemo(() => {
@@ -71,43 +83,112 @@ export function GrammarPage() {
     })
   }, [selectedCategory, selectedBand, searchQuery])
 
+  // Active question bank list based on mode & filter
+  const activeQuestions = useMemo(() => {
+    let pool = GRAMMAR_QUESTION_BANK
+    if (bankCategoryFilter !== 'all') {
+      pool = pool.filter((q) => q.category === bankCategoryFilter)
+    }
+
+    if (bankMode === 'mistakes') {
+      return pool.filter((q) => wrongQuestionIds.includes(q.id))
+    }
+    if (bankMode === '5-sprint') {
+      return pool.slice(0, 5)
+    }
+    if (bankMode === '10-focus') {
+      return pool.slice(0, 10)
+    }
+    return pool
+  }, [bankMode, bankCategoryFilter, wrongQuestionIds])
+
+  const currentBankQuestion: GrammarBankQuestion | undefined = activeQuestions[bankCurrentIdx]
+
   function handleCopy(template: SentenceTemplate) {
     void navigator.clipboard.writeText(template.templateEn)
     setCopiedTemplateId(template.id)
     window.setTimeout(() => setCopiedTemplateId(null), 2000)
   }
 
+  // Handle inline in-topic mini quiz
   function handleInlineQuizPick(topicId: string, optIdx: number) {
-    if (topicQuizState[topicId]?.checked) return
+    const curr = topicQuizState[topicId]
+    if (curr?.checked) return
     setTopicQuizState((prev) => ({
       ...prev,
-      [topicId]: { picked: optIdx, checked: false },
+      [topicId]: {
+        qIdx: curr?.qIdx ?? 0,
+        picked: optIdx,
+        checked: false,
+      },
     }))
   }
 
   function handleInlineQuizCheck(topicId: string) {
+    const curr = topicQuizState[topicId]
+    if (!curr || curr.picked === null) return
     setTopicQuizState((prev) => ({
       ...prev,
-      [topicId]: { picked: prev[topicId]?.picked ?? null, checked: true },
+      [topicId]: {
+        ...curr,
+        checked: true,
+      },
     }))
   }
 
-  function handleNextGlobalQuiz() {
-    if (quizIdx + 1 < GRAMMAR_TOPICS.length) {
-      setQuizIdx((prev) => prev + 1)
-      setSelectedOption(null)
-      setIsAnswerChecked(false)
+  function handleInlineQuizNext(topicId: string, totalQuizzes: number) {
+    const curr = topicQuizState[topicId]
+    const nextIdx = ((curr?.qIdx ?? 0) + 1) % totalQuizzes
+    setTopicQuizState((prev) => ({
+      ...prev,
+      [topicId]: {
+        qIdx: nextIdx,
+        picked: null,
+        checked: false,
+      },
+    }))
+  }
+
+  // Question bank handlers
+  function handleStartBankMode(mode: '5-sprint' | '10-focus' | 'all' | 'mistakes') {
+    setBankMode(mode)
+    setBankCurrentIdx(0)
+    setBankSelectedOpt(null)
+    setBankIsChecked(false)
+    setBankScore(0)
+    setBankFinished(false)
+  }
+
+  function handleBankSubmit() {
+    if (bankSelectedOpt === null || !currentBankQuestion) return
+    setBankIsChecked(true)
+    const isCorrect = bankSelectedOpt === currentBankQuestion.correctIndex
+    if (isCorrect) {
+      setBankScore((s) => s + 1)
+      // If was previously marked wrong, remove from mistakes
+      setWrongQuestionIds((prev) => prev.filter((id) => id !== currentBankQuestion.id))
     } else {
-      setQuizFinished(true)
+      // Record wrong question
+      setWrongQuestionIds((prev) => (prev.includes(currentBankQuestion.id) ? prev : [...prev, currentBankQuestion.id]))
     }
   }
 
-  function handleRestartGlobalQuiz() {
-    setQuizIdx(0)
-    setSelectedOption(null)
-    setIsAnswerChecked(false)
-    setQuizScore(0)
-    setQuizFinished(false)
+  function handleBankNext() {
+    if (bankCurrentIdx + 1 < activeQuestions.length) {
+      setBankCurrentIdx((idx) => idx + 1)
+      setBankSelectedOpt(null)
+      setBankIsChecked(false)
+    } else {
+      setBankFinished(true)
+    }
+  }
+
+  function handleRestartBank() {
+    setBankCurrentIdx(0)
+    setBankSelectedOpt(null)
+    setBankIsChecked(false)
+    setBankScore(0)
+    setBankFinished(false)
   }
 
   return (
@@ -136,12 +217,12 @@ export function GrammarPage() {
               <span className="text-[11px] text-muted-foreground">{zh ? '核心专题' : 'Core Topics'}</span>
             </div>
             <div className="flex flex-col items-center justify-center rounded-2xl border border-border/70 bg-background/70 px-4 py-2.5 text-center shadow-2xs">
-              <span className="font-mono text-lg font-bold text-emerald-500">Band 8.5</span>
-              <span className="text-[11px] text-muted-foreground">{zh ? '最高句式目标' : 'Target Band'}</span>
+              <span className="font-mono text-lg font-bold text-amber-500">{GRAMMAR_QUESTION_BANK.length}</span>
+              <span className="text-[11px] text-muted-foreground">{zh ? '题库考题' : 'Questions'}</span>
             </div>
             <div className="flex flex-col items-center justify-center rounded-2xl border border-border/70 bg-background/70 px-4 py-2.5 text-center shadow-2xs">
-              <span className="font-mono text-lg font-bold text-foreground">{BAND_NINE_TEMPLATES.length}</span>
-              <span className="text-[11px] text-muted-foreground">{zh ? '实战模板' : 'Templates'}</span>
+              <span className="font-mono text-lg font-bold text-emerald-500">Band 8.5+</span>
+              <span className="text-[11px] text-muted-foreground">{zh ? '高分目标' : 'Target Band'}</span>
             </div>
           </div>
         </div>
@@ -161,6 +242,23 @@ export function GrammarPage() {
         >
           <BookMarked className="size-3.5" aria-hidden="true" />
           <span>{zh ? '语法精讲与句式矩阵' : 'Grammar Deep-Dive'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('quiz')}
+          className={cn(
+            'inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium transition',
+            activeTab === 'quiz'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'border border-border/70 bg-card/60 text-muted-foreground hover:bg-card hover:text-foreground',
+          )}
+        >
+          <BookCheck className="size-3.5" aria-hidden="true" />
+          <span>{zh ? '全真语法题库与自测' : 'Grammar Question Bank'}</span>
+          <span className="ml-1 rounded-full bg-primary/20 px-1.5 py-0.2 text-[10px] font-mono">
+            {GRAMMAR_QUESTION_BANK.length}
+          </span>
         </button>
 
         <button
@@ -190,23 +288,9 @@ export function GrammarPage() {
           <Zap className="size-3.5" aria-hidden="true" />
           <span>{zh ? '雅思 9 分句式模板库' : 'Band 9 Sentence Templates'}</span>
         </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('quiz')}
-          className={cn(
-            'inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium transition',
-            activeTab === 'quiz'
-              ? 'bg-primary text-primary-foreground shadow-xs'
-              : 'border border-border/70 bg-card/60 text-muted-foreground hover:bg-card hover:text-foreground',
-          )}
-        >
-          <BookCheck className="size-3.5" aria-hidden="true" />
-          <span>{zh ? '随堂自测与考点攻克' : 'Grammar Mastery Quiz'}</span>
-        </button>
       </div>
 
-      {/* TAB 1: TOPICS (DEEP DIVE) */}
+      {/* TAB 1: TOPICS (DEEP DIVE WITH INLINE MINI-QUIZZES) */}
       {activeTab === 'topics' && (
         <div className="space-y-6">
           {/* Filters & Search */}
@@ -255,6 +339,7 @@ export function GrammarPage() {
                 <option value="7.0">Band 7.0+</option>
                 <option value="7.5">Band 7.5+</option>
                 <option value="8.0">Band 8.0+</option>
+                <option value="8.5">Band 8.5+</option>
               </select>
             </div>
           </div>
@@ -268,7 +353,11 @@ export function GrammarPage() {
             ) : (
               filteredTopics.map((topic) => {
                 const isExpanded = expandedTopicId === topic.id
-                const topicQuiz = topicQuizState[topic.id]
+                const topicQuizzes = topic.quizzes ?? [topic.quiz]
+                const state = topicQuizState[topic.id] ?? { qIdx: 0, picked: null, checked: false }
+                const currentQuiz = topicQuizzes[state.qIdx % topicQuizzes.length]
+                const totalMiniQuizzes = topicQuizzes.length
+
                 return (
                   <article
                     key={topic.id}
@@ -408,44 +497,66 @@ export function GrammarPage() {
                           </div>
                         </div>
 
-                        {/* Inline Practice Quiz */}
+                        {/* Interactive In-Card Mini Quiz */}
                         <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-4.5 space-y-3">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-primary">
-                              <GraduationCap className="size-3.5" />
-                              {zh ? '专题随堂诊断 (Diagnostic Check)' : 'Mini Diagnostic'}
-                            </span>
-                            {topicQuiz?.checked && (
-                              <Badge
-                                variant={topicQuiz.picked === topic.quiz.correctIndex ? 'default' : 'destructive'}
-                                className="text-[10px]"
-                              >
-                                {topicQuiz.picked === topic.quiz.correctIndex
-                                  ? (zh ? '回答正确 ✓' : 'Correct ✓')
-                                  : (zh ? '回答有误 ✗' : 'Incorrect ✗')}
-                              </Badge>
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-primary">
+                                <GraduationCap className="size-3.5" />
+                                {zh ? '专题随堂小测试' : 'Topic Mini-Quiz'}
+                              </span>
+                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-mono text-primary">
+                                {state.qIdx + 1} / {totalMiniQuizzes}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              {state.checked && (
+                                <Badge
+                                  variant={state.picked === currentQuiz.correctIndex ? 'default' : 'destructive'}
+                                  className="text-[10px]"
+                                >
+                                  {state.picked === currentQuiz.correctIndex
+                                    ? (zh ? '回答正确 ✓' : 'Correct ✓')
+                                    : (zh ? '回答有误 ✗' : 'Incorrect ✗')}
+                                </Badge>
+                              )}
+                              {totalMiniQuizzes > 1 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleInlineQuizNext(topic.id, totalMiniQuizzes)}
+                                  className="h-6 gap-1 rounded-full px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                                >
+                                  <span>{zh ? '换一题' : 'Next Quiz'}</span>
+                                  <RefreshCw className="size-2.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium text-foreground">
+                              {currentQuiz.question}
+                            </p>
+                            {zh && currentQuiz.questionZh && (
+                              <p className="text-[11px] text-muted-foreground">{currentQuiz.questionZh}</p>
                             )}
                           </div>
 
-                          <p className="text-xs font-medium text-foreground">
-                            {topic.quiz.question}
-                          </p>
-                          {zh && topic.quiz.questionZh && (
-                            <p className="text-[11px] text-muted-foreground">{topic.quiz.questionZh}</p>
-                          )}
-
                           <div className="space-y-1.5 pt-1">
-                            {topic.quiz.options.map((opt, optIdx) => {
-                              const isPicked = topicQuiz?.picked === optIdx
-                              const isCorrect = optIdx === topic.quiz.correctIndex
+                            {currentQuiz.options.map((opt, optIdx) => {
+                              const isPicked = state.picked === optIdx
+                              const isCorrect = optIdx === currentQuiz.correctIndex
                               return (
                                 <button
                                   key={optIdx}
                                   type="button"
+                                  disabled={state.checked}
                                   onClick={() => handleInlineQuizPick(topic.id, optIdx)}
                                   className={cn(
                                     'w-full text-left rounded-xl border p-2.5 text-xs transition flex items-start gap-2.5',
-                                    !topicQuiz?.checked
+                                    !state.checked
                                       ? isPicked
                                         ? 'border-primary bg-primary/10 text-primary font-medium'
                                         : 'border-border/70 bg-card hover:bg-card/80 text-foreground/90'
@@ -465,28 +576,32 @@ export function GrammarPage() {
                             })}
                           </div>
 
+                          {state.checked && (
+                            <div className="rounded-xl border border-border/80 bg-muted/40 p-3 text-xs space-y-1">
+                              <p className="font-medium text-foreground">{zh ? '解析依据：' : 'Rationale: '}</p>
+                              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                                {currentQuiz.explanation}
+                              </p>
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-between pt-2">
                             <span className="text-[11px] text-muted-foreground">
                               💡 <strong>{zh ? '应试锦囊：' : 'Tip: '}</strong>
                               {topic.examTips}
                             </span>
-                            {!topicQuiz?.checked && topicQuiz?.picked !== null && topicQuiz?.picked !== undefined && (
+
+                            {!state.checked && (
                               <Button
                                 size="sm"
+                                disabled={state.picked === null}
                                 onClick={() => handleInlineQuizCheck(topic.id)}
-                                className="h-7 rounded-full text-xs"
+                                className="h-7 rounded-full px-3.5 text-xs"
                               >
-                                {zh ? '核对答案' : 'Check'}
+                                {zh ? '校验答案' : 'Check'}
                               </Button>
                             )}
                           </div>
-
-                          {topicQuiz?.checked && (
-                            <div className="mt-2 rounded-xl bg-background/80 p-3 text-[11px] leading-relaxed text-muted-foreground border border-border/60">
-                              <strong className="text-foreground">{zh ? '解析：' : 'Analysis: '}</strong>
-                              {topic.quiz.explanation}
-                            </div>
-                          )}
                         </div>
                       </div>
                     )}
@@ -498,18 +613,322 @@ export function GrammarPage() {
         </div>
       )}
 
-      {/* TAB 2: CLINIC (ERROR DIAGNOSIS) */}
+      {/* TAB 2: FULL QUESTION BANK & MASTERY */}
+      {activeTab === 'quiz' && (
+        <div className="space-y-6">
+          {/* Bank Mode Switcher Banner */}
+          <div className="flex flex-col gap-4 rounded-3xl border border-primary/20 bg-gradient-to-r from-primary/[0.04] via-card to-card p-5 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Target className="size-4 text-primary" />
+                <h2 className="font-display text-base font-bold text-foreground">
+                  {zh ? '全真语法题库测试中心' : 'Grammar Question Bank & Drills'}
+                </h2>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {zh
+                  ? '精选题库直击倒装、让步、分词、学术谨慎语气与高频硬伤错误，智能错题收录。'
+                  : 'High-yield examination items spanning inversion, clauses, hedging, and high-frequency writing pitfalls.'}
+              </p>
+            </div>
+
+            {/* Mode selection buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant={bankMode === '5-sprint' ? 'default' : 'outline'}
+                onClick={() => handleStartBankMode('5-sprint')}
+                className="h-8 gap-1.5 rounded-full text-xs"
+              >
+                <Flame className="size-3 text-amber-500" />
+                <span>{zh ? '5 题速测' : '5-Item Sprint'}</span>
+              </Button>
+              <Button
+                size="sm"
+                variant={bankMode === '10-focus' ? 'default' : 'outline'}
+                onClick={() => handleStartBankMode('10-focus')}
+                className="h-8 gap-1.5 rounded-full text-xs"
+              >
+                <Zap className="size-3 text-primary" />
+                <span>{zh ? '10 题强化' : '10-Item Focus'}</span>
+              </Button>
+              <Button
+                size="sm"
+                variant={bankMode === 'all' ? 'default' : 'outline'}
+                onClick={() => handleStartBankMode('all')}
+                className="h-8 gap-1.5 rounded-full text-xs"
+              >
+                <Layers className="size-3" />
+                <span>{zh ? `全真模考 (${GRAMMAR_QUESTION_BANK.length})` : 'All Questions'}</span>
+              </Button>
+              {wrongQuestionIds.length > 0 && (
+                <Button
+                  size="sm"
+                  variant={bankMode === 'mistakes' ? 'default' : 'outline'}
+                  onClick={() => handleStartBankMode('mistakes')}
+                  className={cn(
+                    'h-8 gap-1.5 rounded-full text-xs',
+                    bankMode === 'mistakes' ? 'bg-destructive text-destructive-foreground' : 'border-destructive/40 text-destructive',
+                  )}
+                >
+                  <XCircle className="size-3" />
+                  <span>{zh ? `错题本 (${wrongQuestionIds.length})` : `Mistakes (${wrongQuestionIds.length})`}</span>
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Category Filter for Bank */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-muted-foreground mr-1">{zh ? '分类筛选：' : 'Category: '}</span>
+            {GRAMMAR_CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  setBankCategoryFilter(cat.id)
+                  setBankCurrentIdx(0)
+                  setBankSelectedOpt(null)
+                  setBankIsChecked(false)
+                }}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-medium transition',
+                  bankCategoryFilter === cat.id
+                    ? 'bg-primary text-primary-foreground font-semibold'
+                    : 'border border-border/80 bg-card text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {zh ? cat.labelZh : cat.labelEn}
+              </button>
+            ))}
+          </div>
+
+          {/* Active Question Box */}
+          <div className="max-w-2xl mx-auto space-y-6">
+            {activeQuestions.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-border p-12 text-center space-y-3">
+                <CheckCircle2 className="size-8 mx-auto text-emerald-500" />
+                <p className="text-sm font-medium text-foreground">
+                  {zh ? '暂无符合题目的练习项（若在错题本模式，说明你目前没有未解决错题）！' : 'No items match this filter.'}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleStartBankMode('5-sprint')}
+                  className="rounded-full text-xs"
+                >
+                  {zh ? '返回 5 题速测' : 'Start 5-Item Sprint'}
+                </Button>
+              </div>
+            ) : !bankFinished && currentBankQuestion ? (
+              <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-xs space-y-6">
+                {/* Progress Header */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-primary">
+                      {zh
+                        ? `考题 ${bankCurrentIdx + 1} / ${activeQuestions.length}`
+                        : `Question ${bankCurrentIdx + 1} of ${activeQuestions.length}`}
+                    </span>
+                    <Badge variant="outline" className="border-primary/30 text-[10px]">
+                      {currentBankQuestion.bandTarget}
+                    </Badge>
+                    <span className="rounded bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                      {currentBankQuestion.difficulty}
+                    </span>
+                  </div>
+                  <span className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                    {zh ? `当前得分: ${bankScore}` : `Score: ${bankScore}`}
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    style={{ width: `${((bankCurrentIdx + 1) / activeQuestions.length) * 100}%` }}
+                  />
+                </div>
+
+                {/* Question Prompt */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-mono font-semibold text-primary uppercase">
+                      {currentBankQuestion.topicTitle}
+                    </span>
+                    <Pronunciation word={currentBankQuestion.question} showText={false} />
+                  </div>
+                  <h3 className="font-display text-base font-bold text-foreground leading-snug">
+                    {currentBankQuestion.question}
+                  </h3>
+                  {zh && currentBankQuestion.questionZh && (
+                    <p className="text-xs text-muted-foreground">{currentBankQuestion.questionZh}</p>
+                  )}
+                </div>
+
+                {/* Options List */}
+                <div className="space-y-2">
+                  {currentBankQuestion.options.map((opt, oIdx) => {
+                    const isPicked = bankSelectedOpt === oIdx
+                    const isCorrect = oIdx === currentBankQuestion.correctIndex
+                    return (
+                      <button
+                        key={oIdx}
+                        type="button"
+                        disabled={bankIsChecked}
+                        onClick={() => setBankSelectedOpt(oIdx)}
+                        className={cn(
+                          'w-full text-left rounded-2xl border p-3.5 text-xs transition flex items-start gap-3',
+                          !bankIsChecked
+                            ? isPicked
+                              ? 'border-primary bg-primary/10 text-primary font-medium'
+                              : 'border-border/80 bg-background hover:border-primary/40 text-foreground'
+                            : isCorrect
+                              ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 font-medium'
+                              : isPicked
+                                ? 'border-destructive bg-destructive/10 text-destructive'
+                                : 'border-border/50 bg-card/40 text-muted-foreground opacity-60',
+                        )}
+                      >
+                        <span className="font-mono text-xs font-semibold opacity-70">
+                          {String.fromCharCode(65 + oIdx)}.
+                        </span>
+                        <span className="min-w-0 flex-1 leading-relaxed">{opt}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Explanation & Trap Alert */}
+                {bankIsChecked && (
+                  <div className="space-y-2.5 rounded-2xl border border-border/80 bg-muted/30 p-4 text-xs">
+                    <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                      <HelpCircle className="size-3.5 text-primary" />
+                      <span>{zh ? '考点详解与规则依据' : 'Grammar Rationale'}</span>
+                    </div>
+                    <p className="leading-relaxed text-muted-foreground">
+                      {currentBankQuestion.explanation}
+                    </p>
+                    {currentBankQuestion.trapReason && (
+                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-2.5 text-[11px] text-amber-800 dark:text-amber-300">
+                        <strong>⚠️ {zh ? '考官陷阱警示：' : 'Examiner Trap: '}</strong>
+                        {currentBankQuestion.trapReason}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions footer */}
+                <div className="flex items-center justify-between pt-2">
+                  <span className="text-[11px] text-muted-foreground">
+                    {zh ? '每做一题，立即生成权威考情解析' : 'Instant diagnostic explanation'}
+                  </span>
+
+                  {!bankIsChecked ? (
+                    <Button
+                      disabled={bankSelectedOpt === null}
+                      onClick={handleBankSubmit}
+                      className="rounded-full px-5 text-xs"
+                    >
+                      {zh ? '提交判定' : 'Submit'}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleBankNext}
+                      className="rounded-full px-5 text-xs gap-1.5"
+                    >
+                      <span>
+                        {bankCurrentIdx + 1 === activeQuestions.length
+                          ? (zh ? '查看成绩报告' : 'View Results')
+                          : (zh ? '下一题' : 'Next Question')}
+                      </span>
+                      <ArrowRight className="size-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Finish Screen */
+              <div className="rounded-3xl border border-border/80 bg-card p-8 text-center space-y-5 shadow-xs">
+                <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Award className="size-8 text-primary" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-display text-xl font-bold text-foreground">
+                    {zh ? '测试训练顺利完成！' : 'Drill Completed!'}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {zh
+                      ? `本次训练共 ${activeQuestions.length} 道题目，你的最终得分是：`
+                      : `You answered ${bankScore} out of ${activeQuestions.length} questions correctly.`}
+                  </p>
+                </div>
+
+                <div className="font-mono text-4xl font-bold text-primary">
+                  {bankScore} / {activeQuestions.length}
+                </div>
+
+                <div className="max-w-md mx-auto text-xs text-muted-foreground leading-relaxed">
+                  {Math.round((bankScore / (activeQuestions.length || 1)) * 100) >= 80 ? (
+                    <p className="text-emerald-600 dark:text-emerald-400 font-medium">
+                      {zh
+                        ? '🎉 极佳！你对雅思 8.0+ 倒装、分词从句与学术谨慎用语的把握已相当精准。'
+                        : 'Outstanding control of advanced academic grammatical structures!'}
+                    </p>
+                  ) : (
+                    <p>
+                      {zh
+                        ? '建议多回看错题，并结合“语法精讲与句式矩阵”中的真题例句加深记忆。'
+                        : 'Review incorrect items and strengthen conceptual foundations in the Deep-Dive tab.'}
+                    </p>
+                  )}
+                </div>
+
+                <div className="pt-2 flex flex-wrap justify-center gap-3">
+                  <Button
+                    onClick={handleRestartBank}
+                    variant="outline"
+                    className="rounded-full gap-2 text-xs"
+                  >
+                    <RotateCcw className="size-3.5" />
+                    <span>{zh ? '重新练习此模式' : 'Retry Mode'}</span>
+                  </Button>
+                  {wrongQuestionIds.length > 0 && (
+                    <Button
+                      onClick={() => handleStartBankMode('mistakes')}
+                      className="rounded-full gap-2 text-xs bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                    >
+                      <XCircle className="size-3.5" />
+                      <span>{zh ? `攻坚错题 (${wrongQuestionIds.length})` : 'Review Mistakes'}</span>
+                    </Button>
+                  )}
+                  <Button
+                    onClick={() => setActiveTab('topics')}
+                    variant="secondary"
+                    className="rounded-full gap-2 text-xs"
+                  >
+                    <BookMarked className="size-3.5" />
+                    <span>{zh ? '回看语法专题' : 'Back to Lessons'}</span>
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: ERROR CLINIC */}
       {activeTab === 'clinic' && (
         <div className="space-y-6">
-          <div className="rounded-3xl border border-destructive/20 bg-destructive/[0.02] p-6 space-y-2">
+          <div className="rounded-3xl border border-destructive/20 bg-destructive/[0.03] p-6 space-y-2">
             <h2 className="font-display text-lg font-bold text-foreground flex items-center gap-2">
               <AlertTriangle className="size-5 text-destructive" />
-              <span>{zh ? '雅思写作中式常见病句诊所' : 'IELTS Writing Sentence Clinic'}</span>
+              <span>{zh ? '雅思写作高频病句与失分陷阱诊所' : 'Common IELTS Writing Pitfalls & Surgical Fixes'}</span>
             </h2>
             <p className="text-xs leading-relaxed text-muted-foreground">
               {zh
-                ? '考官在批阅 Task 2 时，语法错误通常分为“致命性失分错误”（Comma splice、主谓不一致、悬垂分词）与“口语化生硬表达”。本诊所提供手术式重写对比与避坑指南。'
-                : 'Interactive diagnosis of high-risk grammatical errors that cap Grammatical Range & Accuracy at Band 5.5-6.0.'}
+                ? '直击中国考生大作文最致命的 3 类硬伤：逗号拼接（Comma Splice）、主谓一致性失控（Subject-Verb Agreement）与极端武断语气（Overgeneralized Dogmatism）。'
+                : 'Surgical error correction focusing on punctuation splices, modifier agreement, and absolute tone.'}
             </p>
           </div>
 
@@ -519,37 +938,35 @@ export function GrammarPage() {
                 key={topic.id}
                 className="flex flex-col justify-between rounded-3xl border border-border/80 bg-card p-5 shadow-xs space-y-4"
               >
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-display font-semibold text-sm text-foreground">{topic.title}</span>
-                    <Badge variant="outline" className="border-destructive/40 text-destructive text-[10px]">
-                      {zh ? '高频踩雷' : 'High Risk'}
+                    <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive font-mono text-[10px]">
+                      {topic.bandTarget}
                     </Badge>
+                    <span className="text-[11px] text-muted-foreground font-mono">{topic.ieltsApplication}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {topic.summaryZh}
-                  </p>
+                  <h3 className="font-display font-bold text-sm text-foreground">{topic.title}</h3>
                 </div>
 
-                <div className="space-y-2.5">
-                  <div className="rounded-2xl border border-destructive/25 bg-destructive/[0.04] p-3 text-xs space-y-1">
-                    <span className="font-mono text-[10px] font-semibold text-destructive uppercase">
-                      {zh ? '❌ 典型病句 / 学生原句' : '❌ Student Error'}
-                    </span>
-                    <p className="font-mono text-foreground/90">“{topic.badExample}”</p>
-                    <p className="text-[11px] text-muted-foreground">{topic.badReason}</p>
+                <div className="rounded-2xl border border-destructive/30 bg-destructive/[0.04] p-3.5 space-y-1 text-xs">
+                  <div className="flex items-center gap-1.5 font-mono text-[11px] font-semibold text-destructive">
+                    <XCircle className="size-3.5" />
+                    <span>{zh ? '典型病句：' : 'Flawed sentence: '}</span>
                   </div>
+                  <p className="font-mono text-foreground/90 font-medium">“{topic.badExample}”</p>
+                  <p className="text-[11px] text-muted-foreground">{topic.badReason}</p>
+                </div>
 
-                  <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.04] p-3 text-xs space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase">
-                        {zh ? '✓ 手术式学术重构' : '✓ Band 8.5+ Surgical Fix'}
-                      </span>
-                      <Pronunciation word={topic.goodExample} showText={false} />
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.04] p-3.5 space-y-1 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 font-mono text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="size-3.5" />
+                      <span>{zh ? '高分手术级修正：' : 'Surgical Upgrade: '}</span>
                     </div>
-                    <p className="font-mono text-foreground font-medium">“{topic.goodExample}”</p>
-                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400">{topic.goodUpgradeReason}</p>
+                    <Pronunciation word={topic.goodExample} showText={false} />
                   </div>
+                  <p className="font-mono text-foreground font-medium">“{topic.goodExample}”</p>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400">{topic.goodUpgradeReason}</p>
                 </div>
 
                 <div className="rounded-2xl border border-border/60 bg-muted/30 px-3.5 py-2 text-[11px] text-muted-foreground">
@@ -562,7 +979,7 @@ export function GrammarPage() {
         </div>
       )}
 
-      {/* TAB 3: BAND 9 TEMPLATES */}
+      {/* TAB 4: BAND 9 TEMPLATES */}
       {activeTab === 'templates' && (
         <div className="space-y-6">
           <div className="rounded-3xl border border-primary/20 bg-primary/[0.03] p-6 space-y-2">
@@ -655,171 +1072,6 @@ export function GrammarPage() {
               )
             })}
           </div>
-        </div>
-      )}
-
-      {/* TAB 4: QUIZ & MASTERY */}
-      {activeTab === 'quiz' && (
-        <div className="max-w-2xl mx-auto space-y-6">
-          {!quizFinished ? (
-            <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-xs space-y-6">
-              {/* Progress Header */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold text-primary">
-                    {zh ? `题目 ${quizIdx + 1} / ${GRAMMAR_TOPICS.length}` : `Question ${quizIdx + 1} of ${GRAMMAR_TOPICS.length}`}
-                  </span>
-                  <Badge variant="outline" className="text-[10px] border-primary/30">
-                    {GRAMMAR_TOPICS[quizIdx].bandTarget}
-                  </Badge>
-                </div>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {zh ? `得分: ${quizScore}` : `Score: ${quizScore}`}
-                </span>
-              </div>
-
-              {/* Progress bar */}
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary transition-all duration-300"
-                  style={{ width: `${((quizIdx + 1) / GRAMMAR_TOPICS.length) * 100}%` }}
-                />
-              </div>
-
-              {/* Question */}
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-mono font-semibold text-primary uppercase">
-                  {GRAMMAR_TOPICS[quizIdx].title}
-                </span>
-                <h3 className="font-display text-base font-bold text-foreground">
-                  {GRAMMAR_TOPICS[quizIdx].quiz.question}
-                </h3>
-                {zh && GRAMMAR_TOPICS[quizIdx].quiz.questionZh && (
-                  <p className="text-xs text-muted-foreground">{GRAMMAR_TOPICS[quizIdx].quiz.questionZh}</p>
-                )}
-              </div>
-
-              {/* Options */}
-              <div className="space-y-2">
-                {GRAMMAR_TOPICS[quizIdx].quiz.options.map((opt, oIdx) => {
-                  const isPicked = selectedOption === oIdx
-                  const isCorrect = oIdx === GRAMMAR_TOPICS[quizIdx].quiz.correctIndex
-                  return (
-                    <button
-                      key={oIdx}
-                      type="button"
-                      disabled={isAnswerChecked}
-                      onClick={() => setSelectedOption(oIdx)}
-                      className={cn(
-                        'w-full text-left rounded-2xl border p-3.5 text-xs transition flex items-start gap-3',
-                        !isAnswerChecked
-                          ? isPicked
-                            ? 'border-primary bg-primary/10 text-primary font-medium'
-                            : 'border-border/80 bg-background hover:border-primary/40 text-foreground'
-                          : isCorrect
-                            ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 font-medium'
-                            : isPicked
-                              ? 'border-destructive bg-destructive/10 text-destructive'
-                              : 'border-border/50 bg-card/40 text-muted-foreground opacity-60',
-                      )}
-                    >
-                      <span className="font-mono text-xs font-semibold opacity-70">
-                        {String.fromCharCode(65 + oIdx)}.
-                      </span>
-                      <span className="min-w-0 flex-1 leading-relaxed">{opt}</span>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Explanation & Action */}
-              {isAnswerChecked && (
-                <div className="rounded-2xl border border-border/80 bg-muted/30 p-4 text-xs space-y-1.5">
-                  <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                    <HelpCircle className="size-3.5 text-primary" />
-                    <span>{zh ? '考点详解与规则依据' : 'Grammar Rationale'}</span>
-                  </div>
-                  <p className="leading-relaxed text-muted-foreground">
-                    {GRAMMAR_TOPICS[quizIdx].quiz.explanation}
-                  </p>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-[11px] text-muted-foreground">
-                  💡 {GRAMMAR_TOPICS[quizIdx].examTips}
-                </span>
-
-                {!isAnswerChecked ? (
-                  <Button
-                    disabled={selectedOption === null}
-                    onClick={() => {
-                      if (selectedOption === null) return
-                      setIsAnswerChecked(true)
-                      if (selectedOption === GRAMMAR_TOPICS[quizIdx].quiz.correctIndex) {
-                        setQuizScore((prev) => prev + 1)
-                      }
-                    }}
-                    className="rounded-full px-5 text-xs"
-                  >
-                    {zh ? '提交并判定' : 'Submit'}
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleNextGlobalQuiz}
-                    className="rounded-full px-5 text-xs gap-1.5"
-                  >
-                    <span>{quizIdx + 1 === GRAMMAR_TOPICS.length ? (zh ? '查看成绩' : 'View Results') : (zh ? '下一题' : 'Next Question')}</span>
-                    <ArrowRight className="size-3.5" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-3xl border border-border/80 bg-card p-8 text-center space-y-5 shadow-xs">
-              <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <GraduationCap className="size-8" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="font-display text-xl font-bold text-foreground">
-                  {zh ? '语法自测圆满完成！' : 'Quiz Completed!'}
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  {zh
-                    ? `本次自测总分 ${GRAMMAR_TOPICS.length} 分，你的最终得分是：`
-                    : `You answered ${quizScore} out of ${GRAMMAR_TOPICS.length} questions correctly.`}
-                </p>
-              </div>
-
-              <div className="font-mono text-4xl font-bold text-primary">
-                {quizScore} / {GRAMMAR_TOPICS.length}
-              </div>
-
-              <p className="max-w-md mx-auto text-xs text-muted-foreground leading-relaxed">
-                {quizScore >= 7
-                  ? (zh ? '卓越表现！你对雅思 8.0+ 倒装虚拟、裂句与学术谨慎语气掌握极为娴熟。' : 'Outstanding mastery of advanced IELTS syntactic structures!')
-                  : (zh ? '打好基础，多回看“病句诊所”与“精讲矩阵”，注意避免逗号粘连与悬垂从句。' : 'Keep practicing with the Sentence Clinic to eliminate punctuation and modifier errors.')}
-              </p>
-
-              <div className="pt-2 flex justify-center gap-3">
-                <Button
-                  onClick={handleRestartGlobalQuiz}
-                  variant="outline"
-                  className="rounded-full gap-2 text-xs"
-                >
-                  <RotateCcw className="size-3.5" />
-                  <span>{zh ? '重新挑战' : 'Retry Quiz'}</span>
-                </Button>
-                <Button
-                  onClick={() => setActiveTab('topics')}
-                  className="rounded-full gap-2 text-xs"
-                >
-                  <BookMarked className="size-3.5" />
-                  <span>{zh ? '返回精讲' : 'Back to Lessons'}</span>
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
