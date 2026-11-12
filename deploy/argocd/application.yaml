@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/ryanwang345/ProjectDesk.git
     targetRevision: main
-    path: project-desk/chart
+    path: deploy/helm
     helm:
       valueFiles:
         - values.yaml
@@ -18,7 +18,7 @@ spec:
     server: https://kubernetes.default.svc
     namespace: rwang
   # Image updates are GitOps-driven: Jenkins pushes a new immutable tag to
-  # project-desk/chart/values.yaml on main, ArgoCD detects the commit and
+  # deploy/helm/values.yaml on main, ArgoCD detects the commit and
   # auto-syncs, and Kubernetes performs a rolling update of api/web.
   syncPolicy:
     automated:

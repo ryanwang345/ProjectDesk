@@ -163,38 +163,32 @@ spec:
             fi
             echo "========================================"
 
-            # 1. API: changes under project-desk/server/
-            if echo "$CHANGED_FILES" | grep -q '^project-desk/server/'; then
+            # 1. API: changes under apps/api/ (or legacy project-desk/server/)
+            if echo "$CHANGED_FILES" | grep -q -E '^(apps/api/|project-desk/server/)'; then
               echo "[CI] -> Detected API changes"
               touch .ci-build-api .ci-build-any
             fi
 
-            # 2. E2E: changes under project-desk/e2e/
-            if echo "$CHANGED_FILES" | grep -q '^project-desk/e2e/'; then
+            # 2. E2E: changes under apps/e2e/ (or legacy project-desk/e2e/)
+            if echo "$CHANGED_FILES" | grep -q -E '^(apps/e2e/|project-desk/e2e/)'; then
               echo "[CI] -> Detected E2E changes"
               touch .ci-build-e2e .ci-build-any
             fi
 
-            # 3. Helm: changes under project-desk/chart/
-            if echo "$CHANGED_FILES" | grep -q '^project-desk/chart/'; then
+            # 3. Helm: changes under deploy/helm/ (or legacy project-desk/chart/)
+            if echo "$CHANGED_FILES" | grep -q -E '^(deploy/helm/|project-desk/chart/)'; then
               echo "[CI] -> Detected Helm chart changes"
               touch .ci-build-helm
             fi
 
-            # 4. Web: changes in project-desk/ excluding server/, e2e/, chart/, docs/, README
-            if echo "$CHANGED_FILES" | grep '^project-desk/' \
-              | grep -v '^project-desk/server/' \
-              | grep -v '^project-desk/e2e/' \
-              | grep -v '^project-desk/chart/' \
-              | grep -v '^project-desk/docs/' \
-              | grep -v '^project-desk/README.md' \
-              | grep -q .; then
+            # 4. Web: changes under apps/web/
+            if echo "$CHANGED_FILES" | grep -q -E '^apps/web/'; then
               echo "[CI] -> Detected Web frontend changes"
               touch .ci-build-web .ci-build-any
             fi
 
             if [ ! -f .ci-build-any ] && [ ! -f .ci-build-helm ]; then
-              echo "[CI] No relevant monorepo changes detected in project-desk/."
+              echo "[CI] No relevant monorepo changes detected."
               echo "[CI] Skipping all test stages, Docker builds, and image pushes."
             else
               echo "[CI] Execution plan:"
@@ -222,7 +216,7 @@ spec:
             expression { return fileExists('.ci-build-web') }
           }
           steps {
-            dir('project-desk') {
+            dir('apps/web') {
               sh '''
                 npm ci
                 npm run lint
@@ -238,7 +232,7 @@ spec:
           }
           steps {
             container('golang') {
-              dir('project-desk/server') {
+              dir('apps/api') {
                 sh 'go test -mod=vendor ./...'
               }
             }
@@ -250,7 +244,7 @@ spec:
             expression { return fileExists('.ci-build-e2e') || fileExists('.ci-build-helm') }
           }
           steps {
-            dir('project-desk/e2e') {
+            dir('apps/e2e') {
               container('node') {
                 sh '''
                   if [ -f "$WORKSPACE/.ci-build-e2e" ]; then
@@ -262,16 +256,19 @@ spec:
 
               container('helm') {
                 sh '''
+                  HELM_DIR="$WORKSPACE/deploy/helm"
+                  [ ! -d "$HELM_DIR" ] && HELM_DIR="$WORKSPACE/project-desk/chart"
+
                   for env in dev staging prod; do
-                    helm lint ./chart \
-                      -f "chart/values-${env}.yaml" \
+                    helm lint "$HELM_DIR" \
+                      -f "${HELM_DIR}/values-${env}.yaml" \
                       --set image.tag="ci-${BUILD_NUMBER}" \
                       --set-file dotenv=.env
                   done
 
-                  helm template project-desk-e2e ./chart \
+                  helm template project-desk-e2e "$HELM_DIR" \
                     --namespace rwang \
-                    -f chart/values-dev.yaml \
+                    -f "${HELM_DIR}/values-dev.yaml" \
                     --set image.tag="${BUILD_NUMBER}" \
                     --set-file dotenv=.env > /dev/null
                 '''
@@ -319,25 +316,14 @@ spec:
               chmod 600 /kaniko/.docker/config.json
               unset AUTH
 
-              ROOT="$WORKSPACE/project-desk"
-
               for app in web api e2e; do
                 if [ ! -f "$WORKSPACE/.ci-build-${app}" ]; then
                   echo "[Kaniko] Skipping project-desk-${app}: no changes detected."
                   continue
                 fi
 
-                case "$app" in
-                  web)
-                    CONTEXT="$ROOT"
-                    ;;
-                  api)
-                    CONTEXT="$ROOT/server"
-                    ;;
-                  e2e)
-                    CONTEXT="$ROOT/e2e"
-                    ;;
-                esac
+                CONTEXT="$WORKSPACE/apps/${app}"
+                [ ! -d "$CONTEXT" ] && CONTEXT="$WORKSPACE/project-desk/${app}"
 
                 IMAGE="docker.io/${DOCKERHUB_USER}/project-desk-${app}"
 
@@ -422,7 +408,8 @@ spec:
               export GIT_TERMINAL_PROMPT=0
 
               REMOTE="https://x-access-token@github.com/ryanwang345/ProjectDesk.git"
-              VALUES="project-desk/chart/values.yaml"
+              VALUES="deploy/helm/values.yaml"
+              [ ! -f "$VALUES" ] && VALUES="project-desk/chart/values.yaml"
 
               UPDATE_WEB="false"
               UPDATE_API="false"

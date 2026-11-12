@@ -15,7 +15,7 @@ services:
 
   api:
     build:
-      context: ./server
+      context: ../apps/api
       secrets:
         - extra-ca
     environment:
@@ -45,7 +45,7 @@ services:
         condition: service_healthy
 
   web:
-    build: .
+    build: ../apps/web
     ports:
       - "47291:80"
     depends_on:
@@ -58,4 +58,4 @@ services:
 #   echo | openssl s_client -showcerts -connect dl-cdn.alpinelinux.org:443 -servername dl-cdn.alpinelinux.org 2>/dev/null | awk 'BEGIN{n=0} /BEGIN CERT/{n++; if(n==1) next} n>=2 && n<=4' > server/extra-ca.crt
 secrets:
   extra-ca:
-    file: ./server/extra-ca.crt
+    file: ../apps/api/extra-ca.crt
