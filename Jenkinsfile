@@ -283,19 +283,23 @@ spec:
 
             container('helm') {
               sh '''
-                HELM_DIR="$WORKSPACE/deploy/helm"
-                [ ! -d "$HELM_DIR" ] && HELM_DIR="$WORKSPACE/project-desk/chart"
+                # 1. Lint the main application chart (deploy/helm)
+                MAIN_HELM="$WORKSPACE/deploy/helm"
+                [ ! -d "$MAIN_HELM" ] && MAIN_HELM="$WORKSPACE/project-desk/chart"
+                helm lint "$MAIN_HELM"
 
+                # 2. Lint and template the E2E CronJob chart (apps/e2e/chart)
+                cd "$WORKSPACE/apps/e2e"
                 for env in dev staging prod; do
-                  helm lint "$HELM_DIR" \
-                    -f "${HELM_DIR}/values-${env}.yaml" \
+                  helm lint ./chart \
+                    -f "chart/values-${env}.yaml" \
                     --set image.tag="ci-${BUILD_NUMBER}" \
                     --set-file dotenv=.env
                 done
 
-                helm template project-desk-e2e "$HELM_DIR" \
+                helm template project-desk-e2e ./chart \
                   --namespace rwang \
-                  -f "${HELM_DIR}/values-dev.yaml" \
+                  -f chart/values-dev.yaml \
                   --set image.tag="${BUILD_NUMBER}" \
                   --set-file dotenv=.env > /dev/null
               '''
