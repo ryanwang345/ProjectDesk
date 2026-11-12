@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
@@ -5,9 +6,15 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
+const pkg = JSON.parse(fs.readFileSync(path.resolve(root, 'package.json'), 'utf-8'))
+const appVersion = process.env.VITE_APP_VERSION || `v${pkg.version}`
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   resolve: {
     alias: {
       '@': path.resolve(root, 'src'),

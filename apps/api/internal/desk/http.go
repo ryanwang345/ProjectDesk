@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -24,6 +25,7 @@ func NewHandler(store *Store, platform *Platform) http.Handler {
 	h.registerReading(mux)
 	h.registerLearning(mux)
 	mux.HandleFunc("GET /api/healthz", h.health)
+	mux.HandleFunc("GET /api/version", h.version)
 	mux.HandleFunc("GET /api/cycles", h.listCycles)
 	mux.HandleFunc("POST /api/cycles/sample", h.sampleCycle)
 	mux.HandleFunc("POST /api/cycles", h.createCycle)
@@ -53,6 +55,18 @@ func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) version(w http.ResponseWriter, r *http.Request) {
+	ver := os.Getenv("APP_VERSION")
+	if ver == "" {
+		ver = "dev"
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"version": ver,
+		"status":  "ok",
+		"service": "project-desk-api",
+	})
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {

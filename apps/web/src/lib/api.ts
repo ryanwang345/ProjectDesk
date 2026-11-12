@@ -475,3 +475,14 @@ export function submitVocabularyReview(input: SrsReviewInput): Promise<SrsReview
     body: JSON.stringify(input),
   })
 }
+
+export type SystemVersionInfo = {
+  version: string
+  status: string
+  service: string
+}
+
+export function getSystemVersion(): Promise<SystemVersionInfo> {
+  return request<SystemVersionInfo>('/api/version')
+}
+

@@ -26,6 +26,8 @@ spec:
           ports:
             - containerPort: {{ .Values.api.port }}
           env:
+            - name: APP_VERSION
+              value: {{ .Values.api.tag | default "dev" | quote }}
             - name: PORT
               value: {{ .Values.api.port | quote }}
             - name: DATABASE_URL

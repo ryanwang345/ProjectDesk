@@ -44,33 +44,60 @@ export function AboutPage() {
           </Card>
         ))}
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>The fallback</CardTitle>
-          <CardDescription>nginx.conf</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          <pre className="overflow-x-auto rounded-lg bg-muted px-4 py-3 text-sm text-foreground">
-            <code>try_files $uri $uri/ /index.html;</code>
-          </pre>
-          <p className="text-muted-foreground">
-            A direct check of nginx, outside React, is{' '}
-            <a className="underline underline-offset-4 hover:text-foreground" href="/healthz">
-              /healthz
-            </a>
-            . It returns the plain text <span className="text-foreground">ok</span>.
-          </p>
-          <p>
-            <Link className="text-sm underline underline-offset-4" to="/">
-              Back to the desk
-            </Link>
-            <span className="px-2 text-muted-foreground">·</span>
-            <Link className="text-sm underline underline-offset-4" to="/english">
-              Open English cards
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>The fallback</CardTitle>
+            <CardDescription>nginx.conf</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <pre className="overflow-x-auto rounded-lg bg-muted px-4 py-3 text-sm text-foreground">
+              <code>try_files $uri $uri/ /index.html;</code>
+            </pre>
+            <p className="text-muted-foreground">
+              A direct check of nginx, outside React, is{' '}
+              <a className="underline underline-offset-4 hover:text-foreground" href="/healthz">
+                /healthz
+              </a>
+              . It returns the plain text <span className="text-foreground">ok</span>.
+            </p>
+            <p>
+              <Link className="text-sm underline underline-offset-4" to="/">
+                Back to the desk
+              </Link>
+              <span className="px-2 text-muted-foreground">·</span>
+              <Link className="text-sm underline underline-offset-4" to="/english">
+                Open English cards
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>System & Runtime Versions</CardTitle>
+            <CardDescription>Live deployment and container build info</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 text-xs font-mono">
+            <div className="flex items-center justify-between rounded-md border border-border/60 bg-muted/40 px-3 py-2">
+              <span className="text-muted-foreground">Web (Frontend):</span>
+              <span className="rounded bg-primary/10 px-2 py-0.5 text-primary font-medium">{__APP_VERSION__}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-md border border-border/60 bg-muted/40 px-3 py-2">
+              <span className="text-muted-foreground">API Version Route:</span>
+              <a className="underline underline-offset-2 hover:text-foreground" href="/api/version" target="_blank" rel="noreferrer">
+                /api/version ↗
+              </a>
+            </div>
+            <div className="flex items-center justify-between rounded-md border border-border/60 bg-muted/40 px-3 py-2">
+              <span className="text-muted-foreground">Postgres Health:</span>
+              <a className="underline underline-offset-2 hover:text-foreground" href="/api/healthz" target="_blank" rel="noreferrer">
+                /api/healthz ↗
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

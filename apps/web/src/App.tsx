@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Search, Sparkles } from 'lucide-react'
 import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/error-boundary'
@@ -7,6 +7,7 @@ import { SiteHeader } from '@/components/site-header'
 import { SpeechSettings } from '@/components/speech-settings'
 import { ThemePicker } from '@/components/theme-picker'
 import { LOCALES, useI18n } from '@/i18n'
+import { getSystemVersion } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 // Lazy-load route pages for code-splitting and faster initial bundle loading
@@ -43,6 +44,26 @@ function Frame() {
   const zh = locale === 'zh'
   const navigate = useNavigate()
   const { enabled: hoverDictEnabled, toggle: toggleHoverDict } = useHoverDictionaryToggle()
+  const [apiVersion, setApiVersion] = useState<string | null>(null)
+  const [apiOnline, setApiOnline] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let active = true
+    getSystemVersion()
+      .then((info) => {
+        if (!active) return
+        setApiVersion(info.version || 'dev')
+        setApiOnline(info.status === 'ok')
+      })
+      .catch(() => {
+        if (!active) return
+        setApiVersion('offline')
+        setApiOnline(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -69,6 +90,18 @@ function Frame() {
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
               <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
               {zh ? '记忆流就绪' : 'Memory Flow Ready'}
+            </span>
+            <span className="hidden items-center gap-1.5 rounded-full border border-border/80 bg-card/60 px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground sm:inline-flex">
+              <span
+                className={cn(
+                  'size-1.5 rounded-full',
+                  apiOnline === true ? 'bg-emerald-500' : apiOnline === false ? 'bg-destructive' : 'bg-primary animate-pulse',
+                )}
+                aria-hidden="true"
+              />
+              <span>Web {__APP_VERSION__}</span>
+              <span className="text-border">/</span>
+              <span>API {apiVersion ? (apiVersion.startsWith('v') ? apiVersion : `v${apiVersion}`) : '...'}</span>
             </span>
           </div>
 
@@ -150,13 +183,29 @@ function Frame() {
 
         <footer className="w-full px-4 pt-2 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] sm:px-6 lg:px-8 lg:pb-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-3 text-[11px] text-muted-foreground">
-            <p className="inline-flex items-center gap-1.5">
-              <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
-              <span>{zh ? '数据保存在 Postgre · Nginx 边缘缓存 · Go 高性能引擎' : t('footer')}</span>
-            </p>
-            <p className="font-mono text-[11px] text-muted-foreground">
-              SRS v4.2.8 · <span className="text-primary">{zh ? '延时 18ms' : t('brand')}</span>
-            </p>
+            <div className="inline-flex flex-wrap items-center gap-2">
+              <span
+                className={cn(
+                  'size-1.5 rounded-full',
+                  apiOnline === true ? 'bg-emerald-500' : apiOnline === false ? 'bg-destructive' : 'bg-primary animate-pulse',
+                )}
+                aria-hidden="true"
+              />
+              <span>{zh ? '数据保存在 Postgres · Nginx 边缘缓存 · Go 高性能引擎' : t('footer')}</span>
+            </div>
+            <div className="inline-flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+              <span className="rounded bg-muted/60 px-1.5 py-0.5 text-foreground/85">Web: {__APP_VERSION__}</span>
+              <span
+                className={cn(
+                  'rounded px-1.5 py-0.5',
+                  apiOnline === true ? 'bg-muted/60 text-foreground/85' : 'bg-destructive/20 text-destructive',
+                )}
+              >
+                API: {apiVersion ? (apiVersion.startsWith('v') ? apiVersion : `v${apiVersion}`) : '...'}
+              </span>
+              <span>·</span>
+              <span className="text-primary">SRS v4.2.8</span>
+            </div>
           </div>
         </footer>
       </div>
