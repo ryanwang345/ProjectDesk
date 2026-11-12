@@ -215,7 +215,7 @@ spec:
             fi
 
             # 3. Helm: chart structural/template changes (ignore pure values.yaml image tag updates)
-            if echo "$CHANGED_FILES" | grep -E '^(deploy/helm/|project-desk/chart/)' | grep -v -E 'values\.ya?ml$' | grep -q .; then
+            if echo "$CHANGED_FILES" | grep -E '^(deploy/helm/|project-desk/chart/)' | grep -v -E 'values[.]ya?ml$' | grep -q .; then
               echo "[CI] -> Detected Helm chart changes"
               touch .ci-build-helm
             fi
