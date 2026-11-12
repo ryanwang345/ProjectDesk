@@ -45,7 +45,7 @@ api:
 
 web:
   image: docker.io/rwang345/project-desk-web
-  tag: "59"
+  tag: "61"
   pullPolicy: IfNotPresent
 
 ingress:
