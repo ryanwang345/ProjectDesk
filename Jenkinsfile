@@ -71,39 +71,27 @@ spec:
   }
 
   parameters {
-    booleanParam(
-      name: 'FORCE_ALL',
-      defaultValue: false,
-      description: 'Force build and push ALL components'
+    choice(
+      name: 'COMPONENT',
+      choices: ['auto', 'web', 'api', 'web+api', 'all', 'e2e'],
+      description: 'Select component to build & push. "auto" detects git diff changes. Selecting a specific component forces build & push even if commit has [skip ci].'
     )
     booleanParam(
-      name: 'FORCE_WEB',
-      defaultValue: false,
-      description: 'Force build and push Web frontend (project-desk-web)'
-    )
-    booleanParam(
-      name: 'FORCE_API',
-      defaultValue: false,
-      description: 'Force build and push Go API backend (project-desk-api)'
-    )
-    booleanParam(
-      name: 'FORCE_E2E',
-      defaultValue: false,
-      description: 'Force build and push E2E tests (project-desk-e2e)'
+      name: 'UPDATE_HELM_TAGS',
+      defaultValue: true,
+      description: 'Update deploy/helm/values.yaml with new image tags and push to GitHub (ArgoCD will roll out)'
     )
     booleanParam(
       name: 'SKIP_E2E',
-      defaultValue: false,
-      description: 'Explicitly skip E2E container build and tests to save disk space'
+      defaultValue: true,
+      description: 'Skip E2E container build and tests to save disk space (recommended)'
     )
   }
 
   environment {
-    FORCE_ALL = "${params.FORCE_ALL ?: false}"
-    FORCE_WEB = "${params.FORCE_WEB ?: false}"
-    FORCE_API = "${params.FORCE_API ?: false}"
-    FORCE_E2E = "${params.FORCE_E2E ?: false}"
-    SKIP_E2E = "${params.SKIP_E2E ?: false}"
+    COMPONENT = "${params.COMPONENT ?: 'auto'}"
+    UPDATE_HELM_TAGS = "${params.UPDATE_HELM_TAGS == null ? true : params.UPDATE_HELM_TAGS}"
+    SKIP_E2E = "${params.SKIP_E2E == null ? true : params.SKIP_E2E}"
   }
 
   options {
@@ -131,32 +119,52 @@ spec:
             COMMIT_MSG="$(g log -1 --pretty=%B)"
             echo "Current commit: $(g rev-parse --short HEAD)"
             echo "Commit message: ${COMMIT_MSG}"
+            echo "Selected component: ${COMPONENT:-auto}"
 
-            if echo "$COMMIT_MSG" | grep -q '\\[skip ci\\]'; then
-              echo "[CI] [skip ci] detected in commit message. Skipping build."
-              exit 0
-            fi
-
-            # Check if force build is requested via parameters or commit message
-            if [ "${FORCE_ALL:-false}" = "true" ] || echo "$COMMIT_MSG" | grep -qiE '\\[(force build|build all)\\]'; then
-              echo "[CI] Force build ALL requested. Marking all components for build."
-              touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
-              exit 0
-            fi
-
-            if [ "${FORCE_WEB:-false}" = "true" ] || echo "$COMMIT_MSG" | grep -qi '\\[build web\\]'; then
-              echo "[CI] Force build WEB requested."
+            # 1. Custom component selection from Jenkins UI (overrides [skip ci])
+            if [ "${COMPONENT:-auto}" = "web" ]; then
+              echo "[CI] Custom selection: WEB ONLY (ignoring [skip ci])"
               touch .ci-build-web .ci-build-any
-            fi
-
-            if [ "${FORCE_API:-false}" = "true" ] || echo "$COMMIT_MSG" | grep -qi '\\[build api\\]'; then
-              echo "[CI] Force build API requested."
+            elif [ "${COMPONENT:-auto}" = "api" ]; then
+              echo "[CI] Custom selection: API ONLY (ignoring [skip ci])"
               touch .ci-build-api .ci-build-any
-            fi
-
-            if [ "${FORCE_E2E:-false}" = "true" ] || echo "$COMMIT_MSG" | grep -qi '\\[build e2e\\]'; then
-              echo "[CI] Force build E2E requested."
+            elif [ "${COMPONENT:-auto}" = "web+api" ]; then
+              echo "[CI] Custom selection: WEB + API (ignoring [skip ci])"
+              touch .ci-build-web .ci-build-api .ci-build-any
+            elif [ "${COMPONENT:-auto}" = "e2e" ]; then
+              echo "[CI] Custom selection: E2E ONLY (ignoring [skip ci])"
               touch .ci-build-e2e .ci-build-any
+            elif [ "${COMPONENT:-auto}" = "all" ]; then
+              echo "[CI] Custom selection: ALL COMPONENTS (ignoring [skip ci])"
+              touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
+            else
+              # 2. AUTO mode: check for [skip ci] first
+              if echo "$COMMIT_MSG" | grep -q '\\[skip ci\\]'; then
+                echo "[CI] [skip ci] detected in commit message. Skipping build."
+                exit 0
+              fi
+
+              # Check commit message flags
+              if echo "$COMMIT_MSG" | grep -qiE '\\[(force build|build all)\\]'; then
+                echo "[CI] Force build ALL requested via commit tag."
+                touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
+                exit 0
+              fi
+
+              if echo "$COMMIT_MSG" | grep -qi '\\[build web\\]'; then
+                echo "[CI] Force build WEB requested via commit tag."
+                touch .ci-build-web .ci-build-any
+              fi
+
+              if echo "$COMMIT_MSG" | grep -qi '\\[build api\\]'; then
+                echo "[CI] Force build API requested via commit tag."
+                touch .ci-build-api .ci-build-any
+              fi
+
+              if echo "$COMMIT_MSG" | grep -qi '\\[build e2e\\]'; then
+                echo "[CI] Force build E2E requested via commit tag."
+                touch .ci-build-e2e .ci-build-any
+              fi
             fi
 
             # Determine base commit to diff against
@@ -247,10 +255,7 @@ spec:
 
     stage('Install Dependencies') {
       when {
-        allOf {
-          not { changelog '\\[skip ci\\]' }
-          expression { return fileExists('.ci-build-web') || fileExists('.ci-build-e2e') }
-        }
+        expression { return fileExists('.ci-build-web') || fileExists('.ci-build-e2e') }
       }
       steps {
         container('node') {
@@ -273,10 +278,7 @@ spec:
 
     stage('Validate') {
       when {
-        allOf {
-          not { changelog '\\[skip ci\\]' }
-          expression { return fileExists('.ci-build-any') || fileExists('.ci-build-helm') }
-        }
+        expression { return fileExists('.ci-build-any') || fileExists('.ci-build-helm') }
       }
 
       parallel {
@@ -354,10 +356,7 @@ spec:
 
     stage('Build & Push Images') {
       when {
-        allOf {
-          not { changelog '\\[skip ci\\]' }
-          expression { return fileExists('.ci-build-any') }
-        }
+        expression { return fileExists('.ci-build-any') }
       }
 
       steps {
@@ -444,12 +443,10 @@ spec:
       // on main, and ArgoCD (auto-sync) rolls it out to the cluster.
       when {
         allOf {
-          // `branch` only works in multibranch jobs; GIT_BRANCH covers
-          // plain pipeline jobs ("origin/main").
           expression {
             (env.BRANCH_NAME ?: env.GIT_BRANCH ?: '').replaceFirst('^origin/', '') == 'main'
           }
-          not { changelog '\\[skip ci\\]' }
+          expression { return "${UPDATE_HELM_TAGS:-true}" == 'true' }
           expression { return fileExists('.ci-build-web') || fileExists('.ci-build-api') }
         }
       }
