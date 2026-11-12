@@ -430,10 +430,44 @@ spec:
               echo "=========================================================="
               echo "[CI] Images successfully built and published!"
               echo "[CI] Build tag: ${BUILD_NUMBER}"
-              echo "[CI] To deploy to Kubernetes, trigger ProjectDesk-Deploy with IMAGE_TAG: ${BUILD_NUMBER}"
               echo "=========================================================="
             '''
           }
+        }
+      }
+    }
+
+    stage('Trigger Deployment') {
+      when {
+        expression {
+          def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: ''
+          branch = branch.replaceFirst('^origin/', '')
+          def isMain = (branch == 'main' || branch == '')
+          def hasImages = fileExists('.ci-build-web') || fileExists('.ci-build-api')
+          return isMain && hasImages
+        }
+      }
+      steps {
+        script {
+          def component = 'web+api'
+          def hasWeb = fileExists('.ci-build-web')
+          def hasApi = fileExists('.ci-build-api')
+          if (hasWeb && !hasApi) {
+            component = 'web'
+          } else if (!hasWeb && hasApi) {
+            component = 'api'
+          }
+
+          echo "=========================================================="
+          echo "[CI] Automatically triggering ProjectDesk-Deploy..."
+          echo "[CI] Component: ${component}"
+          echo "[CI] Image Tag: ${env.BUILD_NUMBER}"
+          echo "=========================================================="
+
+          build job: 'ProjectDesk-Deploy', wait: false, parameters: [
+            string(name: 'COMPONENT', value: component),
+            string(name: 'IMAGE_TAG', value: "${env.BUILD_NUMBER}")
+          ]
         }
       }
     }
