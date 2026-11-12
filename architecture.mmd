@@ -1,0 +1,25 @@
+flowchart LR
+    subgraph SCM ["1. Source Control"]
+        DEV["Developer Push"] -->|"1. git push origin main"| GH["GitHub Monorepo"]
+    end
+
+    subgraph CI ["2. Jenkins CI"]
+        GH -->|"2. SCM Poll Trigger"| JENKINS["Jenkins Pipeline"]
+        JENKINS -->|"3. Parallel Validation"| TEST["Web, API & E2E Tests"]
+        TEST -->|"4. Build Containers"| KANIKO["Kaniko Builder"]
+        KANIKO -->|"5. Push Docker Images"| REGISTRY["Docker Hub"]
+        KANIKO -->|"6. Bump Tag (skip ci)"| GH
+    end
+
+    subgraph GITOPS ["3. GitOps & Kubernetes"]
+        GH -->|"7. Auto-Sync deploy/helm"| ARGO["ArgoCD"]
+        ARGO -->|"8. Reconcile & Deploy"| K8S["Kubernetes Cluster"]
+        K8S -->|"9. Rollout Workloads"| PODS["Web, API & Postgres"]
+        PODS -->|"10. Route Cluster Traffic"| INGRESS["Ingress-Nginx"]
+    end
+
+    subgraph EDGE ["4. Edge & Public Access"]
+        INGRESS -->|"11. Route to Tunnel"| TUNNEL["Cloudflare Tunnel"]
+        TUNNEL -->|"12. Encrypted Tunnel"| CDN["Cloudflare Edge"]
+        CDN -->|"13. HTTPS: www.ryanwang.dev"| CLIENT["Client Devices"]
+    end

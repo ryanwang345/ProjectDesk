@@ -1,0 +1,19 @@
+# Dependencies and caches
+/node_modules/
+/.remotion/
+/.cache/
+
+# Bundles and rendered output
+/out/
+/renders/
+/dist/
+/build/
+/*.png
+/*.mp4
+/*.webm
+/*.mov
+/*.gif
+
+# Tool artifacts
+*.log
+*.tsbuildinfo
