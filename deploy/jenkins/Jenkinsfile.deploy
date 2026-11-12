@@ -90,9 +90,9 @@ spec:
               export GIT_ASKPASS="$ASKPASS"
               export GIT_TERMINAL_PROMPT=0
 
-              REMOTE="https://x-access-token@github.com/ryanwang345/ProjectDesk.git"
-              VALUES="deploy/helm/values.yaml"
-              [ ! -f "$VALUES" ] && VALUES="project-desk/chart/values.yaml"
+              REMOTE="https://x-access-token@github.com/ryanwang345/ProjectDesk-GitOps.git"
+              VALUES="helm/values.yaml"
+              [ ! -f "$VALUES" ] && VALUES="deploy/helm/values.yaml"
 
               TAG="${IMAGE_TAG}"
               UPDATE_WEB="false"

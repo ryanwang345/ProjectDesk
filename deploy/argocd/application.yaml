@@ -8,9 +8,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/ryanwang345/ProjectDesk.git
+    repoURL: https://github.com/ryanwang345/ProjectDesk-GitOps.git
     targetRevision: main
-    path: deploy/helm
+    path: helm
     helm:
       valueFiles:
         - values.yaml
