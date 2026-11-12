@@ -1,0 +1,160 @@
+pipeline {
+  agent {
+    kubernetes {
+      yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins/jenkins-jenkins-agent: "true"
+spec:
+  nodeSelector:
+    kubernetes.io/os: linux
+  restartPolicy: Never
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  containers:
+    - name: git
+      image: alpine/git:latest
+      command:
+        - cat
+      tty: true
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
+'''
+    }
+  }
+
+  parameters {
+    choice(
+      name: 'COMPONENT',
+      choices: ['web+api', 'web', 'api'],
+      description: 'Select component(s) to deploy'
+    )
+    string(
+      name: 'IMAGE_TAG',
+      defaultValue: '',
+      description: 'Docker image tag to deploy (e.g. 59, 61, or rollback to an earlier tag)'
+    )
+  }
+
+  options {
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+    disableConcurrentBuilds()
+  }
+
+  stages {
+    stage('Deploy to GitOps (ArgoCD)') {
+      steps {
+        script {
+          if (!params.IMAGE_TAG?.trim()) {
+            error("IMAGE_TAG parameter cannot be empty! Please provide an image tag (e.g. 59 or 61).")
+          }
+        }
+        withCredentials([
+          string(
+            credentialsId: 'GITHUB_TOKEN',
+            variable: 'GITHUB_TOKEN'
+          )
+        ]) {
+          container('git') {
+            sh '''
+              set +x
+              set -eu
+
+              cd "$WORKSPACE"
+
+              g() {
+                git -c safe.directory="$WORKSPACE" \
+                  -c user.name="ProjectDesk Deployer" \
+                  -c user.email="ci@users.noreply.github.com" \
+                  "$@"
+              }
+
+              ASKPASS="$WORKSPACE/.git-askpass"
+              trap 'rm -f "$ASKPASS"' EXIT
+
+              printf '%s\\n' \
+                '#!/bin/sh' \
+                'printf "%s" "$GITHUB_TOKEN"' > "$ASKPASS"
+
+              chmod 700 "$ASKPASS"
+              export GIT_ASKPASS="$ASKPASS"
+              export GIT_TERMINAL_PROMPT=0
+
+              REMOTE="https://x-access-token@github.com/ryanwang345/ProjectDesk.git"
+              VALUES="deploy/helm/values.yaml"
+              [ ! -f "$VALUES" ] && VALUES="project-desk/chart/values.yaml"
+
+              TAG="${IMAGE_TAG}"
+              UPDATE_WEB="false"
+              UPDATE_API="false"
+              if [ "$COMPONENT" = "web+api" ]; then
+                UPDATE_WEB="true"
+                UPDATE_API="true"
+              elif [ "$COMPONENT" = "web" ]; then
+                UPDATE_WEB="true"
+              elif [ "$COMPONENT" = "api" ]; then
+                UPDATE_API="true"
+              fi
+
+              for attempt in 1 2 3; do
+                echo "[Deploy] Attempt ${attempt}: Fetching latest main..."
+                g fetch --quiet "$REMOTE" main
+                g checkout --quiet --force -B release-tag FETCH_HEAD
+
+                awk -v tag="$TAG" -v updateWeb="$UPDATE_WEB" -v updateApi="$UPDATE_API" '
+                  /^[^ ]/ { section=$1 }
+                  section == "api:" && $1 == "tag:" && updateApi == "true" {
+                    q=sprintf("%c",34)
+                    print "  tag: " q tag q
+                    next
+                  }
+                  section == "web:" && $1 == "tag:" && updateWeb == "true" {
+                    q=sprintf("%c",34)
+                    print "  tag: " q tag q
+                    next
+                  }
+                  { print }
+                ' "$VALUES" > "${VALUES}.new"
+
+                mv "${VALUES}.new" "$VALUES"
+                g add "$VALUES"
+
+                if g diff --cached --quiet; then
+                  echo "[Deploy] Helm image tags are already set to ${TAG}. Nothing to update."
+                  exit 0
+                fi
+
+                MSG="deploy: update ${COMPONENT} image tag to ${TAG} [skip ci]"
+                g commit --quiet -m "$MSG"
+
+                if g push "$REMOTE" HEAD:main; then
+                  echo "=========================================================="
+                  echo "[Deploy] SUCCESS: Helm image tags updated to ${TAG}!"
+                  echo "[Deploy] ArgoCD will automatically detect and roll out."
+                  echo "=========================================================="
+                  exit 0
+                fi
+
+                echo "[Deploy] Push rejected on attempt ${attempt}, retrying in 3s..."
+                sleep 3
+              done
+
+              echo "[Deploy] Failed to push tag update after 3 attempts."
+              exit 1
+            '''
+          }
+        }
+      }
+    }
+  }
+}

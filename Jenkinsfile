@@ -77,11 +77,6 @@ spec:
       description: 'Select component to build & push. "auto" detects git diff changes. Selecting a specific component forces build & push even if commit has [skip ci].'
     )
     booleanParam(
-      name: 'UPDATE_HELM_TAGS',
-      defaultValue: true,
-      description: 'Update deploy/helm/values.yaml with new image tags and push to GitHub (ArgoCD will roll out)'
-    )
-    booleanParam(
       name: 'SKIP_E2E',
       defaultValue: true,
       description: 'Skip E2E container build and tests to save disk space (recommended)'
@@ -90,7 +85,6 @@ spec:
 
   environment {
     COMPONENT = "${params.COMPONENT ?: 'auto'}"
-    UPDATE_HELM_TAGS = "${params.UPDATE_HELM_TAGS == null ? true : params.UPDATE_HELM_TAGS}"
     SKIP_E2E = "${params.SKIP_E2E == null ? true : params.SKIP_E2E}"
   }
 
@@ -432,115 +426,12 @@ spec:
 
                 echo "[BuildKit] Published ${IMAGE}:${BUILD_NUMBER}"
               done
-            '''
-          }
-        }
-      }
-    }
 
-    stage('Update Helm Image Tags') {
-      // GitOps hand-off: Jenkins writes the new immutable tag to values.yaml
-      // on main, and ArgoCD (auto-sync) rolls it out to the cluster.
-      when {
-        allOf {
-          expression {
-            (env.BRANCH_NAME ?: env.GIT_BRANCH ?: '').replaceFirst('^origin/', '') == 'main'
-          }
-          expression { return params.UPDATE_HELM_TAGS != false }
-          expression { return fileExists('.ci-build-web') || fileExists('.ci-build-api') }
-        }
-      }
-
-      steps {
-        withCredentials([
-          string(
-            credentialsId: 'GITHUB_TOKEN',
-            variable: 'GITHUB_TOKEN'
-          )
-        ]) {
-          container('jnlp') {
-            sh '''
-              set +x
-              set -eu
-
-              cd "$WORKSPACE"
-
-              g() {
-                git -c safe.directory="$WORKSPACE" \
-                  -c user.name="ProjectDesk CI" \
-                  -c user.email="ci@users.noreply.github.com" \
-                  "$@"
-              }
-
-              ASKPASS="$WORKSPACE/.git-askpass"
-              trap 'rm -f "$ASKPASS"' EXIT
-
-              printf '%s\\n' \
-                '#!/bin/sh' \
-                'printf "%s" "$GITHUB_TOKEN"' > "$ASKPASS"
-
-              chmod 700 "$ASKPASS"
-
-              export GIT_ASKPASS="$ASKPASS"
-              export GIT_TERMINAL_PROMPT=0
-
-              REMOTE="https://x-access-token@github.com/ryanwang345/ProjectDesk.git"
-              VALUES="deploy/helm/values.yaml"
-              [ ! -f "$VALUES" ] && VALUES="project-desk/chart/values.yaml"
-
-              UPDATE_WEB="false"
-              UPDATE_API="false"
-              [ -f "$WORKSPACE/.ci-build-web" ] && UPDATE_WEB="true"
-              [ -f "$WORKSPACE/.ci-build-api" ] && UPDATE_API="true"
-
-              # Rebase onto the latest main each attempt so a commit pushed
-              # while this build ran does not reject the tag update.
-              for attempt in 1 2 3; do
-                g fetch --quiet "$REMOTE" main
-                g checkout --quiet --force -B ci-image-tag FETCH_HEAD
-
-                awk -v tag="$BUILD_NUMBER" -v updateWeb="$UPDATE_WEB" -v updateApi="$UPDATE_API" '
-                  /^[^ ]/ { section=$1 }
-                  section == "api:" && $1 == "tag:" && updateApi == "true" {
-                    q=sprintf("%c",34)
-                    print "  tag: " q tag q
-                    next
-                  }
-                  section == "web:" && $1 == "tag:" && updateWeb == "true" {
-                    q=sprintf("%c",34)
-                    print "  tag: " q tag q
-                    next
-                  }
-                  { print }
-                ' "$VALUES" > "${VALUES}.new"
-
-                mv "${VALUES}.new" "$VALUES"
-
-                g add "$VALUES"
-
-                if g diff --cached --quiet; then
-                  echo "Helm image tags are already up to date"
-                  exit 0
-                fi
-
-                MSG="ci: update"
-                [ "$UPDATE_WEB" = "true" ] && MSG="${MSG} web"
-                [ "$UPDATE_API" = "true" ] && MSG="${MSG} api"
-                MSG="${MSG} image tag to ${BUILD_NUMBER} [skip ci]"
-
-                g commit --quiet -m "$MSG"
-
-                if g push "$REMOTE" HEAD:main; then
-                  echo "Helm image tags updated to ${BUILD_NUMBER}; ArgoCD will roll it out"
-                  exit 0
-                fi
-
-                echo "Push rejected (attempt ${attempt}), retrying"
-                sleep 5
-              done
-
-              echo "Could not push the image tag update"
-              exit 1
+              echo "=========================================================="
+              echo "[CI] Images successfully built and published!"
+              echo "[CI] Build tag: ${BUILD_NUMBER}"
+              echo "[CI] To deploy to Kubernetes, trigger ProjectDesk-Deploy with IMAGE_TAG: ${BUILD_NUMBER}"
+              echo "=========================================================="
             '''
           }
         }

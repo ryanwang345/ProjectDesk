@@ -124,6 +124,26 @@ spec:
                           }
                         }
                       }
+                      pipelineJob('ProjectDesk-Deploy') {
+                        description('GitOps Release Pipeline: updates deploy/helm/values.yaml with selected image tag for ArgoCD.')
+                        parameters {
+                          choiceParam('COMPONENT', ['web+api', 'web', 'api'], 'Component(s) to deploy')
+                          stringParam('IMAGE_TAG', '', 'Docker image tag to deploy (e.g. 59, 61, or rollback tag)')
+                        }
+                        definition {
+                          cpsScm {
+                            scm {
+                              git {
+                                remote {
+                                  url('https://github.com/ryanwang345/ProjectDesk.git')
+                                }
+                                branch('*/main')
+                              }
+                            }
+                            scriptPath('deploy/jenkins/Jenkinsfile.deploy')
+                          }
+                        }
+                      }
         persistence:
           enabled: true
           storageClass: local-path
