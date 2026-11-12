@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Search, Sparkles } from 'lucide-react'
 import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { GlobalHoverDictionary, useHoverDictionaryToggle } from '@/components/global-hover-dictionary'
@@ -7,14 +7,27 @@ import { SpeechSettings } from '@/components/speech-settings'
 import { ThemePicker } from '@/components/theme-picker'
 import { LOCALES, useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
-import { AboutPage } from '@/pages/about-page'
-import { BoardPage } from '@/pages/board-page'
-import { EnglishPage } from '@/pages/english-page'
-import { GrammarPage } from '@/pages/grammar-page'
-import { ListeningPage } from '@/pages/listening-page'
-import { NotFoundPage } from '@/pages/not-found-page'
-import { RadioNewsPage } from '@/pages/radio-news-page'
-import { ReadingPage } from '@/pages/reading-page'
+
+// Lazy-load route pages for code-splitting and faster initial bundle loading
+const EnglishPage = lazy(() => import('@/pages/english-page').then((m) => ({ default: m.EnglishPage })))
+const BoardPage = lazy(() => import('@/pages/board-page').then((m) => ({ default: m.BoardPage })))
+const GrammarPage = lazy(() => import('@/pages/grammar-page').then((m) => ({ default: m.GrammarPage })))
+const ListeningPage = lazy(() => import('@/pages/listening-page').then((m) => ({ default: m.ListeningPage })))
+const ReadingPage = lazy(() => import('@/pages/reading-page').then((m) => ({ default: m.ReadingPage })))
+const RadioNewsPage = lazy(() => import('@/pages/radio-news-page').then((m) => ({ default: m.RadioNewsPage })))
+const AboutPage = lazy(() => import('@/pages/about-page').then((m) => ({ default: m.AboutPage })))
+const NotFoundPage = lazy(() => import('@/pages/not-found-page').then((m) => ({ default: m.NotFoundPage })))
+
+function PageLoadingFallback() {
+  return (
+    <div className="flex h-72 w-full flex-col items-center justify-center gap-3">
+      <div className="flex items-center gap-2.5 rounded-full border border-border/80 bg-card/60 px-4 py-2 text-xs text-muted-foreground shadow-2xs backdrop-blur-xs">
+        <span className="size-2 animate-ping rounded-full bg-primary" />
+        <span className="font-mono text-[11px] tracking-wide text-foreground/80">Loading module...</span>
+      </div>
+    </div>
+  )
+}
 
 export default function App() {
   return (
@@ -116,18 +129,20 @@ function Frame() {
         </header>
 
         <main className="w-full flex-1 px-4 py-5 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] sm:px-6 lg:px-8 lg:py-6 lg:pb-8">
-          <Routes>
-            <Route index element={<EnglishPage />} />
-            <Route path="english" element={<EnglishPage />} />
-            <Route path="grammar" element={<GrammarPage />} />
-            <Route path="reading" element={<ReadingPage />} />
-            <Route path="listening" element={<ListeningPage />} />
-            <Route path="radio" element={<RadioNewsPage />} />
-            <Route path="desk" element={<BoardPage />} />
-            <Route path="board" element={<BoardPage />} />
-            <Route path="about" element={<AboutPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
+          <Suspense fallback={<PageLoadingFallback />}>
+            <Routes>
+              <Route index element={<EnglishPage />} />
+              <Route path="english" element={<EnglishPage />} />
+              <Route path="grammar" element={<GrammarPage />} />
+              <Route path="reading" element={<ReadingPage />} />
+              <Route path="listening" element={<ListeningPage />} />
+              <Route path="radio" element={<RadioNewsPage />} />
+              <Route path="desk" element={<BoardPage />} />
+              <Route path="board" element={<BoardPage />} />
+              <Route path="about" element={<AboutPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Suspense>
         </main>
 
         <footer className="w-full px-4 pt-2 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] sm:px-6 lg:px-8 lg:pb-5">
