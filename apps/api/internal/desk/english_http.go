@@ -121,10 +121,13 @@ func (h *Handler) listEnglish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Cache-Control", "public, max-age=30, stale-while-revalidate=300")
 	if etag != "" {
 		w.Header().Set("ETag", etag)
-		if match := strings.TrimSpace(r.Header.Get("If-None-Match")); match != "" && match == etag {
+		match := strings.TrimSpace(r.Header.Get("If-None-Match"))
+		cleanMatch := strings.TrimPrefix(match, "W/")
+		cleanEtag := strings.TrimPrefix(etag, "W/")
+		if cleanMatch != "" && cleanMatch == cleanEtag {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}

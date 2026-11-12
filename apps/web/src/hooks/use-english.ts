@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   deleteEnglish,
+  getCachedEnglishCards,
   listEnglish,
   setEnglishReview,
 } from '@/lib/api'
@@ -8,16 +9,16 @@ import type { EnglishCard } from '@/lib/english'
 import type { StorageProblem } from '@/lib/projects'
 
 export function useEnglish() {
-  const [cards, setCards] = useState<EnglishCard[]>([])
-  const [ready, setReady] = useState(false)
+  const [cards, setCards] = useState<EnglishCard[]>(getCachedEnglishCards)
+  const [ready, setReady] = useState(true)
   const [problem, setProblem] = useState<StorageProblem | null>(null)
 
   const load = useCallback(async () => {
     try {
-      setCards(await listEnglish())
+      const fresh = await listEnglish()
+      setCards(fresh)
       setProblem(null)
     } catch {
-      setCards([])
       setProblem('unavailable')
     } finally {
       setReady(true)

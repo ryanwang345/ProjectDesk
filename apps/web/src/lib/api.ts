@@ -105,13 +105,17 @@ import { BUILTIN_VOCAB_CARDS } from '@/lib/vocab-builtin'
 let englishETagCache = ''
 let englishCardsCache: EnglishCard[] | null = null
 
+export function getCachedEnglishCards(): EnglishCard[] {
+  return englishCardsCache && englishCardsCache.length > 0 ? englishCardsCache : BUILTIN_VOCAB_CARDS
+}
+
 export async function listEnglish(): Promise<EnglishCard[]> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (englishETagCache && englishCardsCache) {
     headers['If-None-Match'] = englishETagCache
   }
   try {
-    const response = await fetch('/api/english', { cache: 'no-store', headers })
+    const response = await fetch('/api/english', { cache: 'default', headers })
     if (response.status === 304 && englishCardsCache) {
       return englishCardsCache
     }
@@ -122,11 +126,11 @@ export async function listEnglish(): Promise<EnglishCard[]> {
     const cards = (await response.json()) as EnglishCard[]
     const etag = response.headers.get('ETag')
     if (etag) {
-      englishETagCache = etag
+      englishETagCache = etag.replace(/^W\//, '')
       englishCardsCache = cards
     } else {
       englishETagCache = ''
-      englishCardsCache = null
+      englishCardsCache = cards
     }
     return cards
   } catch {

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Search, Sparkles } from 'lucide-react'
 import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { GlobalHoverDictionary, useHoverDictionaryToggle } from '@/components/global-hover-dictionary'
 import { SiteHeader } from '@/components/site-header'
 import { SpeechSettings } from '@/components/speech-settings'
@@ -129,20 +130,22 @@ function Frame() {
         </header>
 
         <main className="w-full flex-1 px-4 py-5 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] sm:px-6 lg:px-8 lg:py-6 lg:pb-8">
-          <Suspense fallback={<PageLoadingFallback />}>
-            <Routes>
-              <Route index element={<EnglishPage />} />
-              <Route path="english" element={<EnglishPage />} />
-              <Route path="grammar" element={<GrammarPage />} />
-              <Route path="reading" element={<ReadingPage />} />
-              <Route path="listening" element={<ListeningPage />} />
-              <Route path="radio" element={<RadioNewsPage />} />
-              <Route path="desk" element={<BoardPage />} />
-              <Route path="board" element={<BoardPage />} />
-              <Route path="about" element={<AboutPage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <Routes>
+                <Route index element={<EnglishPage />} />
+                <Route path="english" element={<EnglishPage />} />
+                <Route path="grammar" element={<GrammarPage />} />
+                <Route path="reading" element={<ReadingPage />} />
+                <Route path="listening" element={<ListeningPage />} />
+                <Route path="radio" element={<RadioNewsPage />} />
+                <Route path="desk" element={<BoardPage />} />
+                <Route path="board" element={<BoardPage />} />
+                <Route path="about" element={<AboutPage />} />
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </main>
 
         <footer className="w-full px-4 pt-2 pb-[calc(8rem+env(safe-area-inset-bottom,0px))] sm:px-6 lg:px-8 lg:pb-5">
