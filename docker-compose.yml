@@ -1,1 +1,61 @@
-deploy/docker-compose.yml
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: projectdesk
+      POSTGRES_PASSWORD: projectdesk
+      POSTGRES_DB: projectdesk
+    ports:
+      - "54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U projectdesk -d projectdesk"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: apps/api
+      secrets:
+        - extra-ca
+    environment:
+      DATABASE_URL: postgres://projectdesk:projectdesk@postgres:5432/projectdesk?sslmode=disable
+      PORT: "47292"
+      # Encrypts provider API keys at rest. Change this for anything shared;
+      # rotating it means re-entering provider keys under AI Settings.
+      PROJECT_DESK_SECRET_KEY: ${PROJECT_DESK_SECRET_KEY:-local-compose-only-change-me}
+      # Optional bearer token for AI settings changes (providers, agents).
+      PROJECT_DESK_ADMIN_TOKEN: ${PROJECT_DESK_ADMIN_TOKEN:-}
+      # Optional natural sentence audio. Recorded word audio needs no API key.
+      PROJECT_DESK_SPEECH_API_KEY: ${PROJECT_DESK_SPEECH_API_KEY:-}
+      PROJECT_DESK_SPEECH_BASE_URL: ${PROJECT_DESK_SPEECH_BASE_URL:-https://api.openai.com/v1}
+      PROJECT_DESK_SPEECH_MODEL: ${PROJECT_DESK_SPEECH_MODEL:-gpt-audio-1.5}
+      PROJECT_DESK_SPEECH_VOICE: ${PROJECT_DESK_SPEECH_VOICE:-marin}
+      # The API container has no Docker daemon, so sandboxed test runs report
+      # "not run" here. Run the API on a host with Docker to enable them.
+      PROJECT_DESK_RUNNER: none
+      PROJECT_DESK_WORKER_CONCURRENCY: "2"
+      # Set to 1 to write dictionary senses for every word at startup. Off by
+      # default because one full run can use up a free model quota.
+      PROJECT_DESK_FILL_SENSES: ${PROJECT_DESK_FILL_SENSES:-0}
+    ports:
+      - "47292:47292"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build: apps/web
+    ports:
+      - "47291:80"
+    depends_on:
+      - api
+
+# Public CA bundle for TLS interception. Used while apk installs git and
+# left in the API trust store so provider calls can verify. Empty on a
+# network that does not intercept. Never a private key.
+# Recreate it on a Netskope machine with:
+#   echo | openssl s_client -showcerts -connect dl-cdn.alpinelinux.org:443 -servername dl-cdn.alpinelinux.org 2>/dev/null | awk 'BEGIN{n=0} /BEGIN CERT/{n++; if(n==1) next} n>=2 && n<=4' > apps/api/extra-ca.crt
+secrets:
+  extra-ca:
+    file: apps/api/extra-ca.crt

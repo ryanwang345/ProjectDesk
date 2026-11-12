@@ -14,10 +14,10 @@ help:
 	@echo "  make clean       - Remove build artifacts and node_modules"
 
 dev:
-	docker compose -f deploy/docker-compose.yml up --build
+	docker compose up --build
 
 dev-down:
-	docker compose -f deploy/docker-compose.yml down -v
+	docker compose down -v
 
 build: build-web build-api
 
