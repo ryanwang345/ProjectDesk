@@ -446,7 +446,7 @@ spec:
           expression {
             (env.BRANCH_NAME ?: env.GIT_BRANCH ?: '').replaceFirst('^origin/', '') == 'main'
           }
-          expression { return "${UPDATE_HELM_TAGS:-true}" == 'true' }
+          expression { return params.UPDATE_HELM_TAGS != false }
           expression { return fileExists('.ci-build-web') || fileExists('.ci-build-api') }
         }
       }
