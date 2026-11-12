@@ -91,6 +91,11 @@ spec:
       defaultValue: false,
       description: 'Force build and push E2E tests (project-desk-e2e)'
     )
+    booleanParam(
+      name: 'SKIP_E2E',
+      defaultValue: false,
+      description: 'Explicitly skip E2E container build and tests to save disk space'
+    )
   }
 
   environment {
@@ -98,6 +103,7 @@ spec:
     FORCE_WEB = "${params.FORCE_WEB ?: false}"
     FORCE_API = "${params.FORCE_API ?: false}"
     FORCE_E2E = "${params.FORCE_E2E ?: false}"
+    SKIP_E2E = "${params.SKIP_E2E ?: false}"
   }
 
   options {
@@ -184,20 +190,24 @@ spec:
             fi
             echo "========================================"
 
-            # Exercise all builders when the pipeline itself changes.
+            # Filter out documentation, markdown, diagrams, and assets from triggering container builds
+            CODE_CHANGED_FILES="$(echo "$CHANGED_FILES" | grep -v -E '\.(md|markdown|mmd|svg|png|jpg|jpeg|gif)$' || true)"
+
+            # Exercise builders when the pipeline itself changes.
+            # Rebuild Web and API by default; skip E2E unless explicitly requested to prevent node disk exhaustion.
             if echo "$CHANGED_FILES" | grep -q '^Jenkinsfile$'; then
               echo "[CI] -> Detected pipeline changes"
-              touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
+              touch .ci-build-web .ci-build-api .ci-build-helm .ci-build-any
             fi
 
             # 1. API: changes under apps/api/ (or legacy project-desk/server/)
-            if echo "$CHANGED_FILES" | grep -q -E '^(apps/api/|project-desk/server/)'; then
+            if echo "$CODE_CHANGED_FILES" | grep -q -E '^(apps/api/|project-desk/server/)'; then
               echo "[CI] -> Detected API changes"
               touch .ci-build-api .ci-build-any
             fi
 
-            # 2. E2E: changes under apps/e2e/ (or legacy project-desk/e2e/)
-            if echo "$CHANGED_FILES" | grep -q -E '^(apps/e2e/|project-desk/e2e/)'; then
+            # 2. E2E: code changes under apps/e2e/ (excluding docs/assets)
+            if echo "$CODE_CHANGED_FILES" | grep -q -E '^(apps/e2e/|project-desk/e2e/)'; then
               echo "[CI] -> Detected E2E changes"
               touch .ci-build-e2e .ci-build-any
             fi
@@ -209,9 +219,15 @@ spec:
             fi
 
             # 4. Web: changes under apps/web/
-            if echo "$CHANGED_FILES" | grep -q -E '^apps/web/'; then
+            if echo "$CODE_CHANGED_FILES" | grep -q -E '^apps/web/'; then
               echo "[CI] -> Detected Web frontend changes"
               touch .ci-build-web .ci-build-any
+            fi
+
+            # Allow explicitly skipping E2E to save ephemeral disk space
+            if [ "${SKIP_E2E:-false}" = "true" ] || echo "$COMMIT_MSG" | grep -qiE '\\[(skip e2e|no e2e)\\]'; then
+              echo "[CI] Skip E2E requested. Removing E2E build flags."
+              rm -f .ci-build-e2e
             fi
 
             if [ ! -f .ci-build-any ] && [ ! -f .ci-build-helm ]; then
