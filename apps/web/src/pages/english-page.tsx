@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Brain, Clock, Search, Star } from 'lucide-react'
 import { ConfirmDialog } from '@/components/confirm-dialog'
@@ -207,7 +207,7 @@ function WordDesk({
     if (urlParam) return urlParam
     return cards.find((c) => c.word.toLowerCase() === 'additional')?.id ?? null
   })
-  const [reviewing, setReviewing] = useState(false)
+  const reviewing = false
   const [wordQuery, setWordQuery] = useState('')
   const [wordFilter, setWordFilter] = useState<'all' | 'band67' | 'highfreq' | 'unmarked'>('all')
   const [letter, setLetter] = useState(() => wordLetter(cards.find((card) => card.id === new URLSearchParams(window.location.search).get('word'))?.word ?? 'A'))
@@ -216,25 +216,35 @@ function WordDesk({
   const bandFailed = useRef<string | null>(null)
   const senseFlight = useRef<string | null>(null)
   const senseTried = useRef(new Set<string>())
+  const [displayLimit, setDisplayLimit] = useState(50)
+
+  useEffect(() => {
+    setDisplayLimit(50)
+  }, [letter, wordFilter, wordQuery])
+
   const query = wordQuery.trim().toLowerCase()
-  const catalog = [...cards].sort((a, b) => a.word.localeCompare(b.word))
+  const catalog = useMemo(() => [...cards].sort((a, b) => a.word.localeCompare(b.word)), [cards])
 
-  const baseWords = catalog.filter((card) => {
-    if (!query) return wordLetter(card.word) === letter
-    const senses = card.senses ?? []
-    return (
-      card.word.toLowerCase().includes(query) ||
-      card.meaning.toLowerCase().includes(query) ||
-      senses.some((sense) => sense.zh.includes(wordQuery.trim()))
-    )
-  })
+  const baseWords = useMemo(() => {
+    return catalog.filter((card) => {
+      if (!query) return wordLetter(card.word) === letter
+      const senses = card.senses ?? []
+      return (
+        card.word.toLowerCase().includes(query) ||
+        card.meaning.toLowerCase().includes(query) ||
+        senses.some((sense) => sense.zh.includes(wordQuery.trim()))
+      )
+    })
+  }, [catalog, query, letter, wordQuery])
 
-  const visibleWords = baseWords.filter((card, idx) => {
-    if (wordFilter === 'unmarked') return !card.inReview
-    if (wordFilter === 'band67') return Boolean(card.band?.writing) || (card.word.length >= 6 && card.word.length <= 11)
-    if (wordFilter === 'highfreq') return idx % 2 === 0 || Boolean(card.band?.collocations?.length)
-    return true
-  })
+  const visibleWords = useMemo(() => {
+    return baseWords.filter((card, idx) => {
+      if (wordFilter === 'unmarked') return !card.inReview
+      if (wordFilter === 'band67') return Boolean(card.band?.writing) || (card.word.length >= 6 && card.word.length <= 11)
+      if (wordFilter === 'highfreq') return idx % 2 === 0 || Boolean(card.band?.collocations?.length)
+      return true
+    })
+  }, [baseWords, wordFilter])
 
   const current =
     cards.find((card) => card.id === shownId) ??
@@ -245,7 +255,14 @@ function WordDesk({
     cards[0] ??
     null
 
-  const totalInReview = cards.filter((c) => c.inReview).length
+  const totalInReview = useMemo(() => cards.filter((c) => c.inReview).length, [cards])
+  const currentWordId = current?.id
+  const hasBand = Boolean(
+    current?.band?.writing &&
+      current?.band?.writingZh &&
+      (current?.band?.examples?.length ?? 0) > 0 &&
+      (current?.band?.examplesZh?.length ?? 0) === (current?.band?.examples?.length ?? 0),
+  )
 
   const triggerBandFetch = useCallback(
     (card: EnglishCard, force = false) => {
@@ -274,18 +291,12 @@ function WordDesk({
 
   useEffect(() => {
     if (!current) return
-    const card = current
-    if (
-      card.band?.writing &&
-      card.band.writingZh &&
-      (card.band.examples?.length ?? 0) > 0 &&
-      (card.band.examplesZh?.length ?? 0) === (card.band.examples?.length ?? 0)
-    ) {
+    if (hasBand) {
       setBandState('idle')
       return
     }
-    triggerBandFetch(card, false)
-  }, [current, triggerBandFetch])
+    triggerBandFetch(current, false)
+  }, [currentWordId, hasBand, triggerBandFetch])
 
   useEffect(() => {
     if (!current || (current.senses ?? []).length > 0) return
@@ -299,7 +310,7 @@ function WordDesk({
       .finally(() => {
         if (senseFlight.current === requested) senseFlight.current = null
       })
-  }, [current, adoptCard])
+  }, [currentWordId, adoptCard])
 
   return (
     <div className="flex flex-col gap-5">
@@ -393,8 +404,7 @@ function WordDesk({
             reviewing={reviewing}
             bandState={bandState}
             onReview={(inReview) => {
-              setReviewing(true)
-              void markReview(current.id, inReview).finally(() => setReviewing(false))
+              void markReview(current.id, inReview)
             }}
             onRemove={() => setPendingDelete(current)}
             onRegenerateBand={() => triggerBandFetch(current, true)}
@@ -481,7 +491,7 @@ function WordDesk({
             </p>
           ) : (
             <ul className="flex max-h-[calc(100svh-22rem)] flex-col gap-2.5 overflow-y-auto pe-1 lg:[scrollbar-gutter:stable]">
-              {visibleWords.map((card, idx) => {
+              {visibleWords.slice(0, displayLimit).map((card, idx) => {
                 const active = card.id === current?.id
                 const dict = getDictionaryEntry(card.word)
                 const rawPron = card.pronunciation?.trim() || ''
@@ -581,6 +591,21 @@ function WordDesk({
                   </li>
                 )
               })}
+              {visibleWords.length > displayLimit ? (
+                <li className="pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDisplayLimit((prev) => prev + 50)}
+                    className="w-full rounded-2xl border-dashed py-2 text-xs text-muted-foreground hover:border-primary hover:text-foreground"
+                  >
+                    {zh
+                      ? `加载更多单词 (${displayLimit} / ${visibleWords.length} 词)`
+                      : `Load more (${displayLimit} / ${visibleWords.length})`}
+                  </Button>
+                </li>
+              ) : null}
             </ul>
           )}
 

@@ -53,11 +53,26 @@ export function useEnglish() {
   }, [awaitingDetail])
 
   const markReview = useCallback(async (id: string, inReview: boolean) => {
+    // 1. Instant optimistic UI update (0ms delay)
+    setCards((current) => current.map((card) => (card.id === id ? { ...card, inReview } : card)))
     try {
       const saved = await setEnglishReview(id, inReview)
-      setCards((current) => current.map((card) => (card.id === id ? saved : card)))
+      setCards((current) =>
+        current.map((card) => {
+          if (card.id !== id) return card
+          return {
+            ...card,
+            ...saved,
+            inReview,
+            band: saved.band && Object.keys(saved.band).length > 0 ? saved.band : card.band,
+            senses: saved.senses && saved.senses.length > 0 ? saved.senses : card.senses,
+          }
+        }),
+      )
       setProblem(null)
     } catch (error) {
+      // Rollback on failure
+      setCards((current) => current.map((card) => (card.id === id ? { ...card, inReview: !inReview } : card)))
       setProblem('write-failed')
       throw error
     }
