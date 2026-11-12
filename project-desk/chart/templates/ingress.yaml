@@ -35,4 +35,16 @@ spec:
                 port:
                   number: 80
     {{- end }}
+    {{- range .Values.ingress.extraHosts }}
+    - host: {{ . }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 80
+    {{- end }}
 {{- end }}
