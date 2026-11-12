@@ -13,6 +13,7 @@ import { useEnglish } from '@/hooks/use-english'
 import { useLearningProgress, recordVocabularyCompletion, refreshLearningProgress } from '@/hooks/use-learning-progress'
 import { ensureBand, ensureSenses, getLearningPlan } from '@/lib/api'
 import { getDictionaryEntry } from '@/lib/dictionary'
+import { getIeltsBand, isIeltsWord } from '@/lib/ielts-vocab'
 import { useI18n } from '@/i18n'
 import type { EnglishCard } from '@/lib/english'
 import { currentLesson, lessonCount, loadProgress, type LessonProgress } from '@/lib/lesson'
@@ -240,7 +241,7 @@ function WordDesk({
   const visibleWords = useMemo(() => {
     return baseWords.filter((card, idx) => {
       if (wordFilter === 'unmarked') return !card.inReview
-      if (wordFilter === 'band67') return Boolean(card.band?.writing) || (card.word.length >= 6 && card.word.length <= 11)
+      if (wordFilter === 'band67') return isIeltsWord(card.word)
       if (wordFilter === 'highfreq') return idx % 2 === 0 || Boolean(card.band?.collocations?.length)
       return true
     })
@@ -459,7 +460,7 @@ function WordDesk({
               {(
                 [
                   { id: 'all' as const, label: zh ? '全部' : 'All' },
-                  { id: 'band67' as const, label: zh ? 'Band 6-7 雅思' : 'Band 6–7' },
+                  { id: 'band67' as const, label: zh ? '雅思核心词' : 'IELTS' },
                   { id: 'highfreq' as const, label: zh ? '高频' : 'High Freq' },
                   { id: 'unmarked' as const, label: zh ? '未加入复习' : 'Not marked' },
                 ]
@@ -491,7 +492,7 @@ function WordDesk({
             </p>
           ) : (
             <ul className="flex max-h-[calc(100svh-22rem)] flex-col gap-2.5 overflow-y-auto pe-1 lg:[scrollbar-gutter:stable]">
-              {visibleWords.slice(0, displayLimit).map((card, idx) => {
+              {visibleWords.slice(0, displayLimit).map((card) => {
                 const active = card.id === current?.id
                 const dict = getDictionaryEntry(card.word)
                 const rawPron = card.pronunciation?.trim() || ''
@@ -501,22 +502,7 @@ function WordDesk({
                 const pos = shortPos(rawPos)
                 const isBadMeaning = !card.meaning || card.meaning === '堵塞阻碍障碍碍木屐阻塞不畅' || card.meaning.includes('堵塞阻碍障碍碍')
                 const meaning = isBadMeaning ? (dict.meaningZh || '堵塞，阻塞；阻碍；木屐') : card.meaning
-                const bandTag =
-                  card.word === 'additional'
-                    ? 'Band 6.5'
-                    : card.word === 'abandon'
-                      ? 'Band 7.0'
-                      : card.word === 'abandonment'
-                        ? 'Band 7.5'
-                        : card.word === 'abbey'
-                          ? 'Band 6.0'
-                          : card.word === 'ability'
-                            ? 'Band 5.5'
-                            : card.word === 'abnormal'
-                              ? 'Band 7.5'
-                              : card.word === 'aboard'
-                                ? 'Band 6.0'
-                                : (idx % 3 === 0 ? 'Band 6.5' : idx % 3 === 1 ? 'Band 7.0' : 'Band 7.5')
+                const ieltsBand = getIeltsBand(card.word)
 
                 const intervalTag = card.inReview
                   ? (zh ? '已加入复习' : 'In review')
@@ -555,16 +541,18 @@ function WordDesk({
                             />
                           ) : null}
                         </span>
-                        <span
-                          className={cn(
-                            'rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold',
-                            active
-                              ? 'border border-primary/35 bg-primary/15 text-primary'
-                              : 'border border-border bg-background/70 text-muted-foreground',
-                          )}
-                        >
-                          {bandTag}
-                        </span>
+                        {ieltsBand ? (
+                          <span
+                            className={cn(
+                              'rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold',
+                              active
+                                ? 'border border-primary/40 bg-primary/20 text-primary'
+                                : 'border border-primary/25 bg-primary/10 text-primary',
+                            )}
+                          >
+                            IELTS {ieltsBand}
+                          </span>
+                        ) : null}
                       </div>
 
                       {displayPron ? (

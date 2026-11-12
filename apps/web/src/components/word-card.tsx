@@ -21,6 +21,7 @@ import { InteractiveGlossText } from '@/components/interactive-gloss-text'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { getDictionaryEntry } from '@/lib/dictionary'
+import { getIeltsBand } from '@/lib/ielts-vocab'
 import type { EnglishCard, WordSense } from '@/lib/english'
 import { translateExample } from '@/lib/example-zh'
 import { translateCollocation } from '@/lib/collocations-zh'
@@ -142,6 +143,7 @@ export function WordCard({
   const bandExamples = (card.band?.examples ?? []).filter((s) => s.trim() !== '')
   const combinedExamples = bandExamples.length > 0 ? bandExamples : examples
   const shownExamples = examplesOpen ? combinedExamples : combinedExamples.slice(0, 3)
+  const ieltsBand = getIeltsBand(card.word)
 
   const collocations =
     (card.band?.collocations?.length ?? 0) > 0
@@ -250,7 +252,7 @@ export function WordCard({
         {/* Main Headword, Dual IPA Pills & FSRS Stability Ring */}
         <div className="mt-5 flex flex-wrap items-start justify-between gap-6">
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <h2 className="font-display text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
                 {card.word}
               </h2>
@@ -259,6 +261,12 @@ export function WordCard({
                   className="size-5 shrink-0 fill-primary text-primary"
                   aria-hidden="true"
                 />
+              ) : null}
+              {ieltsBand ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/35 bg-primary/10 px-3 py-1 font-mono text-xs font-semibold text-primary shadow-2xs">
+                  <GraduationCap className="size-3.5" aria-hidden="true" />
+                  <span>IELTS · {ieltsBand}</span>
+                </span>
               ) : null}
             </div>
 
