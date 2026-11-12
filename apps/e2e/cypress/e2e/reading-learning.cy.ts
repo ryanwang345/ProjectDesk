@@ -1,4 +1,4 @@
-import type { ReadingQuestion, ReadingSessionBundle } from '../../../src/lib/reading'
+import type { ReadingQuestion, ReadingSessionBundle } from '../../web/src/lib/reading'
 
 function answer(question: ReadingQuestion, value?: string) {
   cy.get(`button[aria-label="Question ${question.number}"]`).click()

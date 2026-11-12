@@ -1,4 +1,4 @@
-import type { EnglishCard } from '../../../src/lib/english'
+import type { EnglishCard } from '../../web/src/lib/english'
 
 type WorldEntry = { word: string; meaning: string; kind: string; definition: string; examples: string[] }
 

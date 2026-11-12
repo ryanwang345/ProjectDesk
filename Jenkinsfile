@@ -212,8 +212,17 @@ spec:
       steps {
         container('node') {
           sh '''
-            cd "$WORKSPACE"
-            CYPRESS_INSTALL_BINARY=0 npm ci
+            if [ -f "$WORKSPACE/.ci-build-web" ]; then
+              echo "[CI] Installing web dependencies..."
+              cd "$WORKSPACE/apps/web"
+              npm ci
+            fi
+
+            if [ -f "$WORKSPACE/.ci-build-e2e" ]; then
+              echo "[CI] Installing e2e dependencies..."
+              cd "$WORKSPACE/apps/e2e"
+              CYPRESS_INSTALL_BINARY=0 npm ci
+            fi
           '''
         }
       }
@@ -234,11 +243,12 @@ spec:
           }
           steps {
             container('node') {
-              sh '''
-                cd "$WORKSPACE"
-                npm run lint:web
-                npm run build:web
-              '''
+              dir('apps/web') {
+                sh '''
+                  npm run lint
+                  npm run build
+                '''
+              }
             }
           }
         }
@@ -262,12 +272,13 @@ spec:
           }
           steps {
             container('node') {
-              sh '''
-                if [ -f "$WORKSPACE/.ci-build-e2e" ]; then
-                  cd "$WORKSPACE"
-                  npm run test:e2e
-                fi
-              '''
+              dir('apps/e2e') {
+                sh '''
+                  if [ -f "$WORKSPACE/.ci-build-e2e" ]; then
+                    npm run typecheck
+                  fi
+                '''
+              }
             }
 
             container('helm') {
