@@ -91,8 +91,6 @@ spec:
               export GIT_TERMINAL_PROMPT=0
 
               REMOTE="https://x-access-token@github.com/ryanwang345/ProjectDesk-GitOps.git"
-              VALUES="helm/values.yaml"
-              [ ! -f "$VALUES" ] && VALUES="deploy/helm/values.yaml"
 
               TAG="${IMAGE_TAG}"
               UPDATE_WEB="false"
@@ -110,6 +108,18 @@ spec:
                 echo "[Deploy] Attempt ${attempt}: Fetching latest main..."
                 g fetch --quiet "$REMOTE" main
                 g checkout --quiet --force -B release-tag FETCH_HEAD
+
+                VALUES="helm/values.yaml"
+                if [ ! -f "$VALUES" ] && [ -f "deploy/helm/values.yaml" ]; then
+                  VALUES="deploy/helm/values.yaml"
+                fi
+
+                if [ ! -f "$VALUES" ]; then
+                  echo "[Deploy] Error: values.yaml not found (tried helm/values.yaml and deploy/helm/values.yaml)"
+                  exit 1
+                fi
+
+                mkdir -p "$(dirname "$VALUES")"
 
                 awk -v tag="$TAG" -v updateWeb="$UPDATE_WEB" -v updateApi="$UPDATE_API" '
                   /^[^ ]/ { section=$1 }
