@@ -51,14 +51,32 @@ spec:
 
   parameters {
     booleanParam(
-      name: 'FORCE_BUILD',
+      name: 'FORCE_ALL',
       defaultValue: false,
-      description: 'Force build and push all components regardless of git changes'
+      description: 'Force build and push ALL components'
+    )
+    booleanParam(
+      name: 'FORCE_WEB',
+      defaultValue: false,
+      description: 'Force build and push Web frontend (project-desk-web)'
+    )
+    booleanParam(
+      name: 'FORCE_API',
+      defaultValue: false,
+      description: 'Force build and push Go API backend (project-desk-api)'
+    )
+    booleanParam(
+      name: 'FORCE_E2E',
+      defaultValue: false,
+      description: 'Force build and push E2E tests (project-desk-e2e)'
     )
   }
 
   environment {
-    FORCE_BUILD = "${params.FORCE_BUILD ?: false}"
+    FORCE_ALL = "${params.FORCE_ALL ?: false}"
+    FORCE_WEB = "${params.FORCE_WEB ?: false}"
+    FORCE_API = "${params.FORCE_API ?: false}"
+    FORCE_E2E = "${params.FORCE_E2E ?: false}"
   }
 
   options {
@@ -92,11 +110,26 @@ spec:
               exit 0
             fi
 
-            # Check if force build is requested via parameter or commit message
-            if [ "${FORCE_BUILD:-false}" = "true" ] || echo "$COMMIT_MSG" | grep -qiE '\\[(force build|build all)\\]'; then
-              echo "[CI] Force build requested. Marking all components for build."
+            # Check if force build is requested via parameters or commit message
+            if [ "${FORCE_ALL:-false}" = "true" ] || echo "$COMMIT_MSG" | grep -qiE '\\[(force build|build all)\\]'; then
+              echo "[CI] Force build ALL requested. Marking all components for build."
               touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
               exit 0
+            fi
+
+            if [ "${FORCE_WEB:-false}" = "true" ] || echo "$COMMIT_MSG" | grep -qi '\\[build web\\]'; then
+              echo "[CI] Force build WEB requested."
+              touch .ci-build-web .ci-build-any
+            fi
+
+            if [ "${FORCE_API:-false}" = "true" ] || echo "$COMMIT_MSG" | grep -qi '\\[build api\\]'; then
+              echo "[CI] Force build API requested."
+              touch .ci-build-api .ci-build-any
+            fi
+
+            if [ "${FORCE_E2E:-false}" = "true" ] || echo "$COMMIT_MSG" | grep -qi '\\[build e2e\\]'; then
+              echo "[CI] Force build E2E requested."
+              touch .ci-build-e2e .ci-build-any
             fi
 
             # Determine base commit to diff against
@@ -113,8 +146,10 @@ spec:
             fi
 
             if [ -z "$BASE_COMMIT" ]; then
-              echo "[CI] No base commit found (initial build). Marking all components for build."
-              touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
+              if [ ! -f .ci-build-any ]; then
+                echo "[CI] No base commit found (initial build). Marking all components for build."
+                touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
+              fi
               exit 0
             fi
 
