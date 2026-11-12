@@ -78,5 +78,6 @@ make dev-down
 ## 🔄 CI/CD & GitOps Workflow
 
 - **CI Pipeline (`Jenkinsfile`)**: Runs on Kubernetes agents using Pod templates. Features **intelligent path-based change detection** — only builds and pushes Docker images for services that actually changed in Git.
+- **Image builds**: A pinned rootless BuildKit container builds and pushes the selected web, API, and E2E images. Changes to `Jenkinsfile` rebuild all components. See [CI image builds](docs/ci-image-builds.md) for runner requirements and verification.
 - **GitOps (`ArgoCD`)**: Continuously reconciles cluster state from `deploy/helm` with automated self-healing.
 - **Cloudflare Zero Trust**: Exposes Ingress securely to public domain (`www.ryanwang.dev`) via `cloudflared`.

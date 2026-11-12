@@ -7,6 +7,9 @@ pipeline {
 apiVersion: v1
 kind: Pod
 spec:
+  shareProcessNamespace: false
+  securityContext:
+    fsGroup: 1000
   containers:
     - name: node
       image: node:22-bookworm
@@ -27,10 +30,15 @@ spec:
       command: ['cat']
       tty: true
 
-    - name: kaniko
-      image: gcr.io/kaniko-project/executor:v1.23.2-debug
-      command: ['/busybox/cat']
+    - name: buildkit
+      image: moby/buildkit:v0.34.2-rootless
+      command: ['cat']
       tty: true
+      env:
+        # Each invocation starts a temporary daemon inside this container.
+        # Native snapshots avoid requiring /dev/fuse or overlayfs support.
+        - name: BUILDKITD_FLAGS
+          value: --oci-worker-no-process-sandbox --oci-worker-snapshotter=native
       resources:
         requests:
           memory: 1Gi
@@ -38,7 +46,20 @@ spec:
         limits:
           memory: 3Gi
       securityContext:
-        runAsUser: 0
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        # Required by rootless BuildKit's user namespaces and mounts.
+        seccompProfile:
+          type: Unconfined
+        appArmorProfile:
+          type: Unconfined
+      volumeMounts:
+        - name: buildkit-state
+          mountPath: /home/user/.local/share/buildkit
+  volumes:
+    - name: buildkit-state
+      emptyDir: {}
 '''
     }
   }
@@ -162,6 +183,12 @@ spec:
               echo "$CHANGED_FILES" | sed 's/^/  /'
             fi
             echo "========================================"
+
+            # Exercise all builders when the pipeline itself changes.
+            if echo "$CHANGED_FILES" | grep -q '^Jenkinsfile$'; then
+              echo "[CI] -> Detected pipeline changes"
+              touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
+            fi
 
             # 1. API: changes under apps/api/ (or legacy project-desk/server/)
             if echo "$CHANGED_FILES" | grep -q -E '^(apps/api/|project-desk/server/)'; then
@@ -328,27 +355,28 @@ spec:
             variable: 'DOCKERHUB_TOKEN'
           )
         ]) {
-          container('kaniko') {
+          container('buildkit') {
             sh '''
               set +x
               set -eu
 
-              mkdir -p /kaniko/.docker
-              trap 'rm -f /kaniko/.docker/config.json' EXIT
+              umask 077
+              DOCKER_CONFIG=$(mktemp -d /tmp/projectdesk-docker.XXXXXX)
+              export DOCKER_CONFIG
+              trap 'rm -rf "$DOCKER_CONFIG"' EXIT
 
               AUTH=$(printf '%s:%s' \
                 "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN" \
                 | base64 | tr -d '[:space:]')
 
               printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}' \
-                "$AUTH" > /kaniko/.docker/config.json
+                "$AUTH" > "$DOCKER_CONFIG/config.json"
 
-              chmod 600 /kaniko/.docker/config.json
               unset AUTH
 
               for app in web api e2e; do
                 if [ ! -f "$WORKSPACE/.ci-build-${app}" ]; then
-                  echo "[Kaniko] Skipping project-desk-${app}: no changes detected."
+                  echo "[BuildKit] Skipping project-desk-${app}: no changes detected."
                   continue
                 fi
 
@@ -357,7 +385,7 @@ spec:
 
                 IMAGE="docker.io/${DOCKERHUB_USER}/project-desk-${app}"
 
-                set -- "--destination=${IMAGE}:${BUILD_NUMBER}"
+                IMAGE_TAGS="${IMAGE}:${BUILD_NUMBER}"
 
                 # BRANCH_NAME is set by multibranch jobs, GIT_BRANCH by plain
                 # pipeline jobs ("origin/main").
@@ -365,23 +393,29 @@ spec:
                 BRANCH="${BRANCH#origin/}"
 
                 if [ "$BRANCH" = "main" ]; then
-                  set -- "$@" "--destination=${IMAGE}:latest"
+                  IMAGE_TAGS="${IMAGE_TAGS},${IMAGE}:latest"
                 fi
 
-                if [ "$app" = "e2e" ]; then
-                  set -- "$@" \
-                    --snapshot-mode=redo \
-                    --compressed-caching=false
+                # CSV quoting keeps both image names in one exporter option.
+                OUTPUT=$(printf 'type=image,"name=%s",push=true' "$IMAGE_TAGS")
+                set -- build \
+                  --progress=plain \
+                  --frontend=dockerfile.v0 \
+                  --local "context=${CONTEXT}" \
+                  --local "dockerfile=${CONTEXT}" \
+                  --output "$OUTPUT"
+
+                # Optional public CA bundle consumed by the API Dockerfile's
+                # secret mount on networks with TLS interception.
+                if [ "$app" = "api" ] && [ -s "$CONTEXT/extra-ca.crt" ]; then
+                  set -- "$@" --secret "id=extra-ca,src=${CONTEXT}/extra-ca.crt"
                 fi
 
-                echo "[Kaniko] Building and pushing project-desk-${app}..."
+                echo "[BuildKit] Building and pushing project-desk-${app}..."
 
-                /kaniko/executor \
-                  --context="dir://${CONTEXT}" \
-                  --dockerfile="${CONTEXT}/Dockerfile" \
-                  "$@"
+                buildctl-daemonless.sh "$@"
 
-                echo "[Kaniko] Published ${IMAGE}:${BUILD_NUMBER}"
+                echo "[BuildKit] Published ${IMAGE}:${BUILD_NUMBER}"
               done
             '''
           }
