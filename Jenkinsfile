@@ -202,6 +202,23 @@ spec:
       }
     }
 
+    stage('Install Dependencies') {
+      when {
+        allOf {
+          not { changelog '\\[skip ci\\]' }
+          expression { return fileExists('.ci-build-web') || fileExists('.ci-build-e2e') }
+        }
+      }
+      steps {
+        container('node') {
+          sh '''
+            cd "$WORKSPACE"
+            CYPRESS_INSTALL_BINARY=0 npm ci
+          '''
+        }
+      }
+    }
+
     stage('Validate') {
       when {
         allOf {
@@ -216,11 +233,11 @@ spec:
             expression { return fileExists('.ci-build-web') }
           }
           steps {
-            dir('apps/web') {
+            container('node') {
               sh '''
-                npm ci
-                npm run lint
-                npm run build
+                cd "$WORKSPACE"
+                npm run lint:web
+                npm run build:web
               '''
             }
           }
@@ -244,35 +261,33 @@ spec:
             expression { return fileExists('.ci-build-e2e') || fileExists('.ci-build-helm') }
           }
           steps {
-            dir('apps/e2e') {
-              container('node') {
-                sh '''
-                  if [ -f "$WORKSPACE/.ci-build-e2e" ]; then
-                    CYPRESS_INSTALL_BINARY=0 npm ci
-                    npm run typecheck
-                  fi
-                '''
-              }
+            container('node') {
+              sh '''
+                if [ -f "$WORKSPACE/.ci-build-e2e" ]; then
+                  cd "$WORKSPACE"
+                  npm run test:e2e
+                fi
+              '''
+            }
 
-              container('helm') {
-                sh '''
-                  HELM_DIR="$WORKSPACE/deploy/helm"
-                  [ ! -d "$HELM_DIR" ] && HELM_DIR="$WORKSPACE/project-desk/chart"
+            container('helm') {
+              sh '''
+                HELM_DIR="$WORKSPACE/deploy/helm"
+                [ ! -d "$HELM_DIR" ] && HELM_DIR="$WORKSPACE/project-desk/chart"
 
-                  for env in dev staging prod; do
-                    helm lint "$HELM_DIR" \
-                      -f "${HELM_DIR}/values-${env}.yaml" \
-                      --set image.tag="ci-${BUILD_NUMBER}" \
-                      --set-file dotenv=.env
-                  done
+                for env in dev staging prod; do
+                  helm lint "$HELM_DIR" \
+                    -f "${HELM_DIR}/values-${env}.yaml" \
+                    --set image.tag="ci-${BUILD_NUMBER}" \
+                    --set-file dotenv=.env
+                done
 
-                  helm template project-desk-e2e "$HELM_DIR" \
-                    --namespace rwang \
-                    -f "${HELM_DIR}/values-dev.yaml" \
-                    --set image.tag="${BUILD_NUMBER}" \
-                    --set-file dotenv=.env > /dev/null
-                '''
-              }
+                helm template project-desk-e2e "$HELM_DIR" \
+                  --namespace rwang \
+                  -f "${HELM_DIR}/values-dev.yaml" \
+                  --set image.tag="${BUILD_NUMBER}" \
+                  --set-file dotenv=.env > /dev/null
+              '''
             }
           }
         }
