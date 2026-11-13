@@ -436,7 +436,8 @@ spec:
 
           build job: 'ProjectDesk-Deploy', wait: false, parameters: [
             string(name: 'COMPONENT', value: component),
-            string(name: 'IMAGE_TAG', value: "${env.BUILD_NUMBER}")
+            string(name: 'IMAGE_TAG', value: "${env.BUILD_NUMBER}"),
+            string(name: 'TARGET_ENV', value: 'dev')
           ]
         }
       }

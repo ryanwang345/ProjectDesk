@@ -101,16 +101,17 @@ spec:
 
               REMOTE="https://x-access-token@github.com/ryanwang345/ProjectDesk-GitOps.git"
               TAG="${IMAGE_TAG}"
-              ENV="${TARGET_ENV}"
+              ENV="${TARGET_ENV:-dev}"
+              COMP="${COMPONENT:-web+api}"
 
               UPDATE_WEB="false"
               UPDATE_API="false"
-              if [ "$COMPONENT" = "web+api" ]; then
+              if [ "$COMP" = "web+api" ]; then
                 UPDATE_WEB="true"
                 UPDATE_API="true"
-              elif [ "$COMPONENT" = "web" ]; then
+              elif [ "$COMP" = "web" ]; then
                 UPDATE_WEB="true"
-              elif [ "$COMPONENT" = "api" ]; then
+              elif [ "$COMP" = "api" ]; then
                 UPDATE_API="true"
               fi
 
@@ -172,7 +173,7 @@ spec:
                   exit 0
                 fi
 
-                MSG="release(${ENV}): update ${COMPONENT} image tag to ${TAG}"
+                MSG="release(${ENV}): update ${COMP} image tag to ${TAG}"
                 g commit --quiet -m "$MSG"
 
                 if g push "$REMOTE" HEAD:main; then
