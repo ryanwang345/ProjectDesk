@@ -121,28 +121,28 @@ spec:
                 g checkout --quiet --force -B release-tag FETCH_HEAD
 
                 # Identify environment values file and base values file
-                TARGET_FILES=()
+                TARGET_FILES=""
                 if [ -f "helm/values-${ENV}.yaml" ]; then
-                  TARGET_FILES+=("helm/values-${ENV}.yaml")
+                  TARGET_FILES="$TARGET_FILES helm/values-${ENV}.yaml"
                 fi
                 if [ -f "helm/values.yaml" ]; then
-                  TARGET_FILES+=("helm/values.yaml")
+                  TARGET_FILES="$TARGET_FILES helm/values.yaml"
                 fi
 
                 # Also update component-specific values if present (web/argo/values/, api/argo/values/)
                 if [ -f "web/argo/values/${ENV}.yaml" ] && [ "$UPDATE_WEB" = "true" ]; then
-                  TARGET_FILES+=("web/argo/values/${ENV}.yaml")
+                  TARGET_FILES="$TARGET_FILES web/argo/values/${ENV}.yaml"
                 fi
                 if [ -f "api/argo/values/${ENV}.yaml" ] && [ "$UPDATE_API" = "true" ]; then
-                  TARGET_FILES+=("api/argo/values/${ENV}.yaml")
+                  TARGET_FILES="$TARGET_FILES api/argo/values/${ENV}.yaml"
                 fi
 
-                if [ ${#TARGET_FILES[@]} -eq 0 ]; then
+                if [ -z "$TARGET_FILES" ]; then
                   echo "[Deploy] Error: No target values files found in ProjectDesk-GitOps!"
                   exit 1
                 fi
 
-                for VALUES in "${TARGET_FILES[@]}"; do
+                for VALUES in $TARGET_FILES; do
                   echo "[Deploy] Updating image tags in ${VALUES} -> ${TAG}"
                   awk -v tag="$TAG" -v updateWeb="$UPDATE_WEB" -v updateApi="$UPDATE_API" '
                     /^[^ ]/ { section=$1 }
