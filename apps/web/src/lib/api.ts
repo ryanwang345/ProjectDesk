@@ -144,8 +144,16 @@ export function deleteEnglish(id: string): Promise<void> {
 }
 
 export function setEnglishReview(id: string, inReview: boolean): Promise<EnglishCard> {
-  return request<EnglishCard>(`/api/english/${id}/review`, {
+  return request<EnglishCard>(`/api/english/${encodeURIComponent(id)}/review`, {
     method: inReview ? 'POST' : 'DELETE',
+    body: JSON.stringify({ inReview }),
+  })
+}
+
+export function saveEnglishCard(card: Partial<EnglishCard>): Promise<EnglishCard> {
+  return request<EnglishCard>('/api/english', {
+    method: 'POST',
+    body: JSON.stringify(card),
   })
 }
 

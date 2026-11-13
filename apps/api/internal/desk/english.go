@@ -213,6 +213,18 @@ func (s *Store) SetEnglishReview(ctx context.Context, id string, inReview bool) 
 		RETURNING `+englishColumns,
 		id, inReview)
 	card, err := scanEnglish(row)
+	if isInvalidUUID(err) || (errors.Is(err, ErrNotFound) && (strings.HasPrefix(id, "seed-") || !strings.Contains(id, "-"))) {
+		wordCandidate := strings.TrimSpace(strings.TrimPrefix(id, "seed-"))
+		if wordCandidate != "" {
+			row = s.pool.QueryRow(ctx, `
+				UPDATE english_cards
+				SET in_review = $2
+				WHERE lower(word) = lower($1)
+				RETURNING `+englishColumns,
+				wordCandidate, inReview)
+			card, err = scanEnglish(row)
+		}
+	}
 	if errors.Is(err, pgx.ErrNoRows) || isInvalidUUID(err) {
 		return EnglishCard{}, ErrNotFound
 	}
@@ -225,11 +237,80 @@ func (s *Store) SetEnglishReview(ctx context.Context, id string, inReview bool) 
 					due_at = LEAST(vocabulary_srs.due_at, now()),
 					state = CASE WHEN vocabulary_srs.reps = 0 THEN 'learning' ELSE 'relearning' END,
 					updated_at = now()
-			`, id)
+			`, card.ID)
 		}
 		s.invalidateEnglishCache()
 	}
 	return card, err
+}
+
+// UpsertEnglishCard creates or updates a vocabulary card and registers it into SRS.
+func (s *Store) UpsertEnglishCard(ctx context.Context, in EnglishCard) (EnglishCard, error) {
+	word := strings.TrimSpace(in.Word)
+	if word == "" {
+		return EnglishCard{}, fmt.Errorf("%w: word cannot be empty", ErrInvalid)
+	}
+
+	var existingID string
+	if in.ID != "" && !strings.HasPrefix(in.ID, "seed-") {
+		_ = s.pool.QueryRow(ctx, `SELECT id::text FROM english_cards WHERE id = $1`, in.ID).Scan(&existingID)
+	}
+	if existingID == "" {
+		_ = s.pool.QueryRow(ctx, `SELECT id::text FROM english_cards WHERE lower(word) = lower($1) ORDER BY updated_at DESC LIMIT 1`, word).Scan(&existingID)
+	}
+
+	sensesJSON, _ := json.Marshal(in.Senses)
+	if in.Senses == nil || len(in.Senses) == 0 {
+		sensesJSON = []byte("[]")
+	}
+	bandJSON, _ := json.Marshal(in.Band)
+	if in.Band.Collocations == nil && in.Band.Writing == "" && in.Band.Speaking == "" && in.Band.Zh == "" {
+		bandJSON = []byte("{}")
+	}
+	examples := in.Examples
+	if examples == nil {
+		examples = []string{}
+	}
+
+	var row pgx.Row
+	if existingID != "" {
+		query := `
+			UPDATE english_cards
+			SET in_review = $2,
+				meaning = CASE WHEN $3 != '' THEN $3 ELSE meaning END,
+				pronunciation = CASE WHEN $4 != '' THEN $4 ELSE pronunciation END,
+				senses = CASE WHEN $5::jsonb != '[]'::jsonb AND $5::jsonb != 'null'::jsonb THEN $5::jsonb ELSE senses END,
+				band = CASE WHEN $6::jsonb != '{}'::jsonb AND $6::jsonb != 'null'::jsonb THEN $6::jsonb ELSE band END,
+				updated_at = now()
+			WHERE id = $1
+			RETURNING ` + englishColumns
+		row = s.pool.QueryRow(ctx, query, existingID, in.InReview, in.Meaning, in.Pronunciation, sensesJSON, bandJSON)
+	} else {
+		query := `
+			INSERT INTO english_cards (word, meaning, pronunciation, examples, in_review, senses, band, generated, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, true, now())
+			RETURNING ` + englishColumns
+		row = s.pool.QueryRow(ctx, query, word, in.Meaning, in.Pronunciation, examples, in.InReview, sensesJSON, bandJSON)
+	}
+
+	card, err := scanEnglish(row)
+	if err != nil {
+		return EnglishCard{}, err
+	}
+
+	if card.InReview {
+		_, _ = s.pool.Exec(ctx, `
+			INSERT INTO vocabulary_srs (card_id, stability, difficulty, state, due_at, updated_at)
+			VALUES ($1, 0.8, 5.5, 'learning', now(), now())
+			ON CONFLICT (card_id) DO UPDATE SET
+				due_at = LEAST(vocabulary_srs.due_at, now()),
+				state = CASE WHEN vocabulary_srs.reps = 0 THEN 'learning' ELSE 'relearning' END,
+				updated_at = now()
+		`, card.ID)
+	}
+
+	s.invalidateEnglishCache()
+	return card, nil
 }
 
 func NormalizeEnglish(input EnglishInput) EnglishInput {

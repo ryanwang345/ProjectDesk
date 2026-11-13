@@ -64,7 +64,7 @@ export function MiniDictionaryTooltipCard({
       await desk.markReview(existing.id, nextSaved)
     } else {
       // Adopt as new card into review queue
-      desk.adoptCard({
+      await desk.adoptCard({
         id: entry.id ?? `seed-${entry.word}`,
         word: entry.word,
         meaning: entry.meaningZh,

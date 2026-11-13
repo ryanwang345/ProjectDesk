@@ -199,7 +199,7 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
       if (existing) {
         await desk.markReview(existing.id, true)
       } else {
-        desk.adoptCard({
+        await desk.adoptCard({
           id: `seed-${item.word}`,
           word: item.word,
           meaning: item.meaning,

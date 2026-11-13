@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Brain, Clock, Search, Star } from 'lucide-react'
+import { Brain, Clock, Plus, Search, Star } from 'lucide-react'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { LessonPath } from '@/components/lesson-path'
 import { LessonPlayer } from '@/components/lesson-player'
@@ -487,9 +487,45 @@ function WordDesk({
           </div>
 
           {visibleWords.length === 0 ? (
-            <p className="rounded-2xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
-              {t('english.noMatch')}
-            </p>
+            <div className="rounded-2xl border border-border/60 bg-card p-4 text-center space-y-3">
+              <p className="text-sm text-muted-foreground">{t('english.noMatch')}</p>
+              {query && (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-full gap-1.5"
+                  onClick={async () => {
+                    const dict = getDictionaryEntry(wordQuery.trim())
+                    const newCard = await adoptCard({
+                      id: `seed-${wordQuery.trim().toLowerCase()}`,
+                      word: wordQuery.trim(),
+                      meaning: dict.meaningZh || (zh ? '生词收录' : 'Saved vocabulary'),
+                      pronunciation: dict.ipa || '',
+                      inReview: true,
+                      generated: true,
+                      updatedAt: new Date().toISOString(),
+                      examples: [],
+                      senses: dict.meaningZh ? [{ pos: dict.pos || 'n.', zh: dict.meaningZh, en: dict.meaningEn || '' }] : [],
+                      band: {
+                        zh: dict.contextNote || '核心词汇',
+                        collocations: dict.synonyms || [],
+                        writing: '',
+                        speaking: '',
+                        weak: '',
+                        fix: '',
+                        paraphrases: dict.synonyms || [],
+                      },
+                    })
+                    if (newCard) {
+                      setShownId(newCard.id)
+                    }
+                  }}
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  <span>{zh ? `+ 将 "${wordQuery.trim()}" 加入生词本` : `+ Add "${wordQuery.trim()}" to Wordbook`}</span>
+                </Button>
+              )}
+            </div>
           ) : (
             <ul className="flex max-h-[calc(100svh-22rem)] flex-col gap-2.5 overflow-y-auto pe-1 lg:[scrollbar-gutter:stable]">
               {visibleWords.slice(0, displayLimit).map((card) => {

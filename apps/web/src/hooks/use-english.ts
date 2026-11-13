@@ -3,6 +3,7 @@ import {
   deleteEnglish,
   getCachedEnglishCards,
   listEnglish,
+  saveEnglishCard,
   setEnglishReview,
 } from '@/lib/api'
 import type { EnglishCard } from '@/lib/english'
@@ -56,19 +57,27 @@ export function useEnglish() {
     // 1. Instant optimistic UI update (0ms delay)
     setCards((current) => current.map((card) => (card.id === id ? { ...card, inReview } : card)))
     try {
-      const saved = await setEnglishReview(id, inReview)
-      setCards((current) =>
-        current.map((card) => {
-          if (card.id !== id) return card
-          return {
-            ...card,
-            ...saved,
-            inReview,
-            band: saved.band && Object.keys(saved.band).length > 0 ? saved.band : card.band,
-            senses: saved.senses && saved.senses.length > 0 ? saved.senses : card.senses,
-          }
-        }),
-      )
+      const targetCard = cards.find((c) => c.id === id)
+      if (targetCard && (id.startsWith('seed-') || !id.includes('-'))) {
+        const persisted = await saveEnglishCard({ ...targetCard, inReview })
+        setCards((current) =>
+          current.map((c) => (c.id === id ? { ...c, ...persisted, inReview } : c)),
+        )
+      } else {
+        const saved = await setEnglishReview(id, inReview)
+        setCards((current) =>
+          current.map((card) => {
+            if (card.id !== id) return card
+            return {
+              ...card,
+              ...saved,
+              inReview,
+              band: saved.band && Object.keys(saved.band).length > 0 ? saved.band : card.band,
+              senses: saved.senses && saved.senses.length > 0 ? saved.senses : card.senses,
+            }
+          }),
+        )
+      }
       setProblem(null)
     } catch (error) {
       // Rollback on failure
@@ -76,7 +85,7 @@ export function useEnglish() {
       setProblem('write-failed')
       throw error
     }
-  }, [])
+  }, [cards])
 
   const removeCard = useCallback(async (id: string) => {
     const previous = cards
@@ -91,7 +100,8 @@ export function useEnglish() {
     }
   }, [cards])
 
-  const adoptCard = useCallback((saved: EnglishCard) => {
+  const adoptCard = useCallback(async (saved: EnglishCard) => {
+    // 1. Optimistic update
     setCards((current) => {
       const idx = current.findIndex(
         (c) => c.id === saved.id || c.word.trim().toLowerCase() === saved.word.trim().toLowerCase(),
@@ -103,6 +113,22 @@ export function useEnglish() {
       }
       return [saved, ...current]
     })
+
+    // 2. Persist to Postgres & SRS so word stays in Wordbook
+    try {
+      const persisted = await saveEnglishCard(saved)
+      setCards((current) =>
+        current.map((c) =>
+          c.id === saved.id || c.word.trim().toLowerCase() === saved.word.trim().toLowerCase()
+            ? { ...c, ...persisted }
+            : c,
+        ),
+      )
+      setProblem(null)
+      return persisted
+    } catch {
+      return saved
+    }
   }, [])
 
   const adoptBatch = useCallback((newCards: EnglishCard[]) => {

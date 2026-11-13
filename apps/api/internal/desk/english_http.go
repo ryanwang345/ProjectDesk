@@ -1,6 +1,7 @@
 package desk
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -136,8 +137,31 @@ func (h *Handler) listEnglish(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(raw)
 }
 
+func (h *Handler) upsertEnglish(w http.ResponseWriter, r *http.Request) {
+	var input EnglishCard
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid card payload")
+		return
+	}
+	card, err := h.store.UpsertEnglishCard(r.Context(), input)
+	if err != nil {
+		writeEnglishError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, card)
+}
+
 func (h *Handler) addEnglishReview(w http.ResponseWriter, r *http.Request) {
-	h.writeEnglishReview(w, r, true)
+	inReview := true
+	if r.Body != nil {
+		var body struct {
+			InReview *bool `json:"inReview"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.InReview != nil {
+			inReview = *body.InReview
+		}
+	}
+	h.writeEnglishReview(w, r, inReview)
 }
 
 func (h *Handler) removeEnglishReview(w http.ResponseWriter, r *http.Request) {
