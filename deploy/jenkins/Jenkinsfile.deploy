@@ -1,0 +1,202 @@
+#!/usr/bin/env groovy
+
+// Backwards-compatible deployment pipeline entrypoint for Jenkins jobs configured with
+// scriptPath 'deploy/jenkins/Jenkinsfile.deploy'.
+// Delegates directly to the clean GitOps release pipeline.
+
+pipeline {
+  agent {
+    kubernetes {
+      cloud 'local-k8s'
+      defaultContainer 'git'
+      yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins/agent: "projectdesk-deployer"
+spec:
+  nodeSelector:
+    kubernetes.io/os: linux
+  restartPolicy: Never
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  containers:
+    - name: git
+      image: alpine/git:latest
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi
+'''
+    }
+  }
+
+  parameters {
+    choice(
+      name: 'COMPONENT',
+      choices: ['web+api', 'web', 'api'],
+      description: 'Component(s) to deploy to GitOps'
+    )
+    string(
+      name: 'IMAGE_TAG',
+      defaultValue: '',
+      description: 'Docker image tag to deploy (e.g. 89 or rollback tag)'
+    )
+    choice(
+      name: 'TARGET_ENV',
+      choices: ['dev', 'staging', 'prod'],
+      description: 'Target environment to update in ProjectDesk-GitOps'
+    )
+    booleanParam(
+      name: 'WAIT_FOR_SYNC',
+      defaultValue: true,
+      description: 'Wait for ArgoCD to detect and complete synchronization'
+    )
+  }
+
+  options {
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    disableConcurrentBuilds()
+  }
+
+  stages {
+    stage('Deploy to GitOps (ArgoCD)') {
+      steps {
+        script {
+          if (!params.IMAGE_TAG?.trim()) {
+            error("IMAGE_TAG parameter cannot be empty! Please provide a valid image tag.")
+          }
+        }
+        withCredentials([
+          string(credentialsId: 'GITHUB_TOKEN', variable: 'GITHUB_TOKEN')
+        ]) {
+          container('git') {
+            sh '''
+              set +x
+              set -eu
+
+              cd "$WORKSPACE"
+
+              g() {
+                git -c safe.directory="$WORKSPACE" \
+                  -c user.name="ProjectDesk Deployer" \
+                  -c user.email="ci@users.noreply.github.com" \
+                  "$@"
+              }
+
+              ASKPASS="$WORKSPACE/.git-askpass"
+              trap 'rm -f "$ASKPASS"' EXIT
+
+              printf '%s\\n' \
+                '#!/bin/sh' \
+                'printf "%s" "$GITHUB_TOKEN"' > "$ASKPASS"
+              chmod 700 "$ASKPASS"
+              export GIT_ASKPASS="$ASKPASS"
+              export GIT_TERMINAL_PROMPT=0
+
+              REMOTE="https://x-access-token@github.com/ryanwang345/ProjectDesk-GitOps.git"
+              TAG="${IMAGE_TAG}"
+              ENV="${TARGET_ENV}"
+
+              UPDATE_WEB="false"
+              UPDATE_API="false"
+              if [ "$COMPONENT" = "web+api" ]; then
+                UPDATE_WEB="true"
+                UPDATE_API="true"
+              elif [ "$COMPONENT" = "web" ]; then
+                UPDATE_WEB="true"
+              elif [ "$COMPONENT" = "api" ]; then
+                UPDATE_API="true"
+              fi
+
+              for attempt in 1 2 3; do
+                echo "[Deploy] Attempt ${attempt}: Fetching latest main from ProjectDesk-GitOps..."
+                g fetch --quiet "$REMOTE" main
+                g checkout --quiet --force -B release-tag FETCH_HEAD
+
+                # Identify environment values file and base values file
+                TARGET_FILES=()
+                if [ -f "helm/values-${ENV}.yaml" ]; then
+                  TARGET_FILES+=("helm/values-${ENV}.yaml")
+                fi
+                if [ -f "helm/values.yaml" ]; then
+                  TARGET_FILES+=("helm/values.yaml")
+                fi
+
+                # Also update component-specific values if present (web/argo/values/, api/argo/values/)
+                if [ -f "web/argo/values/${ENV}.yaml" ] && [ "$UPDATE_WEB" = "true" ]; then
+                  TARGET_FILES+=("web/argo/values/${ENV}.yaml")
+                fi
+                if [ -f "api/argo/values/${ENV}.yaml" ] && [ "$UPDATE_API" = "true" ]; then
+                  TARGET_FILES+=("api/argo/values/${ENV}.yaml")
+                fi
+
+                if [ ${#TARGET_FILES[@]} -eq 0 ]; then
+                  echo "[Deploy] Error: No target values files found in ProjectDesk-GitOps!"
+                  exit 1
+                fi
+
+                for VALUES in "${TARGET_FILES[@]}"; do
+                  echo "[Deploy] Updating image tags in ${VALUES} -> ${TAG}"
+                  awk -v tag="$TAG" -v updateWeb="$UPDATE_WEB" -v updateApi="$UPDATE_API" '
+                    /^[^ ]/ { section=$1 }
+                    section == "api:" && $1 == "tag:" && updateApi == "true" {
+                      q=sprintf("%c",34)
+                      print "  tag: " q tag q
+                      next
+                    }
+                    section == "web:" && $1 == "tag:" && updateWeb == "true" {
+                      q=sprintf("%c",34)
+                      print "  tag: " q tag q
+                      next
+                    }
+                    $1 == "tag:" && updateWeb == "true" && section == "" {
+                      q=sprintf("%c",34)
+                      print "  tag: " q tag q
+                      next
+                    }
+                    { print }
+                  ' "$VALUES" > "${VALUES}.new"
+
+                  mv "${VALUES}.new" "$VALUES"
+                  g add "$VALUES"
+                done
+
+                if g diff --cached --quiet; then
+                  echo "[Deploy] Target values already reflect image tag ${TAG}. Nothing to update."
+                  exit 0
+                fi
+
+                MSG="release(${ENV}): update ${COMPONENT} image tag to ${TAG}"
+                g commit --quiet -m "$MSG"
+
+                if g push "$REMOTE" HEAD:main; then
+                  echo "=========================================================="
+                  echo "[Deploy] SUCCESS: Image tags updated to ${TAG} for ${ENV}!"
+                  echo "[Deploy] ArgoCD will auto-sync changes into Kubernetes."
+                  echo "=========================================================="
+                  exit 0
+                fi
+
+                echo "[Deploy] Push rejected on attempt ${attempt}. Retrying in 3 seconds..."
+                sleep 3
+              done
+
+              echo "[Deploy] Push failed after 3 attempts."
+              exit 1
+            '''
+          }
+        }
+      }
+    }
+  }
+}
