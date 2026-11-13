@@ -15,8 +15,8 @@ def main(config) {
 
   return {
     stage('apps/e2e / Validate') {
-      parallel {
-        stage('Typecheck') {
+      parallel(
+        'Typecheck': {
           container('node') {
             dir('apps/e2e') {
               echo "[apps/e2e] Installing dependencies and verifying TypeScript..."
@@ -26,8 +26,8 @@ def main(config) {
               '''
             }
           }
-        }
-        stage('Chart Lint') {
+        },
+        'Chart Lint': {
           container('helm') {
             dir('apps/e2e') {
               echo "[apps/e2e] Linting E2E Helm charts across environments..."
@@ -44,7 +44,7 @@ def main(config) {
             }
           }
         }
-      }
+      )
     }
 
     stage('apps/e2e / Build & Push Image') {
