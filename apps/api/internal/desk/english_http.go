@@ -3,6 +3,7 @@ package desk
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -186,6 +187,7 @@ func (h *Handler) deleteEnglish(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeEnglishError(w http.ResponseWriter, err error) {
+	log.Printf("[english] error: %v", err)
 	switch {
 	case errors.Is(err, ErrNotFound):
 		writeError(w, http.StatusNotFound, "that card is not in the set")

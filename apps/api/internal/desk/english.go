@@ -267,9 +267,19 @@ func (s *Store) UpsertEnglishCard(ctx context.Context, in EnglishCard) (EnglishC
 	if in.Band.Collocations == nil && in.Band.Writing == "" && in.Band.Speaking == "" && in.Band.Zh == "" {
 		bandJSON = []byte("{}")
 	}
+	meaning := strings.TrimSpace(in.Meaning)
+	if meaning == "" {
+		meaning = word
+	}
+	if len([]rune(meaning)) > 160 {
+		meaning = string([]rune(meaning)[:160])
+	}
+
 	examples := in.Examples
-	if examples == nil {
-		examples = []string{}
+	if len(examples) == 0 {
+		examples = []string{fmt.Sprintf("I learned the word \"%s\" today.", word)}
+	} else if len(examples) > 10 {
+		examples = examples[:10]
 	}
 
 	var row pgx.Row
@@ -284,13 +294,13 @@ func (s *Store) UpsertEnglishCard(ctx context.Context, in EnglishCard) (EnglishC
 				updated_at = now()
 			WHERE id = $1
 			RETURNING ` + englishColumns
-		row = s.pool.QueryRow(ctx, query, existingID, in.InReview, in.Meaning, in.Pronunciation, sensesJSON, bandJSON)
+		row = s.pool.QueryRow(ctx, query, existingID, in.InReview, meaning, in.Pronunciation, sensesJSON, bandJSON)
 	} else {
 		query := `
 			INSERT INTO english_cards (word, meaning, pronunciation, examples, in_review, senses, band, generated, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, true, now())
 			RETURNING ` + englishColumns
-		row = s.pool.QueryRow(ctx, query, word, in.Meaning, in.Pronunciation, examples, in.InReview, sensesJSON, bandJSON)
+		row = s.pool.QueryRow(ctx, query, word, meaning, in.Pronunciation, examples, in.InReview, sensesJSON, bandJSON)
 	}
 
 	card, err := scanEnglish(row)
