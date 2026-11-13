@@ -10,10 +10,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - rwang.ingress.k8s-test.sf.vailsys.net
+        - desk-dev.ryanwang.dev
       secretName: project-desk-tls
   rules:
-    - host: rwang.ingress.k8s-test.sf.vailsys.net
+    - host: desk-dev.ryanwang.dev
       http:
         paths:
           - path: /

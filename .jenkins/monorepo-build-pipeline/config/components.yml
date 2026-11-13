@@ -1,0 +1,49 @@
+# @format
+# ProjectDesk Monorepo Component Registry
+# Modeled after web2/.jenkins/monorepo-build-pipeline/config/frontend-components.yml
+#
+# check.folder       - attribute files under `folder` to this component
+# check.package      - check package.json or version bump
+# check.changelog    - require a CHANGELOG.md entry
+# check.dependencies - require bump/entry when dependsOn path changed
+
+apps/web:
+  folder: 'apps/web'
+  package: 'apps/web/package.json'
+  changelog: 'apps/web/CHANGELOG.md'
+  workflow: './.jenkins/monorepo-build-pipeline/workspaces/apps.web.groovy'
+  image: 'rwang345/project-desk-web'
+  check:
+    folder: true
+    package: true
+    changelog: false
+    dependencies: false
+  dependsOn: []
+
+apps/api:
+  folder: 'apps/api'
+  package: 'apps/api/go.mod'
+  changelog: 'apps/api/CHANGELOG.md'
+  workflow: './.jenkins/monorepo-build-pipeline/workspaces/apps.api.groovy'
+  image: 'rwang345/project-desk-api'
+  check:
+    folder: true
+    package: false
+    changelog: false
+    dependencies: false
+  dependsOn: []
+
+apps/e2e:
+  folder: 'apps/e2e'
+  package: 'apps/e2e/package.json'
+  changelog: 'apps/e2e/CHANGELOG.md'
+  workflow: './.jenkins/monorepo-build-pipeline/workspaces/apps.e2e.groovy'
+  image: 'rwang345/project-desk-e2e'
+  check:
+    folder: true
+    package: true
+    changelog: false
+    dependencies: false
+  dependsOn:
+    - apps/web
+    - apps/api

@@ -1,0 +1,110 @@
+#!/usr/bin/env groovy
+
+pipeline {
+  agent {
+    kubernetes {
+      cloud 'local-k8s'
+      defaultContainer 'cypress'
+      yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins/agent: "projectdesk-e2e"
+spec:
+  containers:
+    - name: cypress
+      image: cypress/included:13.17.0
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          memory: 1Gi
+          cpu: 500m
+        limits:
+          memory: 3Gi
+          cpu: 2000m
+'''
+    }
+  }
+
+  parameters {
+    choice(
+      name: 'TARGET_ENV',
+      choices: ['dev', 'staging', 'prod'],
+      description: 'Environment to run E2E tests against'
+    )
+    string(
+      name: 'BASE_URL',
+      defaultValue: '',
+      description: 'Override base URL (leave blank to use environment default)'
+    )
+    string(
+      name: 'TEST_TAGS',
+      defaultValue: '@smoke',
+      description: 'Grep test tags (e.g. @smoke, @regression, or blank for all)'
+    )
+  }
+
+  options {
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '15'))
+    disableConcurrentBuilds()
+  }
+
+  environment {
+    CYPRESS_CACHE_FOLDER = '/tmp/.cypress-cache'
+  }
+
+  stages {
+    stage('Prepare Test Runner') {
+      steps {
+        container('cypress') {
+          dir('apps/e2e') {
+            echo "[E2E] Installing dependencies for test execution..."
+            sh '''
+              npm ci
+              npm run typecheck
+            '''
+          }
+        }
+      }
+    }
+
+    stage('Execute Cypress E2E Tests') {
+      steps {
+        container('cypress') {
+          dir('apps/e2e') {
+            script {
+              def targetUrl = params.BASE_URL?.trim()
+              if (!targetUrl) {
+                if (params.TARGET_ENV == 'prod') {
+                  targetUrl = 'https://ryanwang.dev'
+                } else if (params.TARGET_ENV == 'staging') {
+                  targetUrl = 'https://desk-staging.ryanwang.dev'
+                } else {
+                  targetUrl = 'https://desk-dev.ryanwang.dev'
+                }
+              }
+
+              echo "Executing E2E tests against ${targetUrl} with tags: ${params.TEST_TAGS}"
+              sh """
+                export CYPRESS_BASE_URL="${targetUrl}"
+                export E2E_TAGS="${params.TEST_TAGS}"
+                node scripts/run.mjs || true
+              """
+            }
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      dir('apps/e2e') {
+        archiveArtifacts artifacts: 'cypress/screenshots/**,cypress/videos/**,reports/**', allowEmptyArchive: true
+      }
+    }
+  }
+}

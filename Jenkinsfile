@@ -74,8 +74,7 @@ spec:
     }
   }
 
-  // The VM Jenkins is not reachable by GitHub webhooks, so poll for new
-  // commits. CI's own "[skip ci]" tag commits skip every stage.
+  // The VM Jenkins is not reachable by GitHub webhooks, so poll for new commits.
   triggers {
     pollSCM('H/2 * * * *')
   }
@@ -84,7 +83,7 @@ spec:
     choice(
       name: 'COMPONENT',
       choices: ['auto', 'web', 'api', 'web+api', 'all', 'e2e'],
-      description: 'Select component to build & push. "auto" detects git diff changes. Selecting a specific component forces build & push even if commit has [skip ci].'
+      description: 'Select component to build & push. "auto" detects git file changes in the monorepo.'
     )
     booleanParam(
       name: 'SKIP_E2E',
@@ -125,53 +124,25 @@ spec:
             echo "Commit message: ${COMMIT_MSG}"
             echo "Selected component: ${COMPONENT:-auto}"
 
-            # 1. Custom component selection from Jenkins UI (overrides [skip ci])
+            # 1. Custom component selection from Jenkins UI (if manually overridden)
             if [ "${COMPONENT:-auto}" = "web" ]; then
-              echo "[CI] Custom selection: WEB ONLY (ignoring [skip ci])"
+              echo "[CI] Manual selection: WEB ONLY"
               touch .ci-build-web .ci-build-any
             elif [ "${COMPONENT:-auto}" = "api" ]; then
-              echo "[CI] Custom selection: API ONLY (ignoring [skip ci])"
+              echo "[CI] Manual selection: API ONLY"
               touch .ci-build-api .ci-build-any
             elif [ "${COMPONENT:-auto}" = "web+api" ]; then
-              echo "[CI] Custom selection: WEB + API (ignoring [skip ci])"
+              echo "[CI] Manual selection: WEB + API"
               touch .ci-build-web .ci-build-api .ci-build-any
             elif [ "${COMPONENT:-auto}" = "e2e" ]; then
-              echo "[CI] Custom selection: E2E ONLY (ignoring [skip ci])"
+              echo "[CI] Manual selection: E2E ONLY"
               touch .ci-build-e2e .ci-build-any
             elif [ "${COMPONENT:-auto}" = "all" ]; then
-              echo "[CI] Custom selection: ALL COMPONENTS (ignoring [skip ci])"
-              touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
-            else
-              # 2. AUTO mode: check for [skip ci] first
-              if echo "$COMMIT_MSG" | grep -q '\\[skip ci\\]'; then
-                echo "[CI] [skip ci] detected in commit message. Skipping build."
-                exit 0
-              fi
-
-              # Check commit message flags
-              if echo "$COMMIT_MSG" | grep -qiE '\\[(force build|build all)\\]'; then
-                echo "[CI] Force build ALL requested via commit tag."
-                touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
-                exit 0
-              fi
-
-              if echo "$COMMIT_MSG" | grep -qi '\\[build web\\]'; then
-                echo "[CI] Force build WEB requested via commit tag."
-                touch .ci-build-web .ci-build-any
-              fi
-
-              if echo "$COMMIT_MSG" | grep -qi '\\[build api\\]'; then
-                echo "[CI] Force build API requested via commit tag."
-                touch .ci-build-api .ci-build-any
-              fi
-
-              if echo "$COMMIT_MSG" | grep -qi '\\[build e2e\\]'; then
-                echo "[CI] Force build E2E requested via commit tag."
-                touch .ci-build-e2e .ci-build-any
-              fi
+              echo "[CI] Manual selection: ALL COMPONENTS"
+              touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-any
             fi
 
-            # Determine base commit to diff against
+            # 2. Pure Git file diff change detection in monorepo
             HEAD_SHA="$(g rev-parse HEAD)"
             BASE_COMMIT=""
             if [ -n "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" ] && [ "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}" != "$HEAD_SHA" ] && g cat-file -e "${GIT_PREVIOUS_SUCCESSFUL_COMMIT}^{commit}" 2>/dev/null; then
@@ -180,22 +151,25 @@ spec:
             elif [ -n "${GIT_PREVIOUS_COMMIT:-}" ] && [ "${GIT_PREVIOUS_COMMIT}" != "$HEAD_SHA" ] && g cat-file -e "${GIT_PREVIOUS_COMMIT}^{commit}" 2>/dev/null; then
               BASE_COMMIT="$GIT_PREVIOUS_COMMIT"
               echo "[CI] Comparing against previous build commit: ${BASE_COMMIT}"
+            elif g rev-parse --verify origin/main >/dev/null 2>&1 && [ "$(g rev-parse HEAD)" != "$(g rev-parse origin/main)" ]; then
+              BASE_COMMIT="origin/main"
+              echo "[CI] Comparing branch against origin/main"
             elif g rev-parse --verify HEAD~1 >/dev/null 2>&1; then
               BASE_COMMIT="HEAD~1"
-              echo "[CI] Comparing against HEAD~1 (rebuild or re-triggered commit detected)"
+              echo "[CI] Comparing against HEAD~1"
             fi
 
             if [ -z "$BASE_COMMIT" ]; then
               if [ ! -f .ci-build-any ]; then
                 echo "[CI] No base commit found (initial build). Marking all components for build."
-                touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-helm .ci-build-any
+                touch .ci-build-web .ci-build-api .ci-build-e2e .ci-build-any
               fi
               exit 0
             fi
 
             CHANGED_FILES="$(g diff --name-only "$BASE_COMMIT" HEAD || true)"
             echo "========================================"
-            echo "[CI] Changed files since ${BASE_COMMIT}:"
+            echo "[CI] Monorepo changed files since ${BASE_COMMIT}:"
             if [ -z "$CHANGED_FILES" ]; then
               echo "  (none)"
             else
@@ -203,37 +177,27 @@ spec:
             fi
             echo "========================================"
 
-            # Filter out documentation, markdown, diagrams, and assets from triggering container builds
-            CODE_CHANGED_FILES="$(echo "$CHANGED_FILES" | grep -v -E '[.](md|markdown|mmd|svg|png|jpg|jpeg|gif)$' || true)"
-
             # Exercise builders when the pipeline itself changes.
-            # Rebuild Web and API by default; skip E2E unless explicitly requested to prevent node disk exhaustion.
             if echo "$CHANGED_FILES" | grep -q '^Jenkinsfile$'; then
-              echo "[CI] -> Detected pipeline changes"
-              touch .ci-build-web .ci-build-api .ci-build-helm .ci-build-any
+              echo "[CI] -> Detected pipeline Jenkinsfile changes: rebuilding Web & API"
+              touch .ci-build-web .ci-build-api .ci-build-any
             fi
 
-            # 1. API: changes under apps/api/ (or legacy project-desk/server/)
-            if echo "$CODE_CHANGED_FILES" | grep -q -E '^(apps/api/|project-desk/server/)'; then
-              echo "[CI] -> Detected API changes"
+            # 1. API: any file changes under apps/api/ (code, docs, assets, etc.)
+            if echo "$CHANGED_FILES" | grep -q -E '^apps/api/'; then
+              echo "[CI] -> Git diff detected changes under apps/api/"
               touch .ci-build-api .ci-build-any
             fi
 
-            # 2. E2E: code changes under apps/e2e/ (excluding docs/assets)
-            if echo "$CODE_CHANGED_FILES" | grep -q -E '^(apps/e2e/|project-desk/e2e/)'; then
-              echo "[CI] -> Detected E2E changes"
+            # 2. E2E: any file changes under apps/e2e/
+            if echo "$CHANGED_FILES" | grep -q -E '^apps/e2e/'; then
+              echo "[CI] -> Git diff detected changes under apps/e2e/"
               touch .ci-build-e2e .ci-build-any
             fi
 
-            # 3. Helm: chart structural/template changes (ignore pure values.yaml image tag updates)
-            if echo "$CHANGED_FILES" | grep -E '^(deploy/helm/|project-desk/chart/)' | grep -v -E 'values[.]ya?ml$' | grep -q .; then
-              echo "[CI] -> Detected Helm chart changes"
-              touch .ci-build-helm
-            fi
-
-            # 4. Web: changes under apps/web/
-            if echo "$CODE_CHANGED_FILES" | grep -q -E '^apps/web/'; then
-              echo "[CI] -> Detected Web frontend changes"
+            # 3. Web: any file changes under apps/web/ (code, icons, svg, assets, docs)
+            if echo "$CHANGED_FILES" | grep -q -E '^apps/web/'; then
+              echo "[CI] -> Git diff detected changes under apps/web/"
               touch .ci-build-web .ci-build-any
             fi
 
@@ -243,15 +207,14 @@ spec:
               rm -f .ci-build-e2e
             fi
 
-            if [ ! -f .ci-build-any ] && [ ! -f .ci-build-helm ]; then
-              echo "[CI] No relevant monorepo changes detected."
+            if [ ! -f .ci-build-any ]; then
+              echo "[CI] No monorepo code changes detected in apps/web, apps/api, or apps/e2e."
               echo "[CI] Skipping all test stages, Docker builds, and image pushes."
             else
               echo "[CI] Execution plan:"
               [ -f .ci-build-web ] && echo "  - Web: BUILD & TEST" || echo "  - Web: SKIP"
               [ -f .ci-build-api ] && echo "  - API: BUILD & TEST" || echo "  - API: SKIP"
               [ -f .ci-build-e2e ] && echo "  - E2E: BUILD & TEST" || echo "  - E2E: SKIP"
-              [ -f .ci-build-helm ] && echo "  - Helm: LINT" || echo "  - Helm: SKIP"
             fi
           '''
         }
@@ -333,25 +296,22 @@ spec:
 
             container('helm') {
               sh '''
-                # 1. Lint the main application chart (deploy/helm)
-                MAIN_HELM="$WORKSPACE/deploy/helm"
-                [ ! -d "$MAIN_HELM" ] && MAIN_HELM="$WORKSPACE/project-desk/chart"
-                helm lint "$MAIN_HELM"
+                # Lint and template the E2E CronJob chart (apps/e2e/chart)
+                if [ -d "$WORKSPACE/apps/e2e/chart" ]; then
+                  cd "$WORKSPACE/apps/e2e"
+                  for env in dev staging prod; do
+                    helm lint ./chart \
+                      -f "chart/values-${env}.yaml" \
+                      --set image.tag="ci-${BUILD_NUMBER}" \
+                      --set-file dotenv=.env
+                  done
 
-                # 2. Lint and template the E2E CronJob chart (apps/e2e/chart)
-                cd "$WORKSPACE/apps/e2e"
-                for env in dev staging prod; do
-                  helm lint ./chart \
-                    -f "chart/values-${env}.yaml" \
-                    --set image.tag="ci-${BUILD_NUMBER}" \
-                    --set-file dotenv=.env
-                done
-
-                helm template project-desk-e2e ./chart \
-                  --namespace rwang \
-                  -f chart/values-dev.yaml \
-                  --set image.tag="${BUILD_NUMBER}" \
-                  --set-file dotenv=.env > /dev/null
+                  helm template project-desk-e2e ./chart \
+                    --namespace rwang \
+                    -f chart/values-dev.yaml \
+                    --set image.tag="${BUILD_NUMBER}" \
+                    --set-file dotenv=.env > /dev/null
+                fi
               '''
             }
           }
@@ -401,7 +361,6 @@ spec:
                 fi
 
                 CONTEXT="$WORKSPACE/apps/${app}"
-                [ ! -d "$CONTEXT" ] && CONTEXT="$WORKSPACE/project-desk/${app}"
 
                 IMAGE="docker.io/${DOCKERHUB_USER}/project-desk-${app}"
 

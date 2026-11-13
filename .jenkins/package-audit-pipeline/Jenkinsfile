@@ -1,0 +1,85 @@
+#!/usr/bin/env groovy
+
+pipeline {
+  agent {
+    kubernetes {
+      cloud 'local-k8s'
+      defaultContainer 'node'
+      yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins/agent: "projectdesk-audit"
+spec:
+  containers:
+    - name: node
+      image: node:22-bookworm
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          memory: 256Mi
+          cpu: 100m
+
+    - name: golang
+      image: golang:1.22-bookworm
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          memory: 256Mi
+          cpu: 100m
+'''
+    }
+  }
+
+  options {
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '12'))
+    disableConcurrentBuilds()
+  }
+
+  triggers {
+    cron('H 6 1 * *')
+  }
+
+  stages {
+    stage('Audit Frontend Dependencies') {
+      steps {
+        container('node') {
+          sh '''
+            mkdir -p reports
+            echo "=== Auditing apps/web dependencies ==="
+            cd "$WORKSPACE/apps/web"
+            npm audit --audit-level=high || true > "$WORKSPACE/reports/web-audit.txt"
+
+            echo "=== Auditing apps/e2e dependencies ==="
+            cd "$WORKSPACE/apps/e2e"
+            npm audit --audit-level=high || true > "$WORKSPACE/reports/e2e-audit.txt"
+          '''
+        }
+      }
+    }
+
+    stage('Audit Backend Go Dependencies') {
+      steps {
+        container('golang') {
+          dir('apps/api') {
+            sh '''
+              echo "=== Auditing Go backend dependencies ==="
+              go list -m all > "$WORKSPACE/reports/go-dependencies.txt"
+              go mod verify > "$WORKSPACE/reports/go-verify.txt" || true
+            '''
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      archiveArtifacts artifacts: 'reports/**', allowEmptyArchive: true
+    }
+  }
+}

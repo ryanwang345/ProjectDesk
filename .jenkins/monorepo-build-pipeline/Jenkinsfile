@@ -1,0 +1,239 @@
+#!/usr/bin/env groovy
+
+def components
+def helpers
+def versions
+def changes
+def workflows
+def workspaces
+def jobs
+def deployments
+
+pipeline {
+  agent {
+    kubernetes {
+      cloud 'local-k8s'
+      defaultContainer 'jnlp'
+      yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins/agent: "projectdesk-monorepo"
+spec:
+  shareProcessNamespace: false
+  securityContext:
+    fsGroup: 1000
+  containers:
+    - name: jnlp
+      resources:
+        requests:
+          memory: 256Mi
+          cpu: 100m
+
+    - name: node
+      image: node:22-bookworm
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 200m
+        limits:
+          memory: 2Gi
+          cpu: 2000m
+
+    - name: golang
+      image: golang:1.22-bookworm
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          memory: 256Mi
+          cpu: 200m
+        limits:
+          memory: 2Gi
+          cpu: 2000m
+
+    - name: helm
+      image: alpine/helm:4.3.1
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          memory: 128Mi
+          cpu: 100m
+
+    - name: buildkit
+      image: moby/buildkit:v0.34.2-rootless
+      command: ['cat']
+      tty: true
+      env:
+        - name: BUILDKITD_FLAGS
+          value: --oci-worker-no-process-sandbox --oci-worker-snapshotter=native
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 200m
+        limits:
+          memory: 3Gi
+          cpu: 2000m
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: Unconfined
+        appArmorProfile:
+          type: Unconfined
+      volumeMounts:
+        - name: buildkit-state
+          mountPath: /home/user/.local/share/buildkit
+  volumes:
+    - name: buildkit-state
+      emptyDir: {}
+'''
+    }
+  }
+
+  triggers {
+    pollSCM('H/2 * * * *')
+  }
+
+  options {
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '15'))
+    disableConcurrentBuilds()
+  }
+
+  parameters {
+    choice(
+      name: 'FORCE_BUILD',
+      choices: ['auto', 'apps/web', 'apps/api', 'apps/web,apps/api', 'apps/e2e', 'all'],
+      description: 'Select component(s) to forcibly build & publish. "auto" detects git diff changes.'
+    )
+    booleanParam(
+      name: 'SKIP_E2E',
+      defaultValue: true,
+      description: 'Skip E2E container build and tests to save disk space'
+    )
+    booleanParam(
+      name: 'AUTO_DEPLOY',
+      defaultValue: true,
+      description: 'Automatically trigger GitOps release to ProjectDesk-GitOps when main is updated'
+    )
+    choice(
+      name: 'DEPLOY_ENV',
+      choices: ['dev', 'staging', 'prod'],
+      description: 'Target deployment environment in ProjectDesk-GitOps'
+    )
+  }
+
+  environment {
+    LATEST_BRANCH = 'main'
+    BRANCH_NAME = "${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'main'}".replaceAll('^origin/', '')
+    COMMIT = "${sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()}"
+  }
+
+  stages {
+    stage('Setup') {
+      steps {
+        script {
+          sh 'mkdir -p debug'
+
+          echo "Loading component configurations..."
+          def configLoader = load('./.jenkins/monorepo-build-pipeline/config/config.groovy')
+          components = configLoader.loadComponents()
+          echo "Components: ${components.keySet()}"
+
+          helpers = load('./.jenkins/monorepo-build-pipeline/helpers.groovy')
+          helpers.fetchGitTarget("origin/${env.LATEST_BRANCH}")
+
+          versions = helpers.getVersions(components, "origin/${env.LATEST_BRANCH}", "origin/${env.BRANCH_NAME}")
+          echo "Versions: ${versions}"
+
+          changes = helpers.getChanges(components, env.LATEST_BRANCH, env.BRANCH_NAME)
+          echo "Detected Changes: ${changes}"
+
+          workflows = helpers.getWorkflows(components)
+          workspaces = load('./.jenkins/monorepo-build-pipeline/workspaces/workspaces.groovy')
+          jobs = load('./.jenkins/monorepo-build-pipeline/jobs/jobs.groovy')
+          deployments = load('./.jenkins/monorepo-build-pipeline/jobs/deployments.groovy')
+        }
+      }
+    }
+
+    stage('Workspaces') {
+      steps {
+        script {
+          def forceParam = params.FORCE_BUILD == 'auto' ? '' : params.FORCE_BUILD
+          parallel workspaces.monorepoWorkspaceStages([
+            helpers: helpers,
+            forceBuild: forceParam,
+            componentConfig: components,
+            changes: changes,
+            versions: versions,
+            workflows: workflows,
+            branch: env.BRANCH_NAME,
+            latestBranch: env.LATEST_BRANCH,
+            buildNumber: env.BUILD_NUMBER,
+            commit: env.COMMIT,
+            skipE2e: params.SKIP_E2E
+          ])
+        }
+      }
+    }
+
+    stage('Deploy to GitOps') {
+      when {
+        expression {
+          def isMain = (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == '')
+          def hasWeb = changes['apps/web'] || params.FORCE_BUILD.contains('web') || params.FORCE_BUILD == 'all'
+          def hasApi = changes['apps/api'] || params.FORCE_BUILD.contains('api') || params.FORCE_BUILD == 'all'
+          return isMain && params.AUTO_DEPLOY && (hasWeb || hasApi)
+        }
+      }
+      steps {
+        script {
+          def hasWeb = changes['apps/web'] || params.FORCE_BUILD.contains('web') || params.FORCE_BUILD == 'all'
+          def hasApi = changes['apps/api'] || params.FORCE_BUILD.contains('api') || params.FORCE_BUILD == 'all'
+          def component = 'web+api'
+          if (hasWeb && !hasApi) {
+            component = 'web'
+          } else if (!hasWeb && hasApi) {
+            component = 'api'
+          }
+
+          deployments.triggerGitOpsDeployment([
+            branch: env.BRANCH_NAME,
+            buildNumber: env.BUILD_NUMBER,
+            component: component,
+            targetEnv: params.DEPLOY_ENV
+          ]).call()
+        }
+      }
+    }
+
+    stage('Run External Tests') {
+      when {
+        expression {
+          return !params.SKIP_E2E && changes['apps/e2e']
+        }
+      }
+      steps {
+        script {
+          parallel jobs.runExternalTests([
+            branchName: env.BRANCH_NAME,
+            runE2e: true
+          ])
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      archiveArtifacts artifacts: 'debug/**', allowEmptyArchive: true
+    }
+  }
+}

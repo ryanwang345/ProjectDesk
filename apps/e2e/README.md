@@ -153,7 +153,7 @@ For S3 or an S3-compatible store, set `E2E_S3_BUCKET` in `.env`, plus `E2E_S3_EN
 
 ## Monitoring
 
-No Prometheus, Pushgateway, Grafana, or Teams integration exists in this repository or the `rwang` namespace, so none is set up here. Every run prints `E2E_RESULT` JSON to the pod log. The namespace carries the label `logging.vailsys.com/elasticsearch=true`, so if that log shipping is active, the line is searchable there with the rest of the pod output. To also push metrics, set `E2E_PUSHGATEWAY_URL` in `.env`. Each run then replaces the group `job=project_desk_e2e, environment=<env>` with:
+No Prometheus, Pushgateway, Grafana, or Teams integration exists in this repository or the `rwang` namespace, so none is set up here. Every run prints `E2E_RESULT` JSON to the pod log. The namespace carries the label `logging/elasticsearch=true`, so if that log shipping is active, the line is searchable there with the rest of the pod output. To also push metrics, set `E2E_PUSHGATEWAY_URL` in `.env`. Each run then replaces the group `job=project_desk_e2e, environment=<env>` with:
 
 - `project_desk_e2e_tests{result="total|passed|failed|pending|skipped"}`
 - `project_desk_e2e_duration_seconds`
