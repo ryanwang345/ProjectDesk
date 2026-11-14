@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { Link, NavLink, useLocation } from 'react-router-dom'
+import { BrandLogo } from '@/components/brand-logo'
 import { useLearningProgress } from '@/hooks/use-learning-progress'
 import { useI18n, type MessageKey } from '@/i18n'
 import { loadProgress } from '@/lib/lesson'
@@ -166,12 +167,7 @@ export function SiteHeader() {
               to="/english"
               className="flex items-center gap-3 text-left text-foreground transition-opacity hover:opacity-90"
             >
-              <span
-                className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_20px_oklch(0.72_0.17_158/0.45)]"
-                aria-hidden="true"
-              >
-                <BookOpen className="size-4" />
-              </span>
+              <BrandLogo className="size-9 shrink-0 rounded-xl shadow-[0_0_20px_oklch(0.72_0.17_158/0.38)]" />
               <span>
                 <span className="block font-display text-lg leading-none font-semibold tracking-tight">
                   {t('brand')}
