@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
@@ -17,6 +17,11 @@ import {
   VolumeX,
 } from 'lucide-react'
 import { InteractiveGlossText } from '@/components/interactive-gloss-text'
+import {
+  ActiveShadowingStudio,
+  TranscriptIntensiveBox,
+  WeatherSpokenBriefingBar,
+} from '@/components/radio-learning-studio'
 import { useEnglish } from '@/hooks/use-english'
 import { useI18n } from '@/i18n'
 import {
@@ -36,8 +41,14 @@ import {
   type RadioNewsWheelSegment,
   type RadioVocabularyItem,
 } from '@/lib/radio-news'
+import {
+  setRadioPlaybackRate,
+  setRadioVolume,
+  toggleRadioMute,
+  toggleRadioStream,
+  useRadioStream,
+} from '@/lib/radio-stream-store'
 import { formatDurationClock } from '@/lib/reading'
-import Hls from 'hls.js'
 import { speakWord, stopSpeech } from '@/lib/speech'
 import { cn } from '@/lib/utils'
 
@@ -377,6 +388,9 @@ function TorontoWeatherWidget({
           </div>
         </div>
       </div>
+
+      {/* 5. Spoken Weather Briefing Bar (Small Talk / Office / 680 Anchor) */}
+      <WeatherSpokenBriefingBar weather={weather} zh={zh} />
     </section>
   )
 }
@@ -386,17 +400,15 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
   const zh = locale === 'zh'
   const desk = useEnglish()
 
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const hlsInstanceRef = useRef<Hls | null>(null)
-
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [isBuffering, setIsBuffering] = useState(false)
-  const [, setStreamConnected] = useState(false)
-  const [streamError, setStreamError] = useState<string | null>(null)
-  const [volume, setVolume] = useState(1.0)
-  const [isMuted, setIsMuted] = useState(false)
-  const [liveListeningSeconds, setLiveListeningSeconds] = useState(0)
-  const [playbackRate, setPlaybackRate] = useState<0.5 | 0.8 | 1 | 1.1 | 1.25>(1)
+  const {
+    isPlaying,
+    isBuffering,
+    streamError,
+    volume,
+    isMuted,
+    playbackRate,
+    liveListeningSeconds,
+  } = useRadioStream()
 
   // Active news wheel segment & live news bulletin state
   const [liveBulletin, setLiveBulletin] = useState<RadioBulletin | null>(() => getCachedLiveRadioBulletin())
@@ -405,6 +417,7 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
   const [selectedArticle, setSelectedArticle] = useState<RadioLiveArticle | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL')
   const [showChinese, setShowChinese] = useState(true)
+  const [showShadowingStudio, setShowShadowingStudio] = useState(false)
   const [activeWordToAdd, setActiveWordToAdd] = useState<string | null>(null)
 
   const segments: RadioNewsWheelSegment[] =
@@ -492,27 +505,6 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
     }
   }
 
-  // Track live listening timer
-  useEffect(() => {
-    if (!isPlaying) return
-    const interval = window.setInterval(() => {
-      setLiveListeningSeconds((prev) => prev + 1)
-    }, 1000)
-    return () => window.clearInterval(interval)
-  }, [isPlaying])
-
-  // Volume & Mute Sync
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume
-    }
-  }, [volume, isMuted])
-
-  // Playback speed sync
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.playbackRate = playbackRate
-  }, [playbackRate, isPlaying])
-
   function renderHighlighted(text: string, lexis: RadioVocabularyItem[]) {
     const words = lexis.map((k) => k.word.replace(/[^a-z]/gi, '')).filter(Boolean)
     if (words.length === 0) return <InteractiveGlossText text={text} contextSentence={text} />
@@ -531,73 +523,8 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
     )
   }
 
-  // Connect to the official 680 News HLS stream (hls.js bundled; native HLS on Safari)
-  function startStream() {
-    const audio = audioRef.current
-    if (!audio) return
-    stopSpeech()
-    setStreamError(null)
-    setIsBuffering(true)
-    setStreamConnected(false)
-
-    hlsInstanceRef.current?.destroy()
-    hlsInstanceRef.current = null
-
-    const fail = (reason: string) => {
-      setIsBuffering(false)
-      setIsPlaying(false)
-      setStreamConnected(false)
-      setStreamError(reason)
-    }
-
-    const urls = [station.primaryStreamUrl, station.secondaryStreamUrl]
-
-    if (Hls.isSupported()) {
-      const tryUrl = (index: number) => {
-        const hls = new Hls({ lowLatencyMode: false, maxBufferLength: 20 })
-        hlsInstanceRef.current = hls
-        hls.on(Hls.Events.ERROR, (_e, data) => {
-          if (!data.fatal) return
-          hls.destroy()
-          hlsInstanceRef.current = null
-          if (index + 1 < urls.length) tryUrl(index + 1)
-          else fail(`${data.type}: ${data.details}`)
-        })
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          audio.play().then(() => {
-            setIsPlaying(true)
-            setIsBuffering(false)
-            setStreamConnected(true)
-          }).catch((err: Error) => fail(err.message))
-        })
-        hls.loadSource(urls[index])
-        hls.attachMedia(audio)
-      }
-      tryUrl(0)
-    } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
-      audio.src = urls[0]
-      audio.play().then(() => {
-        setIsPlaying(true)
-        setIsBuffering(false)
-        setStreamConnected(true)
-      }).catch((err: Error) => fail(err.message))
-    } else {
-      fail('HLS is not supported in this browser')
-    }
-  }
-
   function togglePlay() {
-    const audio = audioRef.current
-    if (isPlaying || isBuffering) {
-      audio?.pause()
-      hlsInstanceRef.current?.destroy()
-      hlsInstanceRef.current = null
-      setIsPlaying(false)
-      setIsBuffering(false)
-      setStreamConnected(false)
-    } else {
-      startStream()
-    }
+    toggleRadioStream(station.primaryStreamUrl, station.secondaryStreamUrl)
   }
 
   // Keyboard shortcut: Spacebar toggles Play/Pause
@@ -614,13 +541,10 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
     return () => window.removeEventListener('keydown', handleKeyDown)
   })
 
-  // Cleanup on unmount
+  // Cleanup only TTS speech on unmount; keep live radio stream playing in background!
   useEffect(() => {
     return () => {
       stopSpeech()
-      if (hlsInstanceRef.current) {
-        hlsInstanceRef.current.destroy()
-      }
     }
   }, [])
 
@@ -725,18 +649,6 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
 
   return (
     <div className="flex flex-col gap-5">
-      <audio
-        ref={audioRef}
-        onWaiting={() => setIsBuffering(true)}
-        onPlaying={() => {
-          setIsBuffering(false)
-          setIsPlaying(true)
-        }}
-        onPause={() => setIsPlaying(false)}
-        onError={() => setIsBuffering(false)}
-        preload="none"
-      />
-
       {/* Station header */}
       <section className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
         <div className="flex items-center gap-4">
@@ -824,12 +736,12 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
           </div>
           <div className="flex min-w-48 flex-col gap-2">
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setIsMuted((v) => !v)} aria-label={isMuted ? 'Unmute' : 'Mute'} className="text-muted-foreground hover:text-foreground">
+              <button type="button" onClick={() => toggleRadioMute()} aria-label={isMuted ? 'Unmute' : 'Mute'} className="text-muted-foreground hover:text-foreground">
                 {isMuted || volume === 0 ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
               </button>
               <input
                 type="range" min="0" max="1" step="0.05" value={isMuted ? 0 : volume}
-                onChange={(e) => { setVolume(parseFloat(e.target.value)); setIsMuted(false) }}
+                onChange={(e) => setRadioVolume(parseFloat(e.target.value))}
                 className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-muted accent-primary"
                 aria-label="Volume"
               />
@@ -848,7 +760,7 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                   <button
                     key={r}
                     type="button"
-                    onClick={() => setPlaybackRate(r)}
+                    onClick={() => setRadioPlaybackRate(r)}
                     className={cn('rounded-full px-2 py-0.5', playbackRate === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
                   >
                     {r.toFixed(r === 1.25 ? 2 : 1)}x
@@ -974,28 +886,55 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                   )}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() =>
-                  void speakWord(
-                    selectedArticle ? `${selectedArticle.title}. ${selectedArticle.summary}` : currentSegment.text,
-                  )
-                }
-                className={cn(btn, 'shrink-0')}
-              >
-                <Mic className="size-3.5 text-primary" /> {zh ? '朗读跟读 (Shadowing)' : 'Shadowing'}
-              </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void speakWord(
+                      selectedArticle ? `${selectedArticle.title}. ${selectedArticle.summary}` : currentSegment.text,
+                    )
+                  }
+                  className={cn(btn, 'shrink-0')}
+                >
+                  <Volume2 className="size-3.5 text-primary" /> {zh ? '全文朗读' : 'Read Aloud'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowShadowingStudio((v) => !v)}
+                  className={cn(
+                    btn,
+                    'shrink-0',
+                    showShadowingStudio && 'border-primary bg-primary text-primary-foreground hover:text-primary-foreground',
+                  )}
+                >
+                  <Mic className={cn('size-3.5', showShadowingStudio ? 'text-primary-foreground' : 'text-primary')} />
+                  {zh ? '跟读录音棚 (Shadowing)' : 'Shadowing Studio'}
+                </button>
+              </div>
             </div>
 
-            <div className="rounded-2xl border border-border bg-background/60 p-4">
-              <div className="mb-2 flex items-center justify-between text-[10px] font-bold tracking-wider text-primary uppercase">
-                <span>Original broadcast transcript</span>
-                <span className="font-mono text-muted-foreground">{clip(currentSegment)}</span>
-              </div>
-              <p className="text-base leading-8 text-foreground">
-                {renderHighlighted(activeTranscriptText, activeKeyLexis)}
-              </p>
-            </div>
+            {showShadowingStudio && (
+              <ActiveShadowingStudio
+                key={`shadow-${activeTranscriptText}`}
+                transcriptText={activeTranscriptText}
+                zh={zh}
+                onClose={() => setShowShadowingStudio(false)}
+              />
+            )}
+
+            <TranscriptIntensiveBox
+              key={`transcript-${activeTranscriptText}`}
+              transcriptText={activeTranscriptText}
+              translationText={
+                selectedArticle
+                  ? `${selectedArticle.titleZh || selectedArticle.title}${selectedArticle.summaryZh ? ` —— ${selectedArticle.summaryZh}` : ''}`
+                  : currentSegment.textZh
+              }
+              keyLexis={activeKeyLexis}
+              durationLabel={clip(currentSegment)}
+              zh={zh}
+              renderHighlighted={renderHighlighted}
+            />
 
             {showChinese && (
               <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm leading-relaxed text-muted-foreground">

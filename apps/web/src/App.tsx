@@ -1,7 +1,8 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Search, Sparkles } from 'lucide-react'
 import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { FloatingRadioMiniPlayer } from '@/components/floating-radio-mini-player'
 import { GlobalHoverDictionary, useHoverDictionaryToggle } from '@/components/global-hover-dictionary'
 import { SiteHeader } from '@/components/site-header'
 import { SpeechSettings } from '@/components/speech-settings'
@@ -46,6 +47,7 @@ function Frame() {
   const { enabled: hoverDictEnabled, toggle: toggleHoverDict } = useHoverDictionaryToggle()
   const [apiVersion, setApiVersion] = useState<string | null>(null)
   const [apiOnline, setApiOnline] = useState<boolean | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     let active = true
@@ -82,7 +84,7 @@ function Frame() {
   return (
     <div className="english-app relative z-10 flex min-h-svh flex-col lg:h-svh lg:flex-row lg:overflow-hidden">
       <SiteHeader />
-      <div className="flex min-w-0 flex-1 flex-col lg:h-svh lg:overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex min-w-0 flex-1 flex-col lg:h-svh lg:overflow-y-auto">
         {/* Slim Top Workbench Status Bar */}
         <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-background/85 px-4 py-2 backdrop-blur-md sm:px-6 lg:px-8">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -209,6 +211,7 @@ function Frame() {
           </div>
         </footer>
       </div>
+      <FloatingRadioMiniPlayer scrollContainerRef={scrollContainerRef} />
       <GlobalHoverDictionary />
     </div>
   )
