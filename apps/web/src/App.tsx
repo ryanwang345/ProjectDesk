@@ -86,14 +86,14 @@ function Frame() {
       <SiteHeader />
       <div ref={scrollContainerRef} className="flex min-w-0 flex-1 flex-col lg:h-svh lg:overflow-y-auto">
         {/* Slim Top Workbench Status Bar */}
-        <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-background/85 px-4 py-2 backdrop-blur-md sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border/70 bg-background/85 px-3 py-1.5 backdrop-blur-md sm:px-6 sm:py-2 lg:px-8">
+          <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
             <span>{zh ? '状态：' : 'Status:'}</span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
               <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
               {zh ? '记忆流就绪' : 'Memory Flow Ready'}
             </span>
-            <span className="hidden items-center gap-1.5 rounded-full border border-border/80 bg-card/60 px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground sm:inline-flex">
+            <span className="hidden items-center gap-1.5 rounded-full border border-border/80 bg-card/60 px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground md:inline-flex">
               <span
                 className={cn(
                   'size-1.5 rounded-full',
@@ -107,7 +107,7 @@ function Frame() {
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center justify-between gap-1.5 sm:w-auto sm:justify-end sm:gap-2">
             <button
               type="button"
               onClick={() => {
@@ -116,24 +116,28 @@ function Frame() {
                   document.getElementById('english-search')?.focus()
                 }, 60)
               }}
-              className="inline-flex h-8 items-center gap-2 rounded-full border border-border bg-card/80 px-3 text-xs text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card/80 px-2.5 text-xs text-muted-foreground transition hover:border-primary/40 hover:text-foreground sm:gap-2 sm:px-3"
             >
-              <Search className="size-3.5" aria-hidden="true" />
-              <span>{zh ? '快捷检索词库 (⌘+K)' : 'Quick search words (⌘+K)'}</span>
+              <Search className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="sm:hidden">{zh ? '检索词库' : 'Search'}</span>
+              <span className="hidden sm:inline">{zh ? '快捷检索词库 (⌘+K)' : 'Quick search words (⌘+K)'}</span>
             </button>
             <button
               type="button"
               onClick={toggleHoverDict}
               title={zh ? '切换全局单词悬浮查词功能' : 'Toggle Global Word Hover Dictionary'}
               className={cn(
-                'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition',
+                'inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold transition sm:gap-1.5 sm:px-3',
                 hoverDictEnabled
-                  ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300 shadow-2xs hover:bg-emerald-900/40'
+                  ? 'border-primary/40 bg-primary/15 text-primary shadow-2xs hover:bg-primary/20'
                   : 'border-border bg-card/60 text-muted-foreground hover:text-foreground',
               )}
             >
-              <Sparkles className="size-3 text-emerald-400" aria-hidden="true" />
-              <span>
+              <Sparkles className="size-3 shrink-0 text-primary" aria-hidden="true" />
+              <span className="sm:hidden">
+                {zh ? (hoverDictEnabled ? '查词 开' : '查词 关') : hoverDictEnabled ? 'Dict ON' : 'Dict OFF'}
+              </span>
+              <span className="hidden sm:inline">
                 {zh
                   ? hoverDictEnabled
                     ? '悬浮查词 开'
@@ -153,7 +157,7 @@ function Frame() {
               aria-label={t('lang')}
               value={locale}
               onChange={(event) => setLocale(event.target.value as 'en' | 'zh')}
-              className="h-8 rounded-full border border-border bg-card px-2.5 text-xs font-medium text-foreground shadow-2xs"
+              className="h-8 rounded-full border border-border bg-card px-2 text-xs font-medium text-foreground shadow-2xs sm:px-2.5"
             >
               {LOCALES.map((item) => (
                 <option key={item.id} value={item.id}>

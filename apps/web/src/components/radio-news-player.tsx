@@ -846,10 +846,10 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
             )}
           </div>
 
-          <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-5 sm:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-4 sm:p-6">
+            <div className="flex flex-col gap-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <span className="rounded bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
                     {selectedArticle ? selectedArticle.category : currentSegment.timeMark}
                   </span>
@@ -857,60 +857,63 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                     {zh ? activeTopic.labelZh : activeTopic.labelEn}
                   </span>
                 </div>
-                <h3 className="font-display text-lg font-semibold leading-snug text-foreground">
-                  {selectedArticle
-                    ? zh
-                      ? selectedArticle.titleZh || selectedArticle.title
-                      : selectedArticle.title
-                    : zh
-                      ? currentSegment.titleZh
-                      : currentSegment.title}
-                </h3>
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span>
-                    {zh ? '播音主播：' : 'Anchor: '}
-                    {selectedArticle ? selectedArticle.source || 'CityNews 680 Newsroom' : currentSegment.anchor}
-                  </span>
-                  {(selectedArticle?.source || currentSegment.sourceName) && (
-                    <span>· {selectedArticle?.source || currentSegment.sourceName}</span>
-                  )}
-                  {(selectedArticle?.link || currentSegment.sourceUrl) && (
-                    <a
-                      href={selectedArticle?.link || currentSegment.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
-                    >
-                      {zh ? '查看新闻原文' : 'Original report'} <ExternalLink className="size-3" />
-                    </a>
-                  )}
-                </p>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void speakWord(
+                        selectedArticle ? `${selectedArticle.title}. ${selectedArticle.summary}` : currentSegment.text,
+                      )
+                    }
+                    className={cn(btn, 'px-2.5 py-1 text-[11px] sm:px-3 sm:py-1.5 sm:text-xs')}
+                  >
+                    <Volume2 className="size-3.5 text-primary" /> {zh ? '全文朗读' : 'Read Aloud'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowShadowingStudio((v) => !v)}
+                    className={cn(
+                      btn,
+                      'px-2.5 py-1 text-[11px] sm:px-3 sm:py-1.5 sm:text-xs',
+                      showShadowingStudio && 'border-primary bg-primary text-primary-foreground hover:text-primary-foreground',
+                    )}
+                  >
+                    <Mic className={cn('size-3.5', showShadowingStudio ? 'text-primary-foreground' : 'text-primary')} />
+                    {zh ? '跟读录音棚' : 'Shadowing'}
+                  </button>
+                </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    void speakWord(
-                      selectedArticle ? `${selectedArticle.title}. ${selectedArticle.summary}` : currentSegment.text,
-                    )
-                  }
-                  className={cn(btn, 'shrink-0')}
-                >
-                  <Volume2 className="size-3.5 text-primary" /> {zh ? '全文朗读' : 'Read Aloud'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowShadowingStudio((v) => !v)}
-                  className={cn(
-                    btn,
-                    'shrink-0',
-                    showShadowingStudio && 'border-primary bg-primary text-primary-foreground hover:text-primary-foreground',
-                  )}
-                >
-                  <Mic className={cn('size-3.5', showShadowingStudio ? 'text-primary-foreground' : 'text-primary')} />
-                  {zh ? '跟读录音棚 (Shadowing)' : 'Shadowing Studio'}
-                </button>
-              </div>
+
+              <h3 className="w-full font-display text-lg font-semibold leading-snug text-foreground sm:text-xl">
+                {selectedArticle
+                  ? zh
+                    ? selectedArticle.titleZh || selectedArticle.title
+                    : selectedArticle.title
+                  : zh
+                    ? currentSegment.titleZh
+                    : currentSegment.title}
+              </h3>
+
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span>
+                  {zh ? '播音主播：' : 'Anchor: '}
+                  {selectedArticle ? selectedArticle.source || 'CityNews 680 Newsroom' : currentSegment.anchor}
+                </span>
+                {(selectedArticle?.source || currentSegment.sourceName) && (
+                  <span>· {selectedArticle?.source || currentSegment.sourceName}</span>
+                )}
+                {(selectedArticle?.link || currentSegment.sourceUrl) && (
+                  <a
+                    href={selectedArticle?.link || currentSegment.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                  >
+                    {zh ? '查看新闻原文' : 'Original report'} <ExternalLink className="size-3" />
+                  </a>
+                )}
+              </p>
             </div>
 
             {showShadowingStudio && (
