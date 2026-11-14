@@ -1126,17 +1126,6 @@ func (s *radioNewsService) extractRadioLexis(text string, fallback []RadioVocabu
 		}
 	}
 
-	// Fill up to 4 items from fallback if live text had fewer matches
-	for _, fb := range fallback {
-		if len(matched) >= 4 {
-			break
-		}
-		key := strings.ToLower(fb.Word)
-		if !seen[key] {
-			seen[key] = true
-			matched = append(matched, fb)
-		}
-	}
 	return matched
 }
 
@@ -1277,6 +1266,11 @@ var stopWords = map[string]bool{
 	"city": true, "stay": true, "tuned": true, "live": true, "latest": true, "checking": true,
 	"stories": true, "greater": true, "area": true, "degree": true, "degrees": true, "celsius": true,
 	"hour": true, "hours": true, "kilometer": true, "kilometers": true, "newsroom": true,
+	"pearson": true, "international": true, "airport": true, "downtown": true, "current": true,
+	"conditions": true, "feeling": true, "like": true, "winds": true, "together": true,
+	"newsradio": true, "continuous": true, "coverage": true, "tracking": true, "happening": true,
+	"around": true, "across": true, "leagues": true, "said": true, "says": true, "monday": true,
+	"tuesday": true, "wednesday": true, "thursday": true, "friday": true, "saturday": true, "sunday": true,
 }
 
 var curatedBroadcastLexis = []RadioVocabularyItem{

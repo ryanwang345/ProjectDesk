@@ -1,8 +1,22 @@
+import { getDictionaryEntry } from '@/lib/dictionary'
+
 export type RadioVocabularyItem = {
   word: string
   pos: string
   ipa: string
   meaning: string
+  band: string
+  contextSnippet: string
+}
+
+export type RadioCollocationItem = {
+  phrase: string
+  patternZh: string
+  patternEn: string
+  meaningZh: string
+  meaningEn: string
+  usageZh: string
+  usageEn: string
   band: string
   contextSnippet: string
 }
@@ -63,7 +77,437 @@ export type RadioBulletin = {
   liveArticles: RadioLiveArticle[]
 }
 
-const RADIO_CACHE_KEY = 'projectdesk.radio.citynews680.v4'
+const RADIO_CACHE_KEY = 'projectdesk.radio.citynews680.v5'
+
+const RADIO_BOILERPLATE_STOPWORDS = new Set([
+  'this', 'that', 'with', 'from', 'have', 'will', 'would', 'could', 'should', 'your', 'here', 'more', 'most',
+  'when', 'what', 'were', 'been', 'they', 'their', 'there', 'where', 'which', 'while', 'about', 'after',
+  'before', 'under', 'over', 'into', 'also', 'some', 'such', 'than', 'then', 'them', 'these', 'those', 'both',
+  'each', 'other', 'only', 'very', 'just', 'even', 'back', 'down', 'well', 'much', 'many', 'made', 'make',
+  'take', 'took', 'taken', 'come', 'came', 'goes', 'went', 'gone', 'know', 'knew', 'known', 'said', 'says',
+  'told', 'tell', 'year', 'years', 'week', 'weeks', 'month', 'months', 'time', 'times', 'news', 'toronto',
+  'canada', 'canadian', 'ontario', 'city', 'stay', 'tuned', 'live', 'latest', 'checking', 'stories', 'greater',
+  'area', 'degree', 'degrees', 'celsius', 'hour', 'hours', 'kilometer', 'kilometers', 'newsroom', 'pearson',
+  'international', 'airport', 'downtown', 'current', 'conditions', 'feeling', 'like', 'winds', 'together',
+  'newsradio', 'continuous', 'coverage', 'tracking', 'happening', 'around', 'across', 'leagues', 'monday',
+  'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'january', 'february', 'march', 'april',
+  'june', 'july', 'august', 'september', 'october', 'november', 'december', 'united', 'states', 'ukraine',
+  'ukrainian', 'russia', 'russian', 'moscow', 'kyiv', 'europe', 'european', 'putin', 'zelenskyy', 'volodymyr',
+  'traffic', 'weather', 'business', 'sports', 'culture', 'metro', 'market', 'economic', 'developments',
+  'breaking', 'northerly', 'northeasterly', 'easterly', 'southeasterly', 'southerly', 'southwesterly',
+  'westerly', 'northwesterly', 'first', 'second', 'third', 'three', 'four', 'five', 'seven', 'eight', 'nine',
+])
+
+function splitIntoSentences(text: string): string[] {
+  const raw = text.match(/[^.!?]+[.!?]+/g)
+  if (!raw || raw.length === 0) return [text.trim()].filter(Boolean)
+  return raw
+    .map((s) => s.trim())
+    .filter((s) => s.length > 12)
+}
+
+function isBoilerplateSentence(sentence: string): boolean {
+  const low = sentence.toLowerCase()
+  return (
+    low.startsWith('this is 680 news') ||
+    low.startsWith('time for traffic and weather') ||
+    low.startsWith('from the 680 newsroom') ||
+    low.startsWith('in 680 business') ||
+    low.startsWith('in 680 sports') ||
+    low.startsWith('stay tuned to 680')
+  )
+}
+
+export function extractLiveKeyLexis(text: string): RadioVocabularyItem[] {
+  const allSentences = splitIntoSentences(text)
+  const storySentences = allSentences.filter((s) => !isBoilerplateSentence(s))
+  const targetSentences = storySentences.length > 0 ? storySentences : allSentences
+  const searchPoolText = targetSentences.join(' ')
+
+  const tokenMatches = searchPoolText.match(/[A-Za-z]{5,}/g) ?? []
+  const seenWords = new Set<string>()
+  const candidates: { item: RadioVocabularyItem; score: number }[] = []
+
+  for (const rawTok of tokenMatches) {
+    const low = rawTok.toLowerCase()
+    if (RADIO_BOILERPLATE_STOPWORDS.has(low) || seenWords.has(low)) continue
+
+    const sentence =
+      targetSentences.find((s) => new RegExp(`\\b${rawTok}\\b`, 'i').test(s)) ??
+      allSentences.find((s) => new RegExp(`\\b${rawTok}\\b`, 'i').test(s)) ??
+      targetSentences[0] ??
+      text
+
+    const dictEntry = getDictionaryEntry(low, [], sentence)
+    if (
+      !dictEntry ||
+      dictEntry.meaningZh.startsWith('专有名词') ||
+      dictEntry.meaningZh.startsWith('暂无')
+    ) {
+      continue
+    }
+
+    const rootWord = dictEntry.contextNote?.startsWith('词根：')
+      ? dictEntry.contextNote.slice(3).trim().toLowerCase()
+      : dictEntry.word.toLowerCase()
+
+    if (RADIO_BOILERPLATE_STOPWORDS.has(rootWord) || seenWords.has(rootWord)) continue
+    seenWords.add(low)
+    seenWords.add(rootWord)
+
+    // Prefer words from the actual news headline/story over the weather intro sentence
+    const inNewsBody = !sentence.toLowerCase().startsWith('over at toronto pearson')
+    const hasRealIpa = dictEntry.ipa !== `/${dictEntry.word}/` && dictEntry.ipa !== `/${low}/`
+    const score =
+      (inNewsBody ? 20 : 0) +
+      (hasRealIpa ? 15 : 0) +
+      Math.min(12, low.length)
+
+    candidates.push({
+      score,
+      item: {
+        word: rootWord,
+        pos: dictEntry.pos,
+        ipa: dictEntry.ipa,
+        meaning: dictEntry.meaningZh,
+        band: dictEntry.band,
+        contextSnippet: sentence.length > 170 ? truncateCleanSentence(sentence, 170) : sentence,
+      },
+    })
+  }
+
+  candidates.sort((a, b) => b.score - a.score)
+  return candidates.slice(0, 4).map((c) => c.item)
+}
+
+function shortChineseGloss(rawZh: string): string {
+  return rawZh
+    .replace(/^[a-z./]+\s*/i, '')
+    .split(/[；;，,（(]/)[0]
+    .trim()
+}
+
+export function extractLiveCollocations(text: string): RadioCollocationItem[] {
+  const allSentences = splitIntoSentences(text)
+  const storySentences = allSentences.filter(
+    (s) => !isBoilerplateSentence(s) && !s.toLowerCase().startsWith('over at toronto pearson'),
+  )
+  const targetSentences = storySentences.length > 0 ? storySentences : allSentences
+  const searchPoolText = targetSentences.join(' ')
+
+  const findSentenceForPhrase = (phrase: string): string => {
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(escaped, 'i')
+    const hit =
+      targetSentences.find((s) => re.test(s)) ??
+      allSentences.find((s) => re.test(s)) ??
+      targetSentences[0] ??
+      text
+    return hit.length > 170 ? truncateCleanSentence(hit, 170) : hit
+  }
+
+  const out: RadioCollocationItem[] = []
+  const seenPhrases = new Set<string>()
+
+  const pushCard = (card: Omit<RadioCollocationItem, 'contextSnippet'>) => {
+    const norm = card.phrase.toLowerCase().trim()
+    if (!norm || seenPhrases.has(norm)) return
+    seenPhrases.add(norm)
+    out.push({
+      ...card,
+      contextSnippet: findSentenceForPhrase(card.phrase),
+    })
+  }
+
+  // Tier 1: High-yield journalism & IELTS collocation patterns present in the live news text
+  const curatedPatterns: {
+    re: RegExp
+    build: (match: RegExpExecArray) => Omit<RadioCollocationItem, 'contextSnippet'>
+  }[] = [
+    {
+      re: /\b(raise[ds]?|raising)\s+the\s+(possibility|prospect|question|issue|risk|alarm|stakes|concern[s]?)\s+(of|that|over|about)\b/gi,
+      build: (m) => ({
+        phrase: m[0].trim(),
+        patternZh: 'v. + n. + prep. 动词短语搭配',
+        patternEn: 'Verb + Noun + Prep',
+        meaningZh: `提出…的${m[2].toLowerCase().startsWith('possib') || m[2].toLowerCase() === 'prospect' ? '可能性' : '问题/关切'}；引发对…的探讨`,
+        meaningEn: 'bring up the likelihood, issue, or concern of something happening',
+        usageZh: '新闻与雅思写作高分替代词组（替代 maybe / talk about），后接名词或动名词。',
+        usageEn: 'High-register journalism and IELTS Writing expression followed by a noun or gerund.',
+        band: 'Band 7.5',
+      }),
+    },
+    {
+      re: /\bas\s+part\s+of\s+(?:[a-z]+\s+)?(efforts|plans|measures|talks|initiatives|push|drive)\s+to\s+([a-z]+)\b/gi,
+      build: (m) => {
+        const verbEntry = getDictionaryEntry(m[2].toLowerCase(), [], m[0])
+        const verbZh =
+          verbEntry && !verbEntry.meaningZh.startsWith('专有名词')
+            ? shortChineseGloss(verbEntry.meaningZh)
+            : ''
+        return {
+          phrase: m[0].trim(),
+          patternZh: 'prep. + n. + to do 目的状语搭配',
+          patternEn: 'Prep + Noun + Infinitive',
+          meaningZh: `作为致力于${verbZh || '实现某目标'}的努力/举措的一部分`,
+          meaningEn: 'as one component of broader organized attempts to achieve a goal',
+          usageZh: '新闻报道常用此句型引出政策、法案或外交行动背后的核心目标。',
+          usageEn: 'Used in news reporting to frame the strategic goal behind an action or policy.',
+          band: 'Band 7.5',
+        }
+      },
+    },
+    {
+      re: /\b(security\s+framework|legal\s+framework|regulatory\s+framework|policy\s+framework)\b/gi,
+      build: (m) => ({
+        phrase: m[0].trim(),
+        patternZh: 'n. + n. 核心复合名词搭配',
+        patternEn: 'Noun + Noun Collocation',
+        meaningZh: m[0].toLowerCase().startsWith('security') ? '安全框架，安保体系架构' : '法律/监管制度框架',
+        meaningEn: 'a structured system of agreements, rules, or safeguards',
+        usageZh: '常与 establish / reshape / broader / new 搭配，用于国际关系与公共政策语境。',
+        usageEn: 'Frequently paired with establish, reshape, or propose in policy contexts.',
+        band: 'Band 7.5',
+      }),
+    },
+    {
+      re: /\b(floated|backed|sparked|triggered|prompted|fueled|plagued|unveiled|launched|issued)\s+by\b/gi,
+      build: (m) => {
+        const v = m[1].toLowerCase()
+        const isFloat = v === 'floated'
+        const vEntry = getDictionaryEntry(v, [], m[0])
+        const vZh = isFloat
+          ? '初步提出（方案/构想）以试探反应'
+          : vEntry && !vEntry.meaningZh.startsWith('专有名词')
+            ? shortChineseGloss(vEntry.meaningZh)
+            : '推动/引发'
+        return {
+          phrase: m[0].trim(),
+          patternZh: 'v.-ed + prep. 后置分词搭配',
+          patternEn: 'Participle + Prep',
+          meaningZh: isFloat ? '由…初步提出（方案/设想），放风试探' : `由…所${vZh}（被动后置修饰）`,
+          meaningEn: isFloat
+            ? 'put forward tentatively to test reaction'
+            : `initiated, supported, or caused by an agent`,
+          usageZh: isFloat
+            ? '熟词僻义：float 在政经新闻中常表示“提出（想法或提案）”，如 a framework floated by US。'
+            : `新闻标题与导语高频精简结构，省略 which was 直接用 “${m[0].trim()}” 作后置定语。`,
+          usageEn: 'Compact broadcast journalism passive modifier.',
+          band: 'Band 7.5',
+        }
+      },
+    },
+    {
+      re: /\b(weaken|reshape|strengthen|bolster|undermine|disrupt|restore|expand|curb|tackle|address)\s+(?:the\s+|such\s+|their\s+|its\s+)?([a-z']+(?:\s+[a-z']+)?)\b/gi,
+      build: (m) => {
+        const vLow = m[1].toLowerCase()
+        const objRaw = m[2].trim()
+        const objLastWord = objRaw.split(/\s+/).pop()?.replace(/[^a-z]/gi, '').toLowerCase() ?? ''
+        const vEntry = getDictionaryEntry(vLow, [], m[0])
+        const oEntry = objLastWord ? getDictionaryEntry(objLastWord, [], m[0]) : null
+        const vZh = vEntry ? shortChineseGloss(vEntry.meaningZh) : vLow
+        const oZh =
+          oEntry && !oEntry.meaningZh.startsWith('专有名词')
+            ? shortChineseGloss(oEntry.meaningZh)
+            : objRaw
+        return {
+          phrase: m[0].trim(),
+          patternZh: 'v. + n. 动宾核心搭配',
+          patternEn: 'Verb + Object Collocation',
+          meaningZh: `${vZh}${oZh}`,
+          meaningEn: `${vLow} ${objRaw} (high-impact transitive verb + object)`,
+          usageZh: `高分动宾搭配：动词 “${vLow}”（${vZh}）精准搭配宾语 “${objRaw}”，比普通动词更具学术与新闻表现力。`,
+          usageEn: `Strong verb-object collocation with "${vLow}".`,
+          band: 'Band 7.0',
+        }
+      },
+    },
+    {
+      re: /\b(ground\s+stop|ripple\s+effect|travel\s+rush|domestic\s+flights|flight\s+disruptions?|air\s+traffic|oil\s+facility|general\s+staff|interest\s+rates?|cost\s+of\s+living|housing\s+market|emergency\s+crews|police\s+investigation|collector\s+lanes|express\s+lanes|transit\s+riders|trade\s+tariffs?|supply\s+chain|public\s+health|city\s+council|executive\s+order|peace\s+talks)\b/gi,
+      build: (m) => {
+        const raw = m[0].trim()
+        const parts = raw.toLowerCase().split(/\s+/)
+        const e1 = getDictionaryEntry(parts[0], [], raw)
+        const e2 = getDictionaryEntry(parts[parts.length - 1], [], raw)
+        const z1 = e1 && !e1.meaningZh.startsWith('专有名词') ? shortChineseGloss(e1.meaningZh) : parts[0]
+        const z2 = e2 && !e2.meaningZh.startsWith('专有名词') ? shortChineseGloss(e2.meaningZh) : parts[parts.length - 1]
+        const specialMap: Record<string, string> = {
+          'ground stop': '地面停飞令（航空管制措施）',
+          'ripple effect': '连锁反应，波及效应',
+          'travel rush': '出行高峰期，客流高峰',
+          'domestic flights': '国内航班',
+          'oil facility': '石油设施，炼油与储油基地',
+          'general staff': '总参谋部',
+          'interest rate': '利率',
+          'interest rates': '利率',
+          'cost of living': '生活成本',
+          'housing market': '房地产市场，楼市',
+          'emergency crews': '应急救援人员',
+          'collector lanes': '辅路车道，集散车道',
+          'express lanes': '快速车道，主路车道',
+        }
+        return {
+          phrase: raw,
+          patternZh: 'n. + n. 新闻行业高频词组',
+          patternEn: 'Compound Noun Phrase',
+          meaningZh: specialMap[raw.toLowerCase()] ?? `${z1}${z2}`,
+          meaningEn: `standard journalism compound noun phrase: "${raw}"`,
+          usageZh: '北美新闻播报固定复合名词搭配，建议作为整体词块（chunk）记忆。',
+          usageEn: 'Fixed compound noun chunk in North American broadcast journalism.',
+          band: 'Band 7.0',
+        }
+      },
+    },
+    {
+      re: /\b(focusing\s+exclusively\s+on|referring\s+to|embargoed\s+until|operating\s+normally|in\s+time\s+to|according\s+to|in\s+response\s+to|ahead\s+of|on\s+the\s+verge\s+of|in\s+the\s+wake\s+of|under\s+investigation)\b/gi,
+      build: (m) => {
+        const low = m[0].trim().toLowerCase()
+        const map: Record<string, { zh: string; usage: string }> = {
+          'focusing exclusively on': { zh: '仅仅聚焦于…，专一针对…', usage: 'exclusively 强化聚焦程度，常用于对比两个议题的优先级。' },
+          'referring to': { zh: '指的是…，提及…', usage: '新闻引语后常接 referring to... 补充说明发言人所指的具体事物。' },
+          'embargoed until': { zh: '（新闻稿）在…之前禁止提前发布', usage: '新闻业专业搭配：embargo 指“新闻解禁时间限制”。' },
+          'operating normally': { zh: '恢复正常运行，正常运转', usage: '常用于交通、电网、航空系统恢复后的官方通报。' },
+          'in time to': { zh: '及时赶上做某事，来得及…', usage: '后接动词原形，表示在关键节点前完成准备。' },
+          'according to': { zh: '据…所说，根据…的数据', usage: '新闻消息源标注最高频介词短语。' },
+          'in response to': { zh: '作为对…的回应，应对…', usage: '用于引出政策或反制措施的触发原因。' },
+          'ahead of': { zh: '在…之前，早于…', usage: '新闻中常替代 before，如 ahead of the summit / holiday。' },
+          'on the verge of': { zh: '濒临…，即将…', usage: '形容局势或协议接近临界点。' },
+          'in the wake of': { zh: '随着…之后，在…的影响下', usage: '常接重大事件或危机名词。' },
+          'under investigation': { zh: '正在接受调查中', usage: '警务与市政新闻固定表语/后置定语短语。' },
+        }
+        const info = map[low] ?? { zh: '核心新闻介词/分词短语搭配', usage: '用于衔接新闻事实与背景信息。' }
+        return {
+          phrase: m[0].trim(),
+          patternZh: 'v./prep. 新闻功能短语搭配',
+          patternEn: 'Journalism Functional Phrase',
+          meaningZh: info.zh,
+          meaningEn: `high-frequency broadcast phrase "${m[0].trim()}"`,
+          usageZh: info.usage,
+          usageEn: 'High-frequency functional phrase in broadcast reporting.',
+          band: 'Band 7.0',
+        }
+      },
+    },
+  ]
+
+  for (const pat of curatedPatterns) {
+    pat.re.lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = pat.re.exec(searchPoolText)) !== null) {
+      pushCard(pat.build(match))
+      if (out.length >= 4) return out
+    }
+  }
+
+  // Tier 2: Dynamic Syntactic Collocation Extractor directly from the live news story sentences
+  // Scans adjacent content word pairs (Adjective + Noun / Noun + Noun / Verb + Preposition) in the story
+  const pairRegex = /\b([A-Za-z]{4,})\s+([a-z]{4,})\b/g
+  let pairMatch: RegExpExecArray | null
+  while ((pairMatch = pairRegex.exec(searchPoolText)) !== null) {
+    if (out.length >= 4) break
+    const w1 = pairMatch[1]
+    const w2 = pairMatch[2]
+    const l1 = w1.toLowerCase()
+    const l2 = w2.toLowerCase()
+    if (RADIO_BOILERPLATE_STOPWORDS.has(l1) || RADIO_BOILERPLATE_STOPWORDS.has(l2)) continue
+
+    const e1 = getDictionaryEntry(l1, [], pairMatch[0])
+    const e2 = getDictionaryEntry(l2, [], pairMatch[0])
+    if (
+      !e1 ||
+      !e2 ||
+      e1.meaningZh.startsWith('专有名词') ||
+      e2.meaningZh.startsWith('专有名词') ||
+      e1.meaningZh.startsWith('暂无') ||
+      e2.meaningZh.startsWith('暂无')
+    ) {
+      continue
+    }
+
+    const z1 = shortChineseGloss(e1.meaningZh)
+    const z2 = shortChineseGloss(e2.meaningZh)
+    if (!z1 || !z2 || z1 === z2) continue
+
+    const phrase = `${w1} ${w2}`
+    const isAdjNoun = e1.pos.includes('adj')
+    pushCard({
+      phrase,
+      patternZh: isAdjNoun ? 'adj. + n. 修饰词组搭配' : 'n. + n. 复合词组搭配',
+      patternEn: isAdjNoun ? 'Adj + Noun Collocation' : 'Noun + Noun Collocation',
+      meaningZh: `${z1} · ${z2}`,
+      meaningEn: `${w1} (${e1.pos}) + ${w2} (${e2.pos})`,
+      usageZh: `来自当前报道的实词搭配：“${w1.toLowerCase()}”（${z1}）+ “${w2.toLowerCase()}”（${z2}），成块记忆可提升听音辨义速度。`,
+      usageEn: `Authentic two-word collocation from the current report.`,
+      band: 'Band 7.0',
+    })
+  }
+
+  return out.slice(0, 4)
+}
+
+export function extractLiveLiaisons(text: string): RadioLiaison[] {
+  const patterns: { re: RegExp; build: (m: string) => RadioLiaison }[] = [
+    {
+      re: /\b([a-z]+ing)\s+(a|an|in|on|at|up|out|over|across|into)\b/gi,
+      build: (m) => {
+        const parts = m.trim().split(/\s+/)
+        return {
+          phrase: m.trim(),
+          ipa: `/...ɪŋ‿${parts[1].toLowerCase()}/`,
+          noteZh: `辅元连读：${parts[0]} 词尾鼻音与元音词 “${parts[1]}” 自然连读`,
+          note: `Linking: “-ing” flows directly into vowel-initial “${parts[1]}”`,
+        }
+      },
+    },
+    {
+      re: /\b([a-z]+ed)\s+(to|in|on|at|up|by|as|of)\b/gi,
+      build: (m) => {
+        const parts = m.trim().split(/\s+/)
+        return {
+          phrase: m.trim(),
+          ipa: `/${parts[0].toLowerCase()}‿${parts[1].toLowerCase()}/`,
+          noteZh: `过去式词尾连读与弱读：“${parts[0]}” 词尾轻化并与 “${parts[1]}” 紧密衔接`,
+          note: `Past-tense linking & reduction: “${parts[0]}” blends into “${parts[1]}”`,
+        }
+      },
+    },
+    {
+      re: /\b(part|possibility|instead|out|because|ahead)\s+of\s+(a|an|the|[a-z]+)\b/gi,
+      build: (m) => ({
+        phrase: m.trim(),
+        ipa: `/${m.trim().toLowerCase().replace(/\s+of\s+/, '‿əv‿')}/`,
+        noteZh: `高频介词 of 弱读：在新闻快语速中 of 弱化为 /əv/ 或 /ə/ 并前后连读`,
+        note: `Reduction: “of” reduces to /əv/ and links smoothly across words`,
+      }),
+    },
+    {
+      re: /\b(gusts|winds|flights|talks|efforts|borders)\s+(up|at|in|on|are|to)\b/gi,
+      build: (m) => {
+        const parts = m.trim().split(/\s+/)
+        return {
+          phrase: m.trim(),
+          ipa: `/${parts[0].toLowerCase()}‿${parts[1].toLowerCase()}/`,
+          noteZh: `复数词尾连读：“${parts[0]}” 词尾 /s/ 或 /z/ 与后续功能词 “${parts[1]}” 连读`,
+          note: `Plural sibilant linking: final /s/ or /z/ of “${parts[0]}” links into “${parts[1]}”`,
+        }
+      },
+    },
+  ]
+
+  const out: RadioLiaison[] = []
+  const seen = new Set<string>()
+  for (const pat of patterns) {
+    const matches = text.match(pat.re) ?? []
+    for (const raw of matches) {
+      const key = raw.toLowerCase().trim()
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(pat.build(raw))
+      if (out.length >= 2) return out
+    }
+  }
+  return out
+}
 
 function isCityNewsArticle(a: RadioLiveArticle): boolean {
   return a.source.toLowerCase().includes('citynews') || a.link.toLowerCase().includes('citynews.ca')
@@ -180,10 +624,16 @@ export async function fetchLiveRadioBulletin(
 
         if (existingCityNews.length >= 4 && !hasDuplicateSegments && !hasNonCityNewsSegment && !hasOverlongSegment) {
           data.liveArticles = existingCityNews
-          data.segments = data.segments.map((seg) => ({
-            ...seg,
-            relatedArticles: dedupeArticles((seg.relatedArticles ?? []).filter(isCityNewsArticle)),
-          }))
+          data.segments = data.segments.map((seg) => {
+            const liveLex = extractLiveKeyLexis(seg.text)
+            const liveLiaisons = extractLiveLiaisons(seg.text)
+            return {
+              ...seg,
+              keyLexis: liveLex.length > 0 ? liveLex : seg.keyLexis,
+              liaisons: liveLiaisons.length > 0 ? liveLiaisons : seg.liaisons,
+              relatedArticles: dedupeArticles((seg.relatedArticles ?? []).filter(isCityNewsArticle)),
+            }
+          })
           saveCachedLiveRadioBulletin(data)
           return data
         }
@@ -418,6 +868,8 @@ function buildSegmentsFromSlotMap(
         ...(top ? [cleanBroadcastPair(top.title, top.summary)] : []),
       ]
       const text = lines.join(' ')
+      const liveLex = extractLiveKeyLexis(text)
+      const liveLiaisons = extractLiveLiaisons(text)
       return {
         ...fb,
         title,
@@ -431,6 +883,8 @@ function buildSegmentsFromSlotMap(
         publishedAt: top?.publishedAt ?? new Date().toISOString(),
         sourceUrl: top?.link ?? 'https://toronto.citynews.ca/traffic/',
         sourceName: top?.source ?? 'CityNews 680 Traffic & Weather',
+        keyLexis: liveLex.length > 0 ? liveLex : fb.keyLexis,
+        liaisons: liveLiaisons.length > 0 ? liveLiaisons : fb.liaisons,
         relatedArticles: list,
       }
     }
@@ -448,6 +902,8 @@ function buildSegmentsFromSlotMap(
       cleanBroadcastPair(top.title, top.summary),
       'Stay tuned to 680 NewsRadio Toronto for continuous live coverage.',
     ].join(' ')
+    const liveLex = extractLiveKeyLexis(text)
+    const liveLiaisons = extractLiveLiaisons(text)
     return {
       ...fb,
       title: top.title,
@@ -457,6 +913,8 @@ function buildSegmentsFromSlotMap(
       publishedAt: top.publishedAt,
       sourceUrl: top.link,
       sourceName: top.source,
+      keyLexis: liveLex.length > 0 ? liveLex : fb.keyLexis,
+      liaisons: liveLiaisons.length > 0 ? liveLiaisons : fb.liaisons,
       relatedArticles: list,
     }
   })

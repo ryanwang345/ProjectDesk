@@ -20,11 +20,15 @@ import { InteractiveGlossText } from '@/components/interactive-gloss-text'
 import { useEnglish } from '@/hooks/use-english'
 import { useI18n } from '@/i18n'
 import {
+  extractLiveCollocations,
+  extractLiveKeyLexis,
+  extractLiveLiaisons,
   fetchLiveRadioBulletin,
   getCachedLiveRadioBulletin,
   STATION_680_NEWS,
   type LiveStreamStation,
   type RadioBulletin,
+  type RadioCollocationItem,
   type RadioLiveArticle,
   type RadioNewsWheelSegment,
   type RadioVocabularyItem,
@@ -63,6 +67,7 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
   const [activeSegmentId, setActiveSegmentId] = useState<string>(station.wheelSegments[0].id)
   const [selectedArticle, setSelectedArticle] = useState<RadioLiveArticle | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL')
+  const [studyCardFilter, setStudyCardFilter] = useState<'ALL' | 'WORDS' | 'PHRASES'>('ALL')
   const [showChinese, setShowChinese] = useState(true)
   const [activeWordToAdd, setActiveWordToAdd] = useState<string | null>(null)
 
@@ -71,6 +76,17 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
 
   const currentSegment: RadioNewsWheelSegment =
     segments.find((s) => s.id === activeSegmentId) || segments[0]
+
+  const activeTranscriptText = selectedArticle
+    ? `${selectedArticle.title}. ${selectedArticle.summary}`
+    : currentSegment.text
+  const extractedLexis = extractLiveKeyLexis(activeTranscriptText)
+  const activeKeyLexis: RadioVocabularyItem[] =
+    extractedLexis.length > 0 ? extractedLexis : currentSegment.keyLexis
+  const activeCollocations: RadioCollocationItem[] = extractLiveCollocations(activeTranscriptText)
+  const extractedLiaisons = extractLiveLiaisons(activeTranscriptText)
+  const activeLiaisons =
+    extractedLiaisons.length > 0 ? extractedLiaisons : currentSegment.liaisons
 
   const allFeedArticles: RadioLiveArticle[] = liveBulletin?.liveArticles ?? []
   const cityNewsArticles = allFeedArticles.filter(
@@ -140,19 +156,19 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
     if (audioRef.current) audioRef.current.playbackRate = playbackRate
   }, [playbackRate, isPlaying])
 
-  function renderHighlighted(seg: RadioNewsWheelSegment) {
-    const words = seg.keyLexis.map((k) => k.word.replace(/[^a-z]/gi, '')).filter(Boolean)
-    if (words.length === 0) return <InteractiveGlossText text={seg.text} contextSentence={seg.text} />
+  function renderHighlighted(text: string, lexis: RadioVocabularyItem[]) {
+    const words = lexis.map((k) => k.word.replace(/[^a-z]/gi, '')).filter(Boolean)
+    if (words.length === 0) return <InteractiveGlossText text={text} contextSentence={text} />
     const re = new RegExp(`\\b((?:${words.join('|')})[a-z]*)\\b`, 'gi')
-    const parts = seg.text.split(re)
+    const parts = text.split(re)
     return parts.map((part, i) =>
       i % 2 === 1 ? (
         <mark key={i} className="rounded bg-primary/15 px-0.5 font-semibold text-primary underline decoration-primary/60 underline-offset-4">
-          <InteractiveGlossText text={part} contextSentence={seg.text} />
+          <InteractiveGlossText text={part} contextSentence={text} />
         </mark>
       ) : (
         <Fragment key={i}>
-          <InteractiveGlossText text={part} contextSentence={seg.text} />
+          <InteractiveGlossText text={part} contextSentence={text} />
         </Fragment>
       ),
     )
@@ -278,6 +294,48 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
             zh: item.band,
             collocations: [],
             writing: '',
+            speaking: '',
+            weak: '',
+            fix: '',
+            paraphrases: [],
+          },
+        })
+      }
+    } catch {
+      // ignore
+    } finally {
+      setTimeout(() => setActiveWordToAdd(null), 1200)
+    }
+  }
+
+  async function handleAddCollocationToWordbook(item: RadioCollocationItem) {
+    setActiveWordToAdd(item.phrase)
+    try {
+      const existing = desk.cards.find((c) => c.word.toLowerCase() === item.phrase.toLowerCase())
+      if (existing) {
+        await desk.markReview(existing.id, true)
+      } else {
+        await desk.adoptCard({
+          id: `seed-phrase-${item.phrase.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+          word: item.phrase,
+          meaning: item.meaningZh,
+          pronunciation: item.patternEn,
+          inReview: true,
+          generated: true,
+          updatedAt: new Date().toISOString(),
+          examples: [item.contextSnippet],
+          senses: [
+            {
+              pos: item.patternZh,
+              zh: item.meaningZh,
+              en: item.meaningEn,
+            },
+          ],
+          band: {
+            zh: item.band,
+            collocations: [item.phrase],
+            writing: item.usageEn,
+            writingZh: item.usageZh,
             speaking: '',
             weak: '',
             fix: '',
@@ -644,14 +702,7 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                 <span className="font-mono text-muted-foreground">{clip(currentSegment)}</span>
               </div>
               <p className="text-base leading-8 text-foreground">
-                {selectedArticle ? (
-                  <InteractiveGlossText
-                    text={`${selectedArticle.title}. ${selectedArticle.summary}`}
-                    contextSentence={`${selectedArticle.title}. ${selectedArticle.summary}`}
-                  />
-                ) : (
-                  renderHighlighted(currentSegment)
-                )}
+                {renderHighlighted(activeTranscriptText, activeKeyLexis)}
               </p>
             </div>
 
@@ -664,14 +715,14 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
               </div>
             )}
 
-            {currentSegment.liaisons.length > 0 && (
+            {activeLiaisons.length > 0 && (
               <div className="rounded-2xl border border-border bg-background/60 p-4">
                 <h4 className="mb-3 flex items-center gap-2 text-xs font-bold text-foreground">
                   <Sparkles className="size-3.5 text-primary" />
                   {zh ? '真实生活连读与音变诊断 (Liaisons & Reductions)' : 'Liaisons & reductions'}
                 </h4>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {currentSegment.liaisons.map((l) => (
+                  {activeLiaisons.map((l) => (
                     <button
                       key={l.phrase}
                       type="button"
@@ -692,59 +743,160 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
           </div>
         </section>
 
-        <aside className="flex flex-col gap-3 lg:col-span-4">
-          <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-              <Sparkles className="size-4 text-primary" />
-              {zh ? '680 新闻高频词汇' : '680 News lexis'}
-            </h2>
-            <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-              {currentSegment.keyLexis.length} {zh ? '核心词' : 'words'}
-            </span>
+        <aside className="flex flex-col gap-3.5 lg:col-span-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="inline-flex rounded-full border border-border bg-background/60 p-0.5 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setStudyCardFilter('ALL')}
+                className={cn(
+                  'rounded-full px-2.5 py-1 transition',
+                  studyCardFilter === 'ALL'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {zh ? '全部学习卡' : 'All Cards'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudyCardFilter('WORDS')}
+                className={cn(
+                  'rounded-full px-2.5 py-1 transition',
+                  studyCardFilter === 'WORDS'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {zh ? `生词卡 (${activeKeyLexis.length})` : `Words (${activeKeyLexis.length})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudyCardFilter('PHRASES')}
+                className={cn(
+                  'rounded-full px-2.5 py-1 transition',
+                  studyCardFilter === 'PHRASES'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {zh ? `短语搭配 (${activeCollocations.length})` : `Phrases (${activeCollocations.length})`}
+              </button>
+            </div>
           </div>
-          <div className="flex flex-col gap-3">
-            {currentSegment.keyLexis.map((item) => {
-              const isSaved = desk.cards.some((c) => c.word.toLowerCase() === item.word.toLowerCase() && c.inReview)
-              const isAdding = activeWordToAdd === item.word
-              return (
-                <div key={item.word} className="rounded-2xl border border-border bg-card p-3.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-display text-base font-semibold text-foreground">{item.word}</span>
-                        <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">{item.band}</span>
+
+          {(studyCardFilter === 'ALL' || studyCardFilter === 'WORDS') && (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                  <Sparkles className="size-4 text-primary" />
+                  {zh ? '680 新闻高频词汇' : '680 News lexis'}
+                </h2>
+                <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                  {activeKeyLexis.length} {zh ? '核心词' : 'words'}
+                </span>
+              </div>
+              {activeKeyLexis.map((item) => {
+                const isSaved = desk.cards.some((c) => c.word.toLowerCase() === item.word.toLowerCase() && c.inReview)
+                const isAdding = activeWordToAdd === item.word
+                return (
+                  <div key={item.word} className="rounded-2xl border border-border bg-card p-3.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-display text-base font-semibold text-foreground">{item.word}</span>
+                          <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">{item.band}</span>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                          <span>{item.pos} · {item.ipa}</span>
+                          <button type="button" onClick={() => void speakWord(item.word)} aria-label={zh ? '朗读单词' : 'Pronounce'} className="hover:text-foreground">
+                            <Volume2 className="size-3.5 text-primary" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
-                        <span>{item.pos} · {item.ipa}</span>
-                        <button type="button" onClick={() => void speakWord(item.word)} aria-label={zh ? '朗读单词' : 'Pronounce'} className="hover:text-foreground">
-                          <Volume2 className="size-3.5 text-primary" />
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleAddLexisToWordbook(item)}
+                        disabled={isAdding}
+                        className={cn(btn, 'px-2.5', isSaved && 'border-primary/50 bg-primary/10 text-primary')}
+                      >
+                        {isSaved ? <BookmarkCheck className="size-3" /> : <BookmarkPlus className="size-3" />}
+                        {isSaved ? (zh ? '已收录' : 'Saved') : isAdding ? (zh ? '添加中…' : 'Adding…') : zh ? '+ 生词本' : '+ Review'}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void handleAddLexisToWordbook(item)}
-                      disabled={isAdding}
-                      className={cn(btn, 'px-2.5', isSaved && 'border-primary/50 bg-primary/10 text-primary')}
-                    >
-                      {isSaved ? <BookmarkCheck className="size-3" /> : <BookmarkPlus className="size-3" />}
-                      {isSaved ? (zh ? '已收录' : 'Saved') : isAdding ? (zh ? '添加中…' : 'Adding…') : zh ? '+ 生词本' : '+ Review'}
-                    </button>
+                    <p className="mt-2 text-sm font-medium text-foreground">{item.meaning}</p>
+                    <p className="mt-2 rounded-lg bg-muted/50 p-2 text-xs leading-relaxed text-muted-foreground italic">“{item.contextSnippet}”</p>
                   </div>
-                  <p className="mt-2 text-sm font-medium text-foreground">{item.meaning}</p>
-                  <p className="mt-2 rounded-lg bg-muted/50 p-2 text-xs leading-relaxed text-muted-foreground italic">“{item.contextSnippet}”</p>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
+
+          {(studyCardFilter === 'ALL' || studyCardFilter === 'PHRASES') && activeCollocations.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between pt-1">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                  <Sparkles className="size-4 text-primary" />
+                  {zh ? '680 新闻短语搭配学习卡' : '680 News collocations & phrases'}
+                </h2>
+                <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                  {activeCollocations.length} {zh ? '组搭配' : 'phrases'}
+                </span>
+              </div>
+              {activeCollocations.map((item) => {
+                const isSaved = desk.cards.some((c) => c.word.toLowerCase() === item.phrase.toLowerCase() && c.inReview)
+                const isAdding = activeWordToAdd === item.phrase
+                return (
+                  <div key={item.phrase} className="rounded-2xl border border-border bg-card p-3.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-display text-base font-semibold text-foreground">{item.phrase}</span>
+                          <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">{item.band}</span>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                          <span>{zh ? item.patternZh : item.patternEn}</span>
+                          <button
+                            type="button"
+                            onClick={() => void speakWord(item.phrase)}
+                            aria-label={zh ? '朗读短语' : 'Pronounce phrase'}
+                            className="hover:text-foreground"
+                          >
+                            <Volume2 className="size-3.5 text-primary" />
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleAddCollocationToWordbook(item)}
+                        disabled={isAdding}
+                        className={cn(btn, 'shrink-0 px-2.5', isSaved && 'border-primary/50 bg-primary/10 text-primary')}
+                      >
+                        {isSaved ? <BookmarkCheck className="size-3" /> : <BookmarkPlus className="size-3" />}
+                        {isSaved ? (zh ? '已收录' : 'Saved') : isAdding ? (zh ? '添加中…' : 'Adding…') : zh ? '+ 生词本' : '+ Review'}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-sm font-medium text-foreground">{item.meaningZh}</p>
+                    <p className="mt-1.5 rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs leading-relaxed text-foreground/85">
+                      {zh ? item.usageZh : item.usageEn}
+                    </p>
+                    <p className="mt-2 rounded-lg bg-muted/50 p-2 text-xs leading-relaxed text-muted-foreground italic">
+                      “{item.contextSnippet}”
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
           <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-xs leading-relaxed text-foreground/85">
             <p className="mb-1.5 flex items-center gap-2 font-bold text-primary">
               <Radio className="size-4" />
               {zh ? '为什么 680 News 是学英语的神器？' : 'Why 680 News for English?'}
             </p>
             {zh
-              ? '680 News 具有典型的北美全新闻快节奏（每分钟 180–220 词），信息高度精炼，词汇贴近生活（路况、气象、市政、股票与汇率）。每天坚持 15–20 分钟泛听，并随时点击生词加入生词本。'
-              : '680 News runs at a brisk North American all-news pace (about 180–220 wpm) with everyday vocabulary: traffic, weather, city hall, markets. Listen 15–20 minutes a day and save new words as you go.'}
+              ? '680 News 具有典型的北美全新闻快节奏（每分钟 180–220 词），信息高度精炼，词汇贴近生活（路况、气象、市政、股票与汇率）。每天坚持 15–20 分钟泛听，并随时点击生词或短语搭配加入生词本。'
+              : '680 News runs at a brisk North American all-news pace (about 180–220 wpm) with everyday vocabulary: traffic, weather, city hall, markets. Listen 15–20 minutes a day and save new words and collocations as you go.'}
           </div>
         </aside>
       </div>
