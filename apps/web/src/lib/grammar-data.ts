@@ -1,4 +1,10 @@
-export type GrammarCategory = 'clauses' | 'inversion' | 'tenses' | 'hedging' | 'errors'
+import {
+  EXTENDED_GRAMMAR_QUESTIONS,
+  EXTENDED_GRAMMAR_TEMPLATES,
+  EXTENDED_GRAMMAR_TOPICS,
+} from './grammar-extended-data'
+
+export type GrammarCategory = 'clauses' | 'inversion' | 'tenses' | 'hedging' | 'errors' | 'nouns' | 'verb-patterns' | 'cohesion'
 
 export interface GrammarQuiz {
   id?: string
@@ -76,6 +82,9 @@ export const GRAMMAR_CATEGORIES: { id: GrammarCategory | 'all'; labelZh: string;
   { id: 'tenses', labelZh: '时态与被动', labelEn: 'Tense & Passive', desc: '图表时态严谨性、现在完成时与学术客观被动' },
   { id: 'hedging', labelZh: '学术谨慎语气', labelEn: 'Hedging & Modality', desc: '学术客观严谨度（避免武断 absolute statement）' },
   { id: 'errors', labelZh: '写作避坑纠错', labelEn: 'Error Correction', desc: '逗号拼接、主谓一致、悬垂修饰与中式英语根治' },
+  { id: 'nouns', labelZh: '冠词与名词', labelEn: 'Articles & Nouns', desc: '泛指与特指、可数性及数量表达' },
+  { id: 'verb-patterns', labelZh: '动词搭配', labelEn: 'Verb Patterns', desc: '动名词、不定式与介词后的动词形式' },
+  { id: 'cohesion', labelZh: '逻辑衔接', labelEn: 'Sentence Linking', desc: '因果、让步与对比连接的句法和标点' },
 ]
 
 export const GRAMMAR_TOPICS: GrammarTopic[] = [
@@ -1197,9 +1206,11 @@ export const GRAMMAR_TOPICS: GrammarTopic[] = [
     ],
     examTips: '写完任何包含 and, or, as well as, not only... but also 的句子，立刻回头核查两边的词性是否完全一致！',
   },
+  ...EXTENDED_GRAMMAR_TOPICS,
 ]
 
 export const BAND_NINE_TEMPLATES: SentenceTemplate[] = [
+  ...EXTENDED_GRAMMAR_TEMPLATES,
   {
     id: 'tpl-concession',
     title: '对立观点让步与有力反驳 (Concession & Rebuttal)',
@@ -1914,4 +1925,5 @@ export const GRAMMAR_QUESTION_BANK: GrammarBankQuestion[] = [
     correctIndex: 0,
     explanation: '“account for + 百分比”是主动语态及物搭配（意为“占……比例”），不能用被动语态（was accounted for 错误），介词 for 也不可缺少。',
   },
+  ...EXTENDED_GRAMMAR_QUESTIONS,
 ]

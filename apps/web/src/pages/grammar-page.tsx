@@ -77,6 +77,7 @@ export function GrammarPage() {
         topic.titleEn.toLowerCase().includes(q) ||
         topic.formula.toLowerCase().includes(q) ||
         topic.summaryZh.toLowerCase().includes(q) ||
+        topic.summaryEn.toLowerCase().includes(q) ||
         topic.explanationZh.toLowerCase().includes(q) ||
         topic.goodExample.toLowerCase().includes(q)
       )
@@ -206,8 +207,8 @@ export function GrammarPage() {
             </h1>
             <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
               {zh
-                ? '精准攻克省略 if 虚拟倒装、强调裂句、学术分词短语与谨慎语气（Hedging），同时手术式修复逗号拼接、主谓不一致与中式英语，让考官眼前一亮。'
-                : 'Master inverted conditionals, cleft focus structures, participle clauses, and academic hedging while eliminating comma splices and subject-verb mismatches.'}
+                ? '从冠词、名词可数性与动词搭配，到定语从句、条件句、时态和逻辑衔接，再进阶倒装与学术谨慎语气，通过双语讲解、例句和自测练习提升表达准确性。'
+                : 'Build accuracy with articles, countability, verb patterns, relative clauses, conditionals, tenses, and sentence linking, then explore inversion and academic hedging through bilingual lessons and practice.'}
             </p>
           </div>
 
@@ -627,8 +628,8 @@ export function GrammarPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {zh
-                  ? '精选题库直击倒装、让步、分词、学术谨慎语气与高频硬伤错误，智能错题收录。'
-                  : 'High-yield examination items spanning inversion, clauses, hedging, and high-frequency writing pitfalls.'}
+                  ? '按类别练习冠词与名词、动词搭配、逻辑衔接及进阶句式；提交答案后查看解析，并在错题本中复习。'
+                  : 'Practise articles, nouns, verb patterns, sentence linking, and advanced structures by category, with answer explanations and mistake review.'}
               </p>
             </div>
 
