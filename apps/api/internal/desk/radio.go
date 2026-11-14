@@ -286,7 +286,7 @@ func (s *radioNewsService) buildLiveBulletin(ctx context.Context) RadioBulletin 
 	)
 
 	// Translate live titles and texts concurrently for crisp bilingual display
-	transCtx, transCancel := context.WithTimeout(ctx, 5*time.Second)
+	transCtx, transCancel := context.WithTimeout(ctx, 8*time.Second)
 	defer transCancel()
 	s.populateTranslations(transCtx, segments, allArticles)
 
@@ -370,6 +370,8 @@ func (s *radioNewsService) composeTrafficWeatherSegment(
 		} else {
 			title = "680 News Live Traffic & Weather: " + top.Title
 		}
+		// Let populateTranslations translate the full headline-inclusive title.
+		titleZh = ""
 		for i, art := range trafficArticles {
 			if i >= 2 {
 				break
@@ -900,16 +902,138 @@ func (s *radioNewsService) populateTranslations(ctx context.Context, segments []
 	}
 }
 
+const maxTranslateChunkLen = 600
+
+func splitSentenceChunks(text string, maxLen int) []string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	if len(text) <= maxLen {
+		return []string{text}
+	}
+	var chunks []string
+	for len(text) > maxLen {
+		cut := text[:maxLen]
+		splitAt := -1
+		for _, sep := range []string{". ", "! ", "? "} {
+			if idx := strings.LastIndex(cut, sep); idx > maxLen/4 && idx+1 > splitAt {
+				splitAt = idx + 1
+			}
+		}
+		if splitAt <= 0 {
+			if idx := strings.LastIndex(cut, " "); idx > 0 {
+				splitAt = idx
+			} else {
+				splitAt = maxLen
+			}
+		}
+		part := strings.TrimSpace(text[:splitAt])
+		if part != "" {
+			chunks = append(chunks, part)
+		}
+		text = strings.TrimSpace(text[splitAt:])
+	}
+	if text != "" {
+		chunks = append(chunks, text)
+	}
+	return chunks
+}
+
 func (s *radioNewsService) translateToZh(ctx context.Context, text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return ""
 	}
-	endpoint := "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=" + url.QueryEscape(text)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+
+	// Preserve newline boundaries for batched article translations.
+	if strings.Contains(text, "\n") {
+		lines := strings.Split(text, "\n")
+		var batches []string
+		var cur strings.Builder
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if cur.Len() > 0 && cur.Len()+1+len(line) > maxTranslateChunkLen {
+				batches = append(batches, cur.String())
+				cur.Reset()
+			}
+			if cur.Len() > 0 {
+				cur.WriteByte('\n')
+			}
+			cur.WriteString(line)
+		}
+		if cur.Len() > 0 {
+			batches = append(batches, cur.String())
+		}
+
+		results := make([]string, len(batches))
+		var wg sync.WaitGroup
+		for i, b := range batches {
+			if len(b) > maxTranslateChunkLen && !strings.Contains(b, "\n") {
+				// Single very long line: translate via sentence chunking.
+				wg.Add(1)
+				go func(idx int, single string) {
+					defer wg.Done()
+					results[idx] = s.translateToZh(ctx, single)
+				}(i, b)
+				continue
+			}
+			wg.Add(1)
+			go func(idx int, chunk string) {
+				defer wg.Done()
+				results[idx] = s.translateChunkToZh(ctx, chunk)
+			}(i, b)
+		}
+		wg.Wait()
+
+		var nonEmpty []string
+		for _, r := range results {
+			if r != "" {
+				nonEmpty = append(nonEmpty, r)
+			}
+		}
+		return strings.Join(nonEmpty, "\n")
+	}
+
+	chunks := splitSentenceChunks(text, maxTranslateChunkLen)
+	if len(chunks) == 0 {
+		return ""
+	}
+	if len(chunks) == 1 {
+		return s.translateChunkToZh(ctx, chunks[0])
+	}
+
+	results := make([]string, len(chunks))
+	var wg sync.WaitGroup
+	for i, c := range chunks {
+		wg.Add(1)
+		go func(idx int, chunk string) {
+			defer wg.Done()
+			results[idx] = s.translateChunkToZh(ctx, chunk)
+		}(i, c)
+	}
+	wg.Wait()
+
+	var sb strings.Builder
+	for _, r := range results {
+		sb.WriteString(r)
+	}
+	return strings.TrimSpace(sb.String())
+}
+
+func (s *radioNewsService) translateChunkToZh(ctx context.Context, text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	form := url.Values{}
+	form.Set("q", text)
+	endpoint := "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return ""
 	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp, err := s.client.Do(req)
 	if err != nil {

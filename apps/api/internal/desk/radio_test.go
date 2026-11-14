@@ -1,7 +1,12 @@
 package desk
 
 import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -69,5 +74,61 @@ func TestExtractRadioLexisAndLiaisonsFromLiveText(t *testing.T) {
 	liaisons := extractRadioLiaisons(liveText, defaultRadioSegments()[0].Liaisons)
 	if len(liaisons) < 2 {
 		t.Fatalf("expected at least 2 liaisons, got %d", len(liaisons))
+	}
+}
+
+type mockTranslateRoundTripper struct {
+	calls atomic.Int32
+}
+
+func (m *mockTranslateRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.calls.Add(1)
+	var body []byte
+	if req.Body != nil {
+		body, _ = io.ReadAll(req.Body)
+	}
+	q := req.URL.Query().Get("q")
+	if q == "" && len(body) > 0 {
+		for _, pair := range strings.Split(string(body), "&") {
+			if strings.HasPrefix(pair, "q=") {
+				q = strings.TrimPrefix(pair, "q=")
+			}
+		}
+	}
+	payload, _ := json.Marshal([]any{
+		[]any{
+			[]any{"[ZH:" + q + "]", q},
+		},
+	})
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(string(payload))),
+		Header:     make(http.Header),
+	}, nil
+}
+
+func TestTranslateToZhChunksLongTranscript(t *testing.T) {
+	longText := strings.Repeat("Flights between Canada and the U.S. are halted due to a ground stop. ", 35)
+	chunks := splitSentenceChunks(longText, maxTranslateChunkLen)
+	if len(chunks) < 3 {
+		t.Fatalf("expected long text to be split into >= 3 chunks, got %d", len(chunks))
+	}
+	for i, c := range chunks {
+		if len(c) > maxTranslateChunkLen {
+			t.Fatalf("chunk %d exceeded maxTranslateChunkLen (%d > %d)", i, len(c), maxTranslateChunkLen)
+		}
+	}
+
+	rt := &mockTranslateRoundTripper{}
+	svc := &radioNewsService{
+		client: &http.Client{Transport: rt},
+	}
+
+	out := svc.translateToZh(context.Background(), longText)
+	if int(rt.calls.Load()) != len(chunks) {
+		t.Fatalf("expected %d translation HTTP calls, got %d", len(chunks), rt.calls.Load())
+	}
+	if !strings.Contains(out, "[ZH:") || len(out) < len(chunks)*10 {
+		t.Fatalf("expected full reassembled translation, got %q", out)
 	}
 }
