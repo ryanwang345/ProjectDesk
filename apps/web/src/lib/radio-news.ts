@@ -63,7 +63,7 @@ export type RadioBulletin = {
   liveArticles: RadioLiveArticle[]
 }
 
-const RADIO_CACHE_KEY = 'projectdesk.radio.citynews680.v3'
+const RADIO_CACHE_KEY = 'projectdesk.radio.citynews680.v4'
 
 function isCityNewsArticle(a: RadioLiveArticle): boolean {
   return a.source.toLowerCase().includes('citynews') || a.link.toLowerCase().includes('citynews.ca')
@@ -176,8 +176,9 @@ export async function fetchLiveRadioBulletin(
         const hasNonCityNewsSegment = data.segments.some(
           (s) => s.sourceName && !s.sourceName.toLowerCase().includes('citynews') && !s.sourceName.toLowerCase().includes('680'),
         )
+        const hasOverlongSegment = data.segments.some((s) => s.text.length > 620)
 
-        if (existingCityNews.length >= 4 && !hasDuplicateSegments && !hasNonCityNewsSegment) {
+        if (existingCityNews.length >= 4 && !hasDuplicateSegments && !hasNonCityNewsSegment && !hasOverlongSegment) {
           data.liveArticles = existingCityNews
           data.segments = data.segments.map((seg) => ({
             ...seg,
@@ -265,6 +266,36 @@ function classifyClientArticle(title: string, summary: string, fallbackSlot: str
   return fallbackSlot
 }
 
+function truncateCleanSentence(raw: string, maxLen = 320): string {
+  const s = raw.replace(/\s*\.\.\.\s*$/, '').trim()
+  if (!s) return ''
+  if (s.length <= maxLen) {
+    return /[.!?]$/.test(s) ? s : `${s}.`
+  }
+  const cut = s.slice(0, maxLen)
+  const lastSentenceEnd = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '), cut.lastIndexOf('.'))
+  if (lastSentenceEnd >= 60) {
+    return cut.slice(0, lastSentenceEnd + 1).trim()
+  }
+  const lastSpace = cut.lastIndexOf(' ')
+  if (lastSpace > 0) {
+    return `${cut.slice(0, lastSpace).replace(/[,;:\-–—]+$/, '').trim()}.`
+  }
+  return `${cut}.`
+}
+
+function cleanBroadcastPair(title: string, summary: string): string {
+  const t = title.trim()
+  let s = summary.trim()
+  if (t && s && s.toLowerCase().startsWith(t.toLowerCase())) {
+    s = s.slice(t.length).replace(/^[.:;\-–—\s]+/, '').trim()
+  }
+  const tPunct = t && !/[.!?]$/.test(t) ? `${t}.` : t
+  if (!s || s.toLowerCase() === t.toLowerCase()) return tPunct
+  const sPunct = !/[.!?]$/.test(s) ? `${s}.` : s
+  return `${tPunct} ${sPunct}`
+}
+
 function parseRssXmlItems(xmlText: string, source: string, fallbackSlot: string): RadioLiveArticle[] {
   if (typeof DOMParser === 'undefined' || !xmlText.includes('<item')) return []
   try {
@@ -284,7 +315,7 @@ function parseRssXmlItems(xmlText: string, source: string, fallbackSlot: string)
       let summary = stripHtml(rawDesc)
         .replace(/The post .*? appeared first on CityNews.*$/i, '')
         .trim()
-      if (rawEncoded) {
+      if (summary.length < 80 && rawEncoded) {
         const full = stripHtml(rawEncoded)
           .replace(/The post .*? appeared first on CityNews.*$/i, '')
           .trim()
@@ -292,9 +323,7 @@ function parseRssXmlItems(xmlText: string, source: string, fallbackSlot: string)
           summary = full
         }
       }
-      if (summary.length > 900) {
-        summary = `${summary.slice(0, 900).trim()}...`
-      }
+      summary = truncateCleanSentence(summary, 320)
       out.push({
         title,
         titleZh: '',
@@ -324,11 +353,15 @@ async function fetchFeedArticlesInBrowser(f: {
     }
     const items = (data.items ?? []).map((it) => {
       const title = stripHtml(it.title ?? '')
-      const rawBody = (it.content && it.content.length > (it.description?.length ?? 0)) ? it.content : (it.description ?? '')
-      const summary = stripHtml(rawBody)
+      let rawDesc = stripHtml(it.description ?? '')
         .replace(/The post .*? appeared first on CityNews.*$/i, '')
         .trim()
-        .slice(0, 900)
+      if (rawDesc.length < 80 && it.content) {
+        rawDesc = stripHtml(it.content)
+          .replace(/The post .*? appeared first on CityNews.*$/i, '')
+          .trim()
+      }
+      const summary = truncateCleanSentence(rawDesc, 320)
       return {
         title,
         titleZh: '',
@@ -382,7 +415,7 @@ function buildSegmentsFromSlotMap(
       const lines = [
         'This is 680 News. Time for traffic and weather together on the 1s.',
         `Over at Toronto Pearson International Airport and downtown Toronto, current conditions are ${cond.toLowerCase()} at ${temp} degrees Celsius, feeling like ${feels}, with ${weather?.windDirection ?? 'westerly'} winds at ${wind} kilometers an hour and gusts up to ${gust}.`,
-        ...list.slice(0, 2).map((a) => `${a.title}. ${a.summary}`),
+        ...(top ? [cleanBroadcastPair(top.title, top.summary)] : []),
       ]
       const text = lines.join(' ')
       return {
@@ -412,19 +445,15 @@ function buildSegmentsFromSlotMap(
     ]
     const text = [
       leadIns[idx],
-      ...list.slice(0, 2).map((a) => `${a.title}. ${a.summary}`),
+      cleanBroadcastPair(top.title, top.summary),
       'Stay tuned to 680 NewsRadio Toronto for continuous live coverage.',
     ].join(' ')
-    const combinedZh = list
-      .slice(0, 2)
-      .map((a) => `${a.titleZh || a.title}${a.summaryZh ? `：${a.summaryZh}` : ''}`)
-      .join(' ')
     return {
       ...fb,
       title: top.title,
       titleZh: top.titleZh || top.title,
       text,
-      textZh: combinedZh || fb.textZh,
+      textZh: top.summaryZh ? `${top.titleZh ? `${top.titleZh}。` : ''}${top.summaryZh}` : fb.textZh,
       publishedAt: top.publishedAt,
       sourceUrl: top.link,
       sourceName: top.source,
@@ -433,18 +462,28 @@ function buildSegmentsFromSlotMap(
   })
 }
 
-async function translateArticlesBatch(articles: RadioLiveArticle[]): Promise<void> {
-  if (articles.length === 0) return
-  const [zhTitles, zhSummaries] = await Promise.all([
-    translateEnToZh(articles.map((a) => a.title.replace(/\n/g, ' ')).join('\n')),
-    translateEnToZh(articles.map((a) => a.summary.slice(0, 260).replace(/\n/g, ' ')).join('\n')),
+async function translateArticlesAndSegments(
+  articles: RadioLiveArticle[],
+  segments: RadioNewsWheelSegment[],
+): Promise<void> {
+  await Promise.all([
+    ...articles.map(async (art) => {
+      const [tZh, sZh] = await Promise.all([
+        translateEnToZh(art.title),
+        art.summary ? translateEnToZh(art.summary) : Promise.resolve(''),
+      ])
+      if (tZh) art.titleZh = tZh
+      if (sZh) art.summaryZh = sZh
+    }),
+    ...segments.map(async (seg) => {
+      const [tZh, textZh] = await Promise.all([
+        translateEnToZh(seg.title),
+        translateEnToZh(seg.text),
+      ])
+      if (tZh) seg.titleZh = tZh
+      if (textZh) seg.textZh = textZh
+    }),
   ])
-  const titleLines = zhTitles ? zhTitles.split('\n') : []
-  const summaryLines = zhSummaries ? zhSummaries.split('\n') : []
-  articles.forEach((art, idx) => {
-    if (titleLines[idx]) art.titleZh = titleLines[idx].trim()
-    if (summaryLines[idx]) art.summaryZh = summaryLines[idx].trim()
-  })
 }
 
 async function fetchBrowserLiveBulletin(
@@ -495,6 +534,7 @@ async function fetchBrowserLiveBulletin(
     if (!weather && allArticles.length === 0) return null
 
     const bySlot = partitionClientArticlesBySlot(allArticles)
+    const segments = buildSegmentsFromSlotMap(bySlot, weather)
 
     // Emit immediate English live bulletin before waiting for translation
     if (onPartial) {
@@ -503,14 +543,12 @@ async function fetchBrowserLiveBulletin(
         source: 'CityNews 680 Toronto (toronto.citynews.ca/feed/)',
         isLive: true,
         weather,
-        segments: buildSegmentsFromSlotMap(bySlot, weather),
-        liveArticles: [...allArticles],
+        segments: segments.map((s) => ({ ...s })),
+        liveArticles: allArticles.map((a) => ({ ...a })),
       })
     }
 
-    await translateArticlesBatch(allArticles)
-
-    const segments = buildSegmentsFromSlotMap(bySlot, weather)
+    await translateArticlesAndSegments(allArticles, segments)
 
     return {
       updatedAt: new Date().toISOString(),

@@ -372,14 +372,9 @@ func (s *radioNewsService) composeTrafficWeatherSegment(
 		}
 		// Let populateTranslations translate the full headline-inclusive title.
 		titleZh = ""
-		for i, art := range trafficArticles {
-			if i >= 2 {
-				break
-			}
-			line := cleanBroadcastSentence(art.Title, art.Summary)
-			if line != "" {
-				parts = append(parts, line)
-			}
+		line := cleanBroadcastSentence(top.Title, top.Summary)
+		if line != "" {
+			parts = append(parts, line)
 		}
 	} else {
 		parts = append(parts, "In the 680 News airborne traffic centre, major commuter corridors across the Gardiner Expressway, the Don Valley Parkway, and Highway 401 are being monitored closely for rush-hour volume and arterial slowdowns.")
@@ -423,14 +418,8 @@ func (s *radioNewsService) composeSlotSegment(
 	var parts []string
 	parts = append(parts, leadIn)
 
-	for i, art := range articles {
-		if i >= 3 {
-			break
-		}
-		line := cleanBroadcastSentence(art.Title, art.Summary)
-		if line != "" {
-			parts = append(parts, line)
-		}
+	if line := cleanBroadcastSentence(top.Title, top.Summary); line != "" {
+		parts = append(parts, line)
 	}
 
 	parts = append(parts, "Stay tuned to 680 NewsRadio Toronto for continuous live coverage.")
@@ -575,8 +564,9 @@ func parseRSSItems(xmlBytes []byte, spec feedSpec) []RadioLiveArticle {
 		}
 		summary := cleanPlainText(item.Description)
 		summary = cityNewsFooterRe.ReplaceAllString(summary, "")
+		summary = strings.TrimSuffix(strings.TrimSpace(summary), "...")
 		summary = strings.TrimSpace(summary)
-		if item.Content != "" {
+		if len(summary) < 80 && item.Content != "" {
 			full := cleanPlainText(item.Content)
 			full = cityNewsFooterRe.ReplaceAllString(full, "")
 			full = strings.TrimSpace(full)
@@ -584,9 +574,7 @@ func parseRSSItems(xmlBytes []byte, spec feedSpec) []RadioLiveArticle {
 				summary = full
 			}
 		}
-		if len(summary) > 900 {
-			summary = truncateSentence(summary, 900)
-		}
+		summary = truncateSentence(summary, 320)
 
 		cat := spec.defaultSlot
 		for _, c := range item.Categories {
@@ -668,17 +656,21 @@ func cleanPlainText(raw string) string {
 }
 
 func truncateSentence(s string, maxLen int) string {
+	s = strings.TrimSpace(s)
 	if len(s) <= maxLen {
+		if s != "" && !strings.HasSuffix(s, ".") && !strings.HasSuffix(s, "!") && !strings.HasSuffix(s, "?") {
+			s += "."
+		}
 		return s
 	}
 	cut := s[:maxLen]
-	if idx := strings.LastIndexAny(cut, ".!?"); idx > maxLen/2 {
+	if idx := strings.LastIndexAny(cut, ".!?"); idx >= 60 {
 		return strings.TrimSpace(cut[:idx+1])
 	}
 	if idx := strings.LastIndex(cut, " "); idx > 0 {
-		return strings.TrimSpace(cut[:idx]) + "..."
+		return strings.TrimRight(strings.TrimSpace(cut[:idx]), ",;:-–—") + "."
 	}
-	return cut + "..."
+	return cut + "."
 }
 
 var nonAlphaNumRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -849,39 +841,21 @@ func (s *radioNewsService) populateTranslations(ctx context.Context, segments []
 		}(i)
 	}
 
-	// Translate all articles in batches of 10 using newline delimiter
-	const batchSize = 10
-	for start := 0; start < len(allArticles); start += batchSize {
-		end := start + batchSize
-		if end > len(allArticles) {
-			end = len(allArticles)
-		}
+	// Translate each article's title and summary 1-to-1 concurrently to prevent newline misalignment
+	for i := range allArticles {
 		wg.Add(1)
-		go func(st, en int) {
+		go func(idx int) {
 			defer wg.Done()
-			var titles []string
-			var summaries []string
-			for k := st; k < en; k++ {
-				titles = append(titles, strings.ReplaceAll(allArticles[k].Title, "\n", " "))
-				summaries = append(summaries, strings.ReplaceAll(allArticles[k].Summary, "\n", " "))
+			art := &allArticles[idx]
+			if zhTitle := s.translateToZh(ctx, art.Title); zhTitle != "" {
+				art.TitleZh = strings.TrimSpace(zhTitle)
 			}
-			if zhTitles := s.translateToZh(ctx, strings.Join(titles, "\n")); zhTitles != "" {
-				lines := strings.Split(zhTitles, "\n")
-				for offset, line := range lines {
-					if st+offset < en {
-						allArticles[st+offset].TitleZh = strings.TrimSpace(line)
-					}
+			if art.Summary != "" {
+				if zhSummary := s.translateToZh(ctx, art.Summary); zhSummary != "" {
+					art.SummaryZh = strings.TrimSpace(zhSummary)
 				}
 			}
-			if zhSummaries := s.translateToZh(ctx, strings.Join(summaries, "\n")); zhSummaries != "" {
-				lines := strings.Split(zhSummaries, "\n")
-				for offset, line := range lines {
-					if st+offset < en {
-						allArticles[st+offset].SummaryZh = strings.TrimSpace(line)
-					}
-				}
-			}
-		}(start, end)
+		}(i)
 	}
 
 	wg.Wait()
