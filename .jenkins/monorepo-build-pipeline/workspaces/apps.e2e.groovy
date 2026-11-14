@@ -48,46 +48,54 @@ def main(config) {
     }
 
     stage('apps/e2e / Build & Push Image') {
-      when {
-        expression { return !skipE2e }
+      if (skipE2e) {
+        echo '[apps/e2e] SKIP_E2E is enabled. Skipping image build and push.'
+        return
       }
-      steps {
+      withEnv([
+        "BUILD_IMAGE_REPO=${imageRepo}",
+        "BUILD_IMAGE_TAG=${buildNumber}",
+        "BUILD_IMAGE_BRANCH=${branchName}",
+        "BUILD_IMAGE_LATEST_BRANCH=${latestBranch}"
+      ]) {
         withCredentials([
           string(credentialsId: 'DOCKERHUB_USER', variable: 'DOCKERHUB_USER'),
           string(credentialsId: 'DOCKERHUB_TOKEN', variable: 'DOCKERHUB_TOKEN')
         ]) {
           container('buildkit') {
-            sh """
+            sh '''
               set +x
               set -eu
 
-              DOCKER_CONFIG=\$(mktemp -d /tmp/e2e-docker.XXXXXX)
-              export DOCKER_CONFIG
-              trap 'rm -rf "\$DOCKER_CONFIG"' EXIT
+              umask 077
 
-              AUTH=\$(printf '%s:%s' "\$DOCKERHUB_USER" "\$DOCKERHUB_TOKEN" | base64 | tr -d '[:space:]')
-              printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}' "\$AUTH" > "\$DOCKER_CONFIG/config.json"
+              DOCKER_CONFIG=$(mktemp -d /tmp/e2e-docker.XXXXXX)
+              export DOCKER_CONFIG
+              trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+
+              AUTH=$(printf '%s:%s' "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN" | base64 | tr -d '[:space:]')
+              printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}' "$AUTH" > "$DOCKER_CONFIG/config.json"
               unset AUTH
 
-              IMAGE="docker.io/${imageRepo}"
-              IMAGE_TAGS="\${IMAGE}:${buildNumber}"
+              IMAGE="docker.io/${BUILD_IMAGE_REPO}"
+              IMAGE_TAGS="${IMAGE}:${BUILD_IMAGE_TAG}"
 
-              if [ "${branchName}" = "${latestBranch}" ]; then
-                IMAGE_TAGS="\${IMAGE_TAGS},\${IMAGE}:latest"
+              if [ "${BUILD_IMAGE_BRANCH}" = "${BUILD_IMAGE_LATEST_BRANCH}" ]; then
+                IMAGE_TAGS="${IMAGE_TAGS},${IMAGE}:latest"
               fi
 
-              OUTPUT=\$(printf 'type=image,"name=%s",push=true' "\$IMAGE_TAGS")
+              OUTPUT=$(printf 'type=image,"name=%s",push=true' "$IMAGE_TAGS")
 
-              echo "[BuildKit] Building and publishing \${IMAGE_TAGS} from apps/e2e..."
+              echo "[BuildKit] Building and publishing ${IMAGE_TAGS} from apps/e2e..."
               buildctl-daemonless.sh build \\
                 --progress=plain \\
                 --frontend=dockerfile.v0 \\
                 --local "context=$WORKSPACE/apps/e2e" \\
                 --local "dockerfile=$WORKSPACE/apps/e2e" \\
-                --output "\$OUTPUT"
+                --output "$OUTPUT"
 
-              echo "[BuildKit] Successfully published \${IMAGE_TAGS}"
-            """
+              echo "[BuildKit] Successfully published ${IMAGE_TAGS}"
+            '''
           }
         }
       }

@@ -23,48 +23,57 @@ def main(config) {
     }
 
     stage('apps/api / Build & Push Image') {
-      withCredentials([
-        string(credentialsId: 'DOCKERHUB_USER', variable: 'DOCKERHUB_USER'),
-        string(credentialsId: 'DOCKERHUB_TOKEN', variable: 'DOCKERHUB_TOKEN')
+      withEnv([
+        "BUILD_IMAGE_REPO=${imageRepo}",
+        "BUILD_IMAGE_TAG=${buildNumber}",
+        "BUILD_IMAGE_BRANCH=${branchName}",
+        "BUILD_IMAGE_LATEST_BRANCH=${latestBranch}"
       ]) {
-        container('buildkit') {
-          sh """
-            set +x
-            set -eu
+        withCredentials([
+          string(credentialsId: 'DOCKERHUB_USER', variable: 'DOCKERHUB_USER'),
+          string(credentialsId: 'DOCKERHUB_TOKEN', variable: 'DOCKERHUB_TOKEN')
+        ]) {
+          container('buildkit') {
+            sh '''
+              set +x
+              set -eu
 
-            DOCKER_CONFIG=\$(mktemp -d /tmp/api-docker.XXXXXX)
-            export DOCKER_CONFIG
-            trap 'rm -rf "\$DOCKER_CONFIG"' EXIT
+              umask 077
 
-            AUTH=\$(printf '%s:%s' "\$DOCKERHUB_USER" "\$DOCKERHUB_TOKEN" | base64 | tr -d '[:space:]')
-            printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}' "\$AUTH" > "\$DOCKER_CONFIG/config.json"
-            unset AUTH
+              DOCKER_CONFIG=$(mktemp -d /tmp/api-docker.XXXXXX)
+              export DOCKER_CONFIG
+              trap 'rm -rf "$DOCKER_CONFIG"' EXIT
 
-            IMAGE="docker.io/${imageRepo}"
-            IMAGE_TAGS="\${IMAGE}:${buildNumber}"
+              AUTH=$(printf '%s:%s' "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN" | base64 | tr -d '[:space:]')
+              printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}' "$AUTH" > "$DOCKER_CONFIG/config.json"
+              unset AUTH
 
-            if [ "${branchName}" = "${latestBranch}" ]; then
-              IMAGE_TAGS="\${IMAGE_TAGS},\${IMAGE}:latest"
-            fi
+              IMAGE="docker.io/${BUILD_IMAGE_REPO}"
+              IMAGE_TAGS="${IMAGE}:${BUILD_IMAGE_TAG}"
 
-            OUTPUT=\$(printf 'type=image,"name=%s",push=true' "\$IMAGE_TAGS")
+              if [ "${BUILD_IMAGE_BRANCH}" = "${BUILD_IMAGE_LATEST_BRANCH}" ]; then
+                IMAGE_TAGS="${IMAGE_TAGS},${IMAGE}:latest"
+              fi
 
-            EXTRA_ARGS=""
-            if [ -s "$WORKSPACE/apps/api/extra-ca.crt" ]; then
-              EXTRA_ARGS="--secret id=extra-ca,src=$WORKSPACE/apps/api/extra-ca.crt"
-            fi
+              OUTPUT=$(printf 'type=image,"name=%s",push=true' "$IMAGE_TAGS")
 
-            echo "[BuildKit] Building and publishing \${IMAGE_TAGS} from apps/api..."
-            buildctl-daemonless.sh build \\
-              --progress=plain \\
-              --frontend=dockerfile.v0 \\
-              --local "context=$WORKSPACE/apps/api" \\
-              --local "dockerfile=$WORKSPACE/apps/api" \\
-              \${EXTRA_ARGS} \\
-              --output "\$OUTPUT"
+              EXTRA_ARGS=""
+              if [ -s "$WORKSPACE/apps/api/extra-ca.crt" ]; then
+                EXTRA_ARGS="--secret id=extra-ca,src=$WORKSPACE/apps/api/extra-ca.crt"
+              fi
 
-            echo "[BuildKit] Successfully published \${IMAGE_TAGS}"
-          """
+              echo "[BuildKit] Building and publishing ${IMAGE_TAGS} from apps/api..."
+              buildctl-daemonless.sh build \\
+                --progress=plain \\
+                --frontend=dockerfile.v0 \\
+                --local "context=$WORKSPACE/apps/api" \\
+                --local "dockerfile=$WORKSPACE/apps/api" \\
+                ${EXTRA_ARGS} \\
+                --output "$OUTPUT"
+
+              echo "[BuildKit] Successfully published ${IMAGE_TAGS}"
+            '''
+          }
         }
       }
     }
