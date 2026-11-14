@@ -124,13 +124,10 @@ spec:
                 g fetch --quiet "$REMOTE" main
                 g checkout --quiet --force -B release-tag FETCH_HEAD
 
-                # Identify environment values file and base values file
+                # Identify environment-specific values file only (never mutate shared helm/values.yaml)
                 TARGET_FILES=""
                 if [ -f "helm/values-${ENV}.yaml" ]; then
                   TARGET_FILES="$TARGET_FILES helm/values-${ENV}.yaml"
-                fi
-                if [ -f "helm/values.yaml" ]; then
-                  TARGET_FILES="$TARGET_FILES helm/values.yaml"
                 fi
 
                 # Also update component-specific values if present (web/argo/values/, api/argo/values/)
