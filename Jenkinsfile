@@ -74,9 +74,10 @@ spec:
     }
   }
 
-  // The VM Jenkins is not reachable by GitHub webhooks, so poll for new commits.
-  triggers {
-    pollSCM('H/2 * * * *')
+  options {
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '15'))
+    disableConcurrentBuilds(abortPrevious: true)
   }
 
   parameters {
