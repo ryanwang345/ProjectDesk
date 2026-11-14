@@ -50,7 +50,7 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
   const [volume, setVolume] = useState(1.0)
   const [isMuted, setIsMuted] = useState(false)
   const [liveListeningSeconds, setLiveListeningSeconds] = useState(0)
-  const [playbackRate, setPlaybackRate] = useState<1 | 1.1 | 1.25>(1)
+  const [playbackRate, setPlaybackRate] = useState<0.5 | 0.8 | 1 | 1.1 | 1.25>(1)
 
   // Active news wheel segment
   const [activeSegmentId, setActiveSegmentId] = useState<string>(station.wheelSegments[0].id)
@@ -365,7 +365,7 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                 {zh ? (showChinese ? '双语对照 (中)' : '纯英沉浸') : showChinese ? 'Bilingual' : 'English only'}
               </button>
               <div className="flex items-center rounded-full border border-border bg-background/60 p-0.5 text-[11px] font-semibold">
-                {([1, 1.1, 1.25] as const).map((r) => (
+                {([0.5, 0.8, 1, 1.1, 1.25] as const).map((r) => (
                   <button
                     key={r}
                     type="button"
