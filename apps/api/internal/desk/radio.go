@@ -145,6 +145,7 @@ type rssItem struct {
 	Title       string   `xml:"title"`
 	Link        string   `xml:"link"`
 	Description string   `xml:"description"`
+	Content     string   `xml:"encoded"`
 	PubDate     string   `xml:"pubDate"`
 	Categories  []string `xml:"category"`
 }
@@ -289,13 +290,23 @@ func (s *radioNewsService) buildLiveBulletin(ctx context.Context) RadioBulletin 
 	)
 
 	// Translate live titles and texts concurrently for crisp bilingual display
-	transCtx, transCancel := context.WithTimeout(ctx, 4*time.Second)
+	transCtx, transCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer transCancel()
-	s.populateTranslations(transCtx, segments)
+	s.populateTranslations(transCtx, segments, allArticles)
 
-	topLive := allArticles
-	if len(topLive) > 12 {
-		topLive = topLive[:12]
+	// Sync translated TitleZh/SummaryZh back into each segment's RelatedArticles
+	translatedByKey := make(map[string]RadioLiveArticle, len(allArticles))
+	for _, art := range allArticles {
+		translatedByKey[strings.ToLower(strings.TrimSpace(art.Title))] = art
+	}
+	for i := range segments {
+		for j := range segments[i].RelatedArticles {
+			key := strings.ToLower(strings.TrimSpace(segments[i].RelatedArticles[j].Title))
+			if tr, ok := translatedByKey[key]; ok {
+				segments[i].RelatedArticles[j].TitleZh = tr.TitleZh
+				segments[i].RelatedArticles[j].SummaryZh = tr.SummaryZh
+			}
+		}
 	}
 
 	return RadioBulletin{
@@ -304,7 +315,7 @@ func (s *radioNewsService) buildLiveBulletin(ctx context.Context) RadioBulletin 
 		IsLive:       isLive,
 		Weather:      weather,
 		Segments:     segments,
-		LiveArticles: topLive,
+		LiveArticles: allArticles,
 	}
 }
 
@@ -378,9 +389,6 @@ func (s *radioNewsService) composeTrafficWeatherSegment(
 
 	text := strings.Join(parts, " ")
 	related := trafficArticles
-	if len(related) > 4 {
-		related = related[:4]
-	}
 
 	return RadioNewsWheelSegment{
 		ID:              fallback.ID,
@@ -431,9 +439,6 @@ func (s *radioNewsService) composeSlotSegment(
 	text := strings.Join(parts, " ")
 
 	related := articles
-	if len(related) > 4 {
-		related = related[:4]
-	}
 
 	pub := top.PublishedAt
 	if pub == "" {
@@ -504,32 +509,44 @@ func (s *radioNewsService) fetchTorontoWeather(ctx context.Context) *RadioLiveWe
 }
 
 func (s *radioNewsService) fetchRSSArticles(ctx context.Context, spec feedSpec) []RadioLiveArticle {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, spec.url, nil)
-	if err != nil {
-		return nil
+	urls := []string{
+		spec.url,
+		"https://api.allorigins.win/raw?url=" + url.QueryEscape(spec.url),
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; ProjectDesk/1.0; +https://toronto.citynews.ca)")
-	req.Header.Set("Accept", "application/rss+xml, application/xml, text/xml, */*")
+	for _, targetURL := range urls {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "application/rss+xml, application/xml, text/xml, text/html, */*;q=0.9")
+		req.Header.Set("Accept-Language", "en-CA,en-US;q=0.9,en;q=0.8")
 
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil
-	}
+		resp, err := s.client.Do(req)
+		if err != nil {
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			continue
+		}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	if err != nil {
-		return nil
-	}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		resp.Body.Close()
+		if err != nil {
+			continue
+		}
 
-	return parseRSSItems(body, spec)
+		if items := parseRSSItems(body, spec); len(items) > 0 {
+			return items
+		}
+	}
+	return nil
 }
 
 var htmlTagRe = regexp.MustCompile(`<[^>]*>`)
 var multiSpaceRe = regexp.MustCompile(`\s+`)
+var cityNewsFooterRe = regexp.MustCompile(`(?i)The post .*? appeared first on CityNews.*$`)
 
 func parseRSSItems(xmlBytes []byte, spec feedSpec) []RadioLiveArticle {
 	var feed rssFeed
@@ -544,10 +561,18 @@ func parseRSSItems(xmlBytes []byte, spec feedSpec) []RadioLiveArticle {
 			continue
 		}
 		summary := cleanPlainText(item.Description)
-		summary = strings.TrimSuffix(summary, "The post "+title+" appeared first on CityNews Toronto.")
+		summary = cityNewsFooterRe.ReplaceAllString(summary, "")
 		summary = strings.TrimSpace(summary)
-		if len(summary) > 320 {
-			summary = truncateSentence(summary, 320)
+		if item.Content != "" {
+			full := cleanPlainText(item.Content)
+			full = cityNewsFooterRe.ReplaceAllString(full, "")
+			full = strings.TrimSpace(full)
+			if len(full) > len(summary) {
+				summary = full
+			}
+		}
+		if len(summary) > 900 {
+			summary = truncateSentence(summary, 900)
 		}
 
 		cat := spec.defaultSlot
@@ -573,7 +598,7 @@ func parseRSSItems(xmlBytes []byte, spec feedSpec) []RadioLiveArticle {
 		}
 		art.Category = classifyRadioArticle(art)
 		out = append(out, art)
-		if len(out) >= 15 {
+		if len(out) >= 100 {
 			break
 		}
 	}
@@ -721,7 +746,7 @@ func cardinalDirection(deg float64) string {
 	return dirs[idx]
 }
 
-func (s *radioNewsService) populateTranslations(ctx context.Context, segments []RadioNewsWheelSegment) {
+func (s *radioNewsService) populateTranslations(ctx context.Context, segments []RadioNewsWheelSegment, allArticles []RadioLiveArticle) {
 	var wg sync.WaitGroup
 	for i := range segments {
 		wg.Add(1)
@@ -742,16 +767,60 @@ func (s *radioNewsService) populateTranslations(ctx context.Context, segments []
 					seg.TextZh = "【680 News 实时播报】" + seg.TitleZh
 				}
 			}
-			for j := range seg.RelatedArticles {
-				if seg.RelatedArticles[j].TitleZh == "" {
-					if zh := s.translateToZh(ctx, seg.RelatedArticles[j].Title); zh != "" {
-						seg.RelatedArticles[j].TitleZh = zh
+		}(i)
+	}
+
+	// Translate all articles in batches of 10 using newline delimiter
+	const batchSize = 10
+	for start := 0; start < len(allArticles); start += batchSize {
+		end := start + batchSize
+		if end > len(allArticles) {
+			end = len(allArticles)
+		}
+		wg.Add(1)
+		go func(st, en int) {
+			defer wg.Done()
+			var titles []string
+			var summaries []string
+			for k := st; k < en; k++ {
+				titles = append(titles, strings.ReplaceAll(allArticles[k].Title, "\n", " "))
+				summaries = append(summaries, strings.ReplaceAll(allArticles[k].Summary, "\n", " "))
+			}
+			if zhTitles := s.translateToZh(ctx, strings.Join(titles, "\n")); zhTitles != "" {
+				lines := strings.Split(zhTitles, "\n")
+				for offset, line := range lines {
+					if st+offset < en {
+						allArticles[st+offset].TitleZh = strings.TrimSpace(line)
 					}
 				}
 			}
-		}(i)
+			if zhSummaries := s.translateToZh(ctx, strings.Join(summaries, "\n")); zhSummaries != "" {
+				lines := strings.Split(zhSummaries, "\n")
+				for offset, line := range lines {
+					if st+offset < en {
+						allArticles[st+offset].SummaryZh = strings.TrimSpace(line)
+					}
+				}
+			}
+		}(start, end)
 	}
+
 	wg.Wait()
+
+	// Sync translated TitleZh & SummaryZh back into each segment's RelatedArticles
+	byLink := make(map[string]RadioLiveArticle, len(allArticles))
+	for _, a := range allArticles {
+		byLink[a.Link+"|"+a.Title] = a
+	}
+	for i := range segments {
+		for j := range segments[i].RelatedArticles {
+			rel := &segments[i].RelatedArticles[j]
+			if updated, ok := byLink[rel.Link+"|"+rel.Title]; ok {
+				rel.TitleZh = updated.TitleZh
+				rel.SummaryZh = updated.SummaryZh
+			}
+		}
+	}
 }
 
 func (s *radioNewsService) translateToZh(ctx context.Context, text string) string {

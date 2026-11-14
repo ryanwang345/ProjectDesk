@@ -70,12 +70,374 @@ export async function fetchLiveRadioBulletin(forceRefresh = false): Promise<Radi
       method: forceRefresh ? 'POST' : 'GET',
       headers: { Accept: 'application/json' },
     })
-    if (!resp.ok) return null
-    const data = (await resp.json()) as RadioBulletin
-    if (!data || !Array.isArray(data.segments) || data.segments.length === 0) {
-      return null
+    if (resp.ok) {
+      const data = (await resp.json()) as RadioBulletin
+      if (data && Array.isArray(data.segments) && data.segments.length > 0 && data.isLive) {
+        const existing = Array.isArray(data.liveArticles) ? data.liveArticles : []
+        const cityNewsCount = existing.filter(
+          (a) => a.source.toLowerCase().includes('citynews') || a.link.toLowerCase().includes('citynews.ca'),
+        ).length
+        if (cityNewsCount < 5) {
+          const browserCityNews = await fetchFeedArticlesInBrowser({
+            url: 'https://toronto.citynews.ca/feed/',
+            source: 'CityNews 680 Toronto',
+            slot: 'Top Headlines',
+          })
+          if (browserCityNews.length > 0) {
+            await translateArticlesBatch(browserCityNews)
+            const seen = new Set<string>()
+            const merged: RadioLiveArticle[] = []
+            for (const art of [...browserCityNews, ...existing]) {
+              const key = art.title.toLowerCase().trim()
+              if (key && !seen.has(key)) {
+                seen.add(key)
+                merged.push(art)
+              }
+            }
+            data.liveArticles = merged
+          }
+        }
+        return data
+      }
     }
-    return data
+  } catch {
+    // Fall through to direct browser live fetch
+  }
+  return fetchBrowserLiveBulletin()
+}
+
+function describeWmoCode(code: number): { en: string; zh: string } {
+  if (code === 0) return { en: 'Clear skies', zh: '晴朗无云' }
+  if (code === 1) return { en: 'Mainly clear', zh: '晴间少云' }
+  if (code === 2) return { en: 'Partly cloudy', zh: '多云间晴' }
+  if (code === 3) return { en: 'Overcast', zh: '阴天多云' }
+  if (code === 45 || code === 48) return { en: 'Foggy conditions', zh: '有雾' }
+  if (code >= 51 && code <= 57) return { en: 'Light drizzle', zh: '零星毛毛雨' }
+  if (code >= 61 && code <= 67) return { en: 'Rain showers', zh: '降雨天气' }
+  if (code >= 71 && code <= 77) return { en: 'Snowfall', zh: '降雪天气' }
+  if (code >= 80 && code <= 82) return { en: 'Scattered showers', zh: '阵雨天气' }
+  if (code >= 85 && code <= 86) return { en: 'Snow showers', zh: '阵雪天气' }
+  if (code >= 95) return { en: 'Thunderstorms', zh: '雷暴天气' }
+  return { en: 'Variable cloudiness', zh: '多云天气' }
+}
+
+function degToCardinal(deg: number): string {
+  const dirs = ['northerly', 'northeasterly', 'easterly', 'southeasterly', 'southerly', 'southwesterly', 'westerly', 'northwesterly']
+  return dirs[Math.max(0, Math.floor((deg + 22.5) / 45) % 8)]
+}
+
+function stripHtml(raw: string): string {
+  return raw
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#8217;|&rsquo;/gi, '’')
+    .replace(/&#8216;|&lsquo;/gi, '‘')
+    .replace(/&#8220;|&ldquo;/gi, '“')
+    .replace(/&#8221;|&rdquo;/gi, '”')
+    .replace(/&#8211;|&ndash;/gi, '–')
+    .replace(/&#8230;|&hellip;/gi, '...')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function translateEnToZh(text: string): Promise<string> {
+  if (!text.trim()) return ''
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=${encodeURIComponent(text)}`
+    const res = await fetch(url)
+    if (!res.ok) return ''
+    const json = (await res.json()) as unknown[]
+    const sentences = Array.isArray(json?.[0]) ? (json[0] as unknown[]) : []
+    return sentences
+      .map((s) => (Array.isArray(s) && typeof s[0] === 'string' ? s[0] : ''))
+      .join('')
+      .trim()
+  } catch {
+    return ''
+  }
+}
+
+function classifyClientArticle(title: string, summary: string, fallbackSlot: string): string {
+  const s = `${title} ${summary}`.toLowerCase()
+  if (/(traffic|weather|highway|401|gardiner|dvp|don valley|ttc|subway|go transit|metrolinx|commute|lane|closure|collision|crash|snow|rain|storm|wind|temperature|forecast|pearson)/.test(s)) {
+    return 'Traffic & Weather'
+  }
+  if (/(tsx|bank of canada|interest rate|inflation|economy|economic|market|stock|dollar|tariff|trade|business|housing|mortgage|retail|jobs|gdp)/.test(s)) {
+    return 'Business News'
+  }
+  if (/(maple leafs|blue jays|raptors|argonauts|tfc|nhl|nba|mlb|hockey|baseball|basketball|soccer|playoff|concert|festival|tiff|culture|weekend|harbourfront)/.test(s)) {
+    return 'Sports & Culture'
+  }
+  return fallbackSlot
+}
+
+function parseRssXmlItems(xmlText: string, source: string, fallbackSlot: string): RadioLiveArticle[] {
+  if (typeof DOMParser === 'undefined' || !xmlText.includes('<item')) return []
+  try {
+    const doc = new DOMParser().parseFromString(xmlText, 'text/xml')
+    const itemNodes = Array.from(doc.querySelectorAll('item'))
+    const out: RadioLiveArticle[] = []
+    for (const node of itemNodes) {
+      const rawTitle = node.querySelector('title')?.textContent ?? ''
+      const title = stripHtml(rawTitle)
+      if (!title) continue
+      const link = (node.querySelector('link')?.textContent ?? '').trim()
+      const pubDate = (node.querySelector('pubDate')?.textContent ?? '').trim()
+      const rawDesc = node.querySelector('description')?.textContent ?? ''
+      const encodedNode =
+        node.getElementsByTagNameNS('*', 'encoded')[0] ?? node.getElementsByTagName('content:encoded')[0]
+      const rawEncoded = encodedNode?.textContent ?? ''
+      let summary = stripHtml(rawDesc)
+        .replace(/The post .*? appeared first on CityNews.*$/i, '')
+        .trim()
+      if (rawEncoded) {
+        const full = stripHtml(rawEncoded)
+          .replace(/The post .*? appeared first on CityNews.*$/i, '')
+          .trim()
+        if (full.length > summary.length) {
+          summary = full
+        }
+      }
+      if (summary.length > 900) {
+        summary = `${summary.slice(0, 900).trim()}...`
+      }
+      out.push({
+        title,
+        titleZh: '',
+        summary,
+        link,
+        source,
+        category: classifyClientArticle(title, summary, fallbackSlot),
+        publishedAt: pubDate || new Date().toISOString(),
+      })
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+async function fetchFeedArticlesInBrowser(f: {
+  url: string
+  source: string
+  slot: string
+}): Promise<RadioLiveArticle[]> {
+  // 1. Try raw RSS XML via AllOrigins to get 100% of <item> entries in the feed without truncation
+  try {
+    const xmlRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(f.url)}`)
+    if (xmlRes.ok) {
+      const xmlText = await xmlRes.text()
+      const parsed = parseRssXmlItems(xmlText, f.source, f.slot)
+      if (parsed.length > 0) return parsed
+    }
+  } catch {
+    // Fall through to rss2json
+  }
+
+  // 2. Fallback to rss2json
+  try {
+    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(f.url)}`)
+    if (!res.ok) return []
+    const data = (await res.json()) as {
+      items?: { title?: string; description?: string; content?: string; link?: string; pubDate?: string }[]
+    }
+    return (data.items ?? []).map((it) => {
+      const title = stripHtml(it.title ?? '')
+      const rawBody = (it.content && it.content.length > (it.description?.length ?? 0)) ? it.content : (it.description ?? '')
+      const summary = stripHtml(rawBody)
+        .replace(/The post .*? appeared first on CityNews.*$/i, '')
+        .trim()
+        .slice(0, 900)
+      return {
+        title,
+        titleZh: '',
+        summary,
+        link: it.link ?? '',
+        source: f.source,
+        category: classifyClientArticle(title, summary, f.slot),
+        publishedAt: it.pubDate ?? new Date().toISOString(),
+      } satisfies RadioLiveArticle
+    })
+  } catch {
+    return []
+  }
+}
+
+async function translateArticlesBatch(articles: RadioLiveArticle[]): Promise<void> {
+  const batchSize = 10
+  await Promise.all(
+    Array.from({ length: Math.ceil(articles.length / batchSize) }, async (_, bIdx) => {
+      const slice = articles.slice(bIdx * batchSize, (bIdx + 1) * batchSize)
+      const [zhTitles, zhSummaries] = await Promise.all([
+        translateEnToZh(slice.map((a) => a.title.replace(/\n/g, ' ')).join('\n')),
+        translateEnToZh(slice.map((a) => a.summary.replace(/\n/g, ' ')).join('\n')),
+      ])
+      const titleLines = zhTitles ? zhTitles.split('\n') : []
+      const summaryLines = zhSummaries ? zhSummaries.split('\n') : []
+      slice.forEach((art, idx) => {
+        if (titleLines[idx]) art.titleZh = titleLines[idx].trim()
+        if (summaryLines[idx]) art.summaryZh = summaryLines[idx].trim()
+      })
+    }),
+  )
+}
+
+async function fetchBrowserLiveBulletin(): Promise<RadioBulletin | null> {
+  try {
+    const weatherPromise = fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=43.6532&longitude=-79.3832&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m&timezone=America%2FToronto',
+    )
+      .then(async (r) => {
+        if (!r.ok) return undefined
+        const d = (await r.json()) as {
+          current?: {
+            time: string
+            temperature_2m: number
+            apparent_temperature: number
+            weather_code: number
+            wind_speed_10m: number
+            wind_gusts_10m: number
+            wind_direction_10m: number
+          }
+        }
+        if (!d.current) return undefined
+        const cond = describeWmoCode(d.current.weather_code)
+        return {
+          temperatureC: d.current.temperature_2m,
+          feelsLikeC: d.current.apparent_temperature,
+          windSpeedKmh: d.current.wind_speed_10m,
+          windGustsKmh: d.current.wind_gusts_10m,
+          windDirection: degToCardinal(d.current.wind_direction_10m),
+          condition: cond.en,
+          conditionZh: cond.zh,
+          observedAt: d.current.time,
+        } satisfies RadioLiveWeather
+      })
+      .catch(() => undefined)
+
+    const feeds = [
+      { url: 'https://toronto.citynews.ca/feed/', source: 'CityNews 680 Toronto', slot: 'Top Headlines' },
+      { url: 'https://www.cbc.ca/webfeed/rss/rss-canada-toronto', source: 'CBC Toronto', slot: 'Top Headlines' },
+      { url: 'https://www.cbc.ca/webfeed/rss/rss-business', source: 'CBC Business', slot: 'Business News' },
+      { url: 'https://www.cbc.ca/webfeed/rss/rss-sports', source: 'CBC Sports', slot: 'Sports & Culture' },
+    ]
+
+    const feedPromises = feeds.map((f) => fetchFeedArticlesInBrowser(f))
+
+    const [weather, ...feedLists] = await Promise.all([weatherPromise, ...feedPromises])
+    const allArticles: RadioLiveArticle[] = []
+    const seen = new Set<string>()
+    for (const list of feedLists) {
+      for (const a of list) {
+        const key = a.title.toLowerCase()
+        if (a.title && !seen.has(key)) {
+          seen.add(key)
+          allArticles.push(a)
+        }
+      }
+    }
+
+    if (!weather && allArticles.length === 0) return null
+
+    await translateArticlesBatch(allArticles)
+
+    const bySlot: Record<string, RadioLiveArticle[]> = {
+      'Traffic & Weather': [],
+      'Top Headlines': [],
+      'Business News': [],
+      'Sports & Culture': [],
+    }
+    for (const art of allArticles) {
+      bySlot[art.category] = bySlot[art.category] ?? []
+      bySlot[art.category].push(art)
+    }
+    for (const slot of Object.keys(bySlot)) {
+      if (bySlot[slot].length === 0 && allArticles.length > 0) {
+        bySlot[slot] = allArticles.slice(0, 2)
+      }
+    }
+
+    const base = STATION_680_NEWS.wheelSegments
+    const segments: RadioNewsWheelSegment[] = await Promise.all(
+      base.map(async (fb, idx) => {
+        const slotName = ['Traffic & Weather', 'Top Headlines', 'Business News', 'Sports & Culture'][idx]
+        const list = bySlot[slotName] ?? []
+
+        if (idx === 0 && (weather || list.length > 0)) {
+          const temp = weather ? Math.round(weather.temperatureC) : 12
+          const feels = weather ? Math.round(weather.feelsLikeC) : 10
+          const wind = weather ? Math.round(weather.windSpeedKmh) : 20
+          const gust = weather ? Math.round(weather.windGustsKmh) : 32
+          const cond = weather?.condition ?? 'Partly cloudy'
+          const condZh = weather?.conditionZh ?? '多云间晴'
+          const top = list[0]
+          const title = top
+            ? `680 Live (${temp}°C ${cond}): ${top.title}`
+            : `680 News Live Weather & Traffic: ${temp}°C ${cond} in Toronto`
+          const lines = [
+            'This is 680 News. Time for traffic and weather together on the 1s.',
+            `Over at Toronto Pearson International Airport and downtown Toronto, current conditions are ${cond.toLowerCase()} at ${temp} degrees Celsius, feeling like ${feels}, with ${weather?.windDirection ?? 'westerly'} winds at ${wind} kilometers an hour and gusts up to ${gust}.`,
+            ...list.slice(0, 2).map((a) => `${a.title}. ${a.summary}`),
+          ]
+          const text = lines.join(' ')
+          const [titleZh, textZh] = await Promise.all([
+            top ? translateEnToZh(title) : Promise.resolve(`680 实时路况与气象：多伦多当前 ${temp}°C ${condZh}（体感 ${feels}°C）`),
+            translateEnToZh(text),
+          ])
+          return {
+            ...fb,
+            title,
+            titleZh: titleZh || `680 实时路况与气象：多伦多当前 ${temp}°C ${condZh}`,
+            text,
+            textZh: textZh || fb.textZh,
+            publishedAt: top?.publishedAt ?? new Date().toISOString(),
+            sourceUrl: top?.link ?? 'https://toronto.citynews.ca/traffic/',
+            sourceName: top?.source ?? 'CityNews 680 Traffic & Weather',
+            relatedArticles: list,
+          }
+        }
+
+        if (list.length === 0) return fb
+        const top = list[0]
+        const leadIns = [
+          'This is 680 News.',
+          'From the 680 Newsroom, checking top breaking stories across the Greater Toronto Area.',
+          'In 680 Business, tracking the latest market and economic developments.',
+          'In 680 Sports and Metro Culture, here is what is happening around Toronto and across the leagues.',
+        ]
+        const text = [
+          leadIns[idx],
+          ...list.slice(0, 3).map((a) => `${a.title}. ${a.summary}`),
+          'Stay tuned to 680 NewsRadio Toronto for continuous live coverage.',
+        ].join(' ')
+        const [titleZh, textZh] = await Promise.all([
+          top.titleZh ? Promise.resolve(top.titleZh) : translateEnToZh(top.title),
+          translateEnToZh(text),
+        ])
+        return {
+          ...fb,
+          title: top.title,
+          titleZh: titleZh || top.title,
+          text,
+          textZh: textZh || fb.textZh,
+          publishedAt: top.publishedAt,
+          sourceUrl: top.link,
+          sourceName: top.source,
+          relatedArticles: list,
+        }
+      }),
+    )
+
+    return {
+      updatedAt: new Date().toISOString(),
+      source: 'CityNews 680 Toronto / CBC / Open-Meteo Live',
+      isLive: true,
+      weather,
+      segments,
+      liveArticles: allArticles,
+    }
   } catch {
     return null
   }

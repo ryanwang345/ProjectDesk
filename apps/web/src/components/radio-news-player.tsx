@@ -24,6 +24,7 @@ import {
   STATION_680_NEWS,
   type LiveStreamStation,
   type RadioBulletin,
+  type RadioLiveArticle,
   type RadioNewsWheelSegment,
   type RadioVocabularyItem,
 } from '@/lib/radio-news'
@@ -59,6 +60,9 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
   const [liveBulletin, setLiveBulletin] = useState<RadioBulletin | null>(null)
   const [isRefreshingNews, setIsRefreshingNews] = useState(false)
   const [activeSegmentId, setActiveSegmentId] = useState<string>(station.wheelSegments[0].id)
+  const [selectedArticle, setSelectedArticle] = useState<RadioLiveArticle | null>(null)
+  const [feedSourceFilter, setFeedSourceFilter] = useState<'citynews' | 'all'>('citynews')
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL')
   const [showChinese, setShowChinese] = useState(true)
   const [activeWordToAdd, setActiveWordToAdd] = useState<string | null>(null)
 
@@ -67,6 +71,15 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
 
   const currentSegment: RadioNewsWheelSegment =
     segments.find((s) => s.id === activeSegmentId) || segments[0]
+
+  const allFeedArticles: RadioLiveArticle[] = liveBulletin?.liveArticles ?? []
+  const cityNewsArticles = allFeedArticles.filter(
+    (a) => a.source.toLowerCase().includes('citynews') || a.link.toLowerCase().includes('citynews.ca'),
+  )
+  const baseArticles =
+    feedSourceFilter === 'citynews' && cityNewsArticles.length > 0 ? cityNewsArticles : allFeedArticles
+  const displayedFeedArticles =
+    categoryFilter === 'ALL' ? baseArticles : baseArticles.filter((a) => a.category === categoryFilter)
 
   // Fetch real-time 680 News / CityNews Toronto bulletin on mount and every 5 minutes
   useEffect(() => {
@@ -428,19 +441,43 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
 
       {/* News clock slots */}
       <section className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-          <Clock className="size-4 text-primary" />
-          {zh ? '680 新闻轮盘 (The 680 News Clock)' : 'The 680 News Clock'}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <Clock className="size-4 text-primary" />
+            {zh ? '680 新闻轮盘 (The 680 News Clock)' : 'The 680 News Clock'}
+            {liveBulletin?.isLive && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+                {zh ? `实时快讯 (${updatedTimeLabel ?? '刚刚'})` : `Live Feed (${updatedTimeLabel ?? 'Just now'})`}
+              </span>
+            )}
+          </h2>
+          <button
+            type="button"
+            onClick={() => void handleRefreshLiveNews()}
+            disabled={isRefreshingNews}
+            className={cn(btn, 'px-2.5 py-1 text-[11px]')}
+          >
+            <RefreshCw className={cn('size-3 text-primary', isRefreshingNews && 'animate-spin')} />
+            {isRefreshingNews ? (zh ? '正在同步实时新闻…' : 'Syncing live news…') : zh ? '同步最新新闻' : 'Sync Live News'}
+          </button>
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {station.wheelFeatures.map((feat, i) => {
             const seg = segments[i]
             const selected = i === segIndex
+            const slotTitle = zh ? (seg?.titleZh || feat.titleZh) : (seg?.title || feat.title)
+            const slotDesc = zh
+              ? (seg?.relatedArticles?.[0]?.summaryZh || seg?.textZh || feat.descZh)
+              : (seg?.relatedArticles?.[0]?.summary || seg?.text || feat.desc)
             return (
               <button
                 key={feat.title}
                 type="button"
-                onClick={() => seg && setActiveSegmentId(seg.id)}
+                onClick={() => {
+                  setSelectedArticle(null)
+                  if (seg) setActiveSegmentId(seg.id)
+                }}
                 className={cn(
                   'flex flex-col gap-2 rounded-2xl border p-4 text-left transition',
                   selected ? 'border-primary/60 bg-primary/10' : 'border-border bg-card hover:border-primary/40',
@@ -455,10 +492,13 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                     {selected ? (zh ? '已载入' : 'Active') : `Slot 0${i + 1}`}
                   </span>
                 </div>
-                <span className="font-display text-base font-semibold text-foreground">{zh ? feat.titleZh : feat.title}</span>
-                <span className="text-xs leading-relaxed text-muted-foreground">{zh ? feat.descZh : feat.desc}</span>
-                <span className="mt-auto pt-1 text-xs font-semibold text-primary">
-                  {selected ? (zh ? '已载入文稿 ✓' : 'Transcript loaded ✓') : zh ? '载入文稿' : 'Load transcript'}
+                <span className="line-clamp-2 font-display text-base font-semibold text-foreground">{slotTitle}</span>
+                <span className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">{slotDesc}</span>
+                <span className="mt-auto flex items-center justify-between pt-1 text-xs font-semibold text-primary">
+                  <span>{selected ? (zh ? '已载入文稿 ✓' : 'Transcript loaded ✓') : zh ? '载入文稿' : 'Load transcript'}</span>
+                  {seg?.sourceName && (
+                    <span className="font-mono text-[10px] font-normal text-muted-foreground">{seg.sourceName}</span>
+                  )}
                 </span>
               </button>
             )
@@ -521,29 +561,54 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
               <button
                 key={seg.id}
                 type="button"
-                onClick={() => setActiveSegmentId(seg.id)}
+                onClick={() => {
+                  setSelectedArticle(null)
+                  setActiveSegmentId(seg.id)
+                }}
                 className={cn(
                   'rounded-full px-3.5 py-1.5 text-xs font-bold transition',
-                  seg.id === activeSegmentId ? 'bg-primary text-primary-foreground' : 'border border-border bg-card text-muted-foreground hover:text-foreground',
+                  !selectedArticle && seg.id === activeSegmentId
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border border-border bg-card text-muted-foreground hover:text-foreground',
                 )}
               >
                 {seg.timeMark}
               </button>
             ))}
+            {selectedArticle && (
+              <button
+                type="button"
+                onClick={() => setSelectedArticle(null)}
+                className="rounded-full border border-primary/50 bg-primary/15 px-3.5 py-1.5 text-xs font-bold text-primary"
+              >
+                {zh ? '← 返回时段联播' : '← Back to slot digest'}
+              </button>
+            )}
           </div>
 
           <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 className="font-display text-lg font-semibold text-foreground">{zh ? currentSegment.titleZh : currentSegment.title}</h3>
+                <h3 className="font-display text-lg font-semibold text-foreground">
+                  {selectedArticle
+                    ? zh
+                      ? selectedArticle.titleZh || selectedArticle.title
+                      : selectedArticle.title
+                    : zh
+                      ? currentSegment.titleZh
+                      : currentSegment.title}
+                </h3>
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span>{zh ? '播音主播：' : 'Anchor: '}{currentSegment.anchor}</span>
-                  {currentSegment.sourceName && (
-                    <span>· {currentSegment.sourceName}</span>
+                  <span>
+                    {zh ? '播音主播：' : 'Anchor: '}
+                    {selectedArticle ? selectedArticle.source || 'CityNews 680 Newsroom' : currentSegment.anchor}
+                  </span>
+                  {(selectedArticle?.source || currentSegment.sourceName) && (
+                    <span>· {selectedArticle?.source || currentSegment.sourceName}</span>
                   )}
-                  {currentSegment.sourceUrl && (
+                  {(selectedArticle?.link || currentSegment.sourceUrl) && (
                     <a
-                      href={currentSegment.sourceUrl}
+                      href={selectedArticle?.link || currentSegment.sourceUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
@@ -553,7 +618,15 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                   )}
                 </p>
               </div>
-              <button type="button" onClick={() => void speakWord(currentSegment.text)} className={btn}>
+              <button
+                type="button"
+                onClick={() =>
+                  void speakWord(
+                    selectedArticle ? `${selectedArticle.title}. ${selectedArticle.summary}` : currentSegment.text,
+                  )
+                }
+                className={btn}
+              >
                 <Mic className="size-3.5 text-primary" /> {zh ? '朗读跟读 (Shadowing)' : 'Shadowing'}
               </button>
             </div>
@@ -563,38 +636,68 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                 <span>Original broadcast transcript</span>
                 <span className="font-mono text-muted-foreground">{clip(currentSegment)}</span>
               </div>
-              <p className="text-base leading-8 text-foreground">{renderHighlighted(currentSegment)}</p>
+              <p className="text-base leading-8 text-foreground">
+                {selectedArticle ? (
+                  <InteractiveGlossText
+                    text={`${selectedArticle.title}. ${selectedArticle.summary}`}
+                    contextSentence={`${selectedArticle.title}. ${selectedArticle.summary}`}
+                  />
+                ) : (
+                  renderHighlighted(currentSegment)
+                )}
+              </p>
             </div>
 
             {showChinese && (
               <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm leading-relaxed text-muted-foreground">
                 <span className="mb-1 block text-xs font-semibold text-foreground">{zh ? '中文对照' : 'Translation'}</span>
-                {currentSegment.textZh}
+                {selectedArticle
+                  ? `${selectedArticle.titleZh || selectedArticle.title}${selectedArticle.summaryZh ? ` —— ${selectedArticle.summaryZh}` : ''}`
+                  : currentSegment.textZh}
               </div>
             )}
 
-            {currentSegment.relatedArticles && currentSegment.relatedArticles.length > 0 && (
+            {(baseArticles.length > 0 || (currentSegment.relatedArticles && currentSegment.relatedArticles.length > 0)) && (
               <div className="rounded-2xl border border-border bg-background/60 p-4">
-                <h4 className="mb-2.5 flex items-center justify-between text-xs font-bold text-foreground">
+                <h4 className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-foreground">
                   <span className="flex items-center gap-1.5">
                     <Radio className="size-3.5 text-primary" />
-                    {zh ? '本时段实时新闻源 (Live News Feed)' : 'Live News Feed for this Slot'}
+                    {zh ? 'toronto.citynews.ca/feed/ 实时新闻列表' : 'toronto.citynews.ca/feed/ Live News Feed'}
                   </span>
                   <span className="font-mono text-[10px] text-muted-foreground">
-                    {currentSegment.relatedArticles.length} {zh ? '条最新快讯' : 'live stories'}
+                    {(baseArticles.length > 0 ? baseArticles : (currentSegment.relatedArticles ?? [])).length}{' '}
+                    {zh ? '条实时新闻' : 'live stories'}
                   </span>
                 </h4>
                 <div className="flex flex-col gap-2">
-                  {currentSegment.relatedArticles.map((art) => (
-                    <div key={art.link || art.title} className="rounded-xl border border-border bg-card p-3 text-xs">
+                  {(baseArticles.length > 0 ? baseArticles : (currentSegment.relatedArticles ?? [])).map((art, idx) => (
+                    <div key={`${art.link || art.title}-${idx}`} className="rounded-xl border border-border bg-card p-3 text-xs">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-foreground">{art.title}</p>
+                          <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                            <span className="rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary">
+                              #{idx + 1}
+                            </span>
+                            <span className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              {art.category}
+                            </span>
+                            <span className="font-mono text-[10px] text-muted-foreground">{art.source}</span>
+                          </div>
+                          <p className="font-semibold text-foreground">
+                            <InteractiveGlossText text={art.title} contextSentence={art.title} />
+                          </p>
                           {showChinese && art.titleZh && (
                             <p className="mt-0.5 text-muted-foreground">{art.titleZh}</p>
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedArticle(art)}
+                            className="rounded-full border border-border px-2 py-1 text-[10px] font-semibold text-primary hover:border-primary/50"
+                          >
+                            {zh ? '精听' : 'Study'}
+                          </button>
                           <button
                             type="button"
                             onClick={() => void speakWord(`${art.title}. ${art.summary}`)}
@@ -620,6 +723,9 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                         <p className="mt-1.5 leading-relaxed text-muted-foreground">
                           <InteractiveGlossText text={art.summary} contextSentence={art.summary} />
                         </p>
+                      )}
+                      {showChinese && art.summaryZh && (
+                        <p className="mt-1 leading-relaxed text-muted-foreground/85">{art.summaryZh}</p>
                       )}
                     </div>
                   ))}
@@ -711,6 +817,178 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
           </div>
         </aside>
       </div>
+
+      {/* All toronto.citynews.ca/feed/ Live Articles Directory */}
+      <section className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h2 className="flex items-center gap-2 text-base font-bold text-foreground">
+              <Radio className="size-4 text-primary" />
+              {zh ? 'CityNews 680 实时新闻流 (toronto.citynews.ca/feed/)' : 'CityNews 680 Live Feed (toronto.citynews.ca/feed/)'}
+            </h2>
+            <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 font-mono text-xs font-semibold text-primary">
+              {displayedFeedArticles.length} {zh ? '条新闻' : 'articles'}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center rounded-full border border-border bg-background/60 p-0.5 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setFeedSourceFilter('citynews')}
+                className={cn(
+                  'rounded-full px-3 py-1 transition',
+                  feedSourceFilter === 'citynews'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                toronto.citynews.ca/feed/ ({cityNewsArticles.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFeedSourceFilter('all')}
+                className={cn(
+                  'rounded-full px-3 py-1 transition',
+                  feedSourceFilter === 'all'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {zh ? `全部新闻源 (${allFeedArticles.length})` : `All Feeds (${allFeedArticles.length})`}
+              </button>
+            </div>
+            <a
+              href="https://toronto.citynews.ca/feed/"
+              target="_blank"
+              rel="noreferrer"
+              className={cn(btn, 'px-3 py-1 text-xs')}
+            >
+              RSS Feed <ExternalLink className="size-3" />
+            </a>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {(['ALL', 'Traffic & Weather', 'Top Headlines', 'Business News', 'Sports & Culture'] as const).map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setCategoryFilter(cat)}
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-semibold transition',
+                categoryFilter === cat
+                  ? 'bg-primary text-primary-foreground'
+                  : 'border border-border bg-background/60 text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {cat === 'ALL' ? (zh ? '全部栏目' : 'All Categories') : cat}
+            </button>
+          ))}
+        </div>
+
+        {displayedFeedArticles.length === 0 ? (
+          <div className="rounded-2xl border border-border bg-background/50 p-6 text-center text-xs text-muted-foreground">
+            {isRefreshingNews
+              ? zh
+                ? '正在从 toronto.citynews.ca/feed/ 同步实时新闻…'
+                : 'Syncing live news from toronto.citynews.ca/feed/…'
+              : zh
+                ? '正在加载实时新闻流，或点击右上角“同步最新新闻”刷新。'
+                : 'Loading live news feed, or click "Sync Live News" above.'}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {displayedFeedArticles.map((art, index) => {
+              const isSelected = selectedArticle?.link === art.link && selectedArticle?.title === art.title
+              return (
+                <article
+                  key={`${art.link}-${index}`}
+                  className={cn(
+                    'flex flex-col justify-between gap-3 rounded-2xl border p-4 transition',
+                    isSelected ? 'border-primary bg-primary/10' : 'border-border bg-background/60 hover:border-primary/40',
+                  )}
+                >
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-primary">#{String(index + 1).padStart(2, '0')}</span>
+                        <span className="rounded bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
+                          {art.category}
+                        </span>
+                        <span className="font-medium">{art.source}</span>
+                      </div>
+                      {art.publishedAt && (
+                        <span className="font-mono text-[10px]">
+                          {new Date(art.publishedAt).toLocaleString(zh ? 'zh-CN' : 'en-CA', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="font-display text-sm font-semibold leading-snug text-foreground sm:text-base">
+                      <InteractiveGlossText text={art.title} contextSentence={art.title} />
+                    </h3>
+                    {showChinese && art.titleZh && (
+                      <p className="text-xs font-medium text-foreground/80">{art.titleZh}</p>
+                    )}
+
+                    {art.summary && (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        <InteractiveGlossText text={art.summary} contextSentence={art.summary} />
+                      </p>
+                    )}
+                    {showChinese && art.summaryZh && (
+                      <p className="rounded-lg bg-muted/40 p-2 text-xs leading-relaxed text-muted-foreground">
+                        {art.summaryZh}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedArticle(art)}
+                        className={cn(
+                          btn,
+                          'px-2.5 py-1 text-[11px]',
+                          isSelected && 'border-primary bg-primary text-primary-foreground hover:text-primary-foreground',
+                        )}
+                      >
+                        <Headphones className="size-3" />
+                        {isSelected ? (zh ? '正在精听' : 'Reading') : zh ? '载入精听文稿' : 'Load in Reader'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void speakWord(`${art.title}. ${art.summary}`)}
+                        className={cn(btn, 'px-2.5 py-1 text-[11px]')}
+                      >
+                        <Volume2 className="size-3 text-primary" />
+                        {zh ? '朗读' : 'Listen'}
+                      </button>
+                    </div>
+                    {art.link && (
+                      <a
+                        href={art.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                      >
+                        {zh ? '阅读原文' : 'Read on CityNews'} <ExternalLink className="size-3" />
+                      </a>
+                    )}
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
