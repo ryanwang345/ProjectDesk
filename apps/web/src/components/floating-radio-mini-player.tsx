@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ExternalLink, Pause, Play, Radio, Volume2, VolumeX, X } from 'lucide-react'
 import { useI18n } from '@/i18n'
@@ -46,12 +47,16 @@ export function FloatingRadioMiniPlayer({
 
   const shouldShow = isStreamActiveOrPaused && (!isOnRadioPage || scrolledPastMainPlayer)
 
-  if (!shouldShow) return null
+  if (!shouldShow || typeof document === 'undefined') return null
 
-  return (
+  return createPortal(
     <aside
       aria-label={zh ? '680 News 悬浮迷你播放器' : '680 News floating mini player'}
-      className="fixed right-4 bottom-20 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2.5 rounded-2xl border border-primary/40 bg-card/95 p-3.5 shadow-xl backdrop-blur-md transition-all sm:right-6 lg:bottom-6"
+      className={cn(
+        'fixed inset-x-3 bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))] z-50 flex flex-col gap-2 rounded-2xl border border-primary/40 bg-card/95 p-2.5 shadow-xl backdrop-blur-md transition-all',
+        'sm:inset-x-auto sm:right-5 sm:bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:w-80 sm:gap-2.5 sm:p-3.5',
+        'lg:right-6 lg:bottom-6',
+      )}
     >
       <div className="flex items-center justify-between gap-2.5">
         {/* Play / Pause Button */}
@@ -59,7 +64,7 @@ export function FloatingRadioMiniPlayer({
           type="button"
           onClick={() => toggleRadioStream()}
           aria-label={stream.isPlaying ? (zh ? '暂停 680 直播' : 'Pause 680 live') : zh ? '播放 680 直播' : 'Play 680 live'}
-          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/25 transition hover:brightness-110 active:scale-95"
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/25 transition hover:brightness-110 active:scale-95 sm:size-10"
         >
           {stream.isPlaying ? (
             <Pause className="size-4 fill-current" />
@@ -84,15 +89,15 @@ export function FloatingRadioMiniPlayer({
               )}
             />
           </div>
-          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-            <span>
+          <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="truncate">
               {stream.isBuffering
                 ? zh
-                  ? '缓冲连接中…'
+                  ? '连接中…'
                   : 'Connecting…'
                 : stream.isPlaying
                   ? zh
-                    ? '正在后台持续播报'
+                    ? '实时播报中'
                     : 'Playing live'
                   : zh
                     ? '已暂停'
@@ -104,7 +109,7 @@ export function FloatingRadioMiniPlayer({
         </div>
 
         {/* Equalizer Bars */}
-        <div className="flex h-5 items-end gap-0.5" aria-hidden="true">
+        <div className="flex h-4 items-end gap-0.5 sm:h-5" aria-hidden="true">
           {[0.4, 0.9, 0.55, 1, 0.7, 0.45].map((h, i) => (
             <span
               key={i}
@@ -120,6 +125,29 @@ export function FloatingRadioMiniPlayer({
           ))}
         </div>
 
+        {/* Quick Action on Mobile (Jump to /radio or Top) */}
+        {!isOnRadioPage ? (
+          <button
+            type="button"
+            onClick={() => navigate('/radio')}
+            className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/25 sm:hidden"
+          >
+            <span>{zh ? '直播台' : 'Studio'}</span>
+            <ExternalLink className="size-3" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              scrollContainerRef?.current?.scrollTo({ top: 0, behavior: 'smooth' })
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground sm:hidden"
+          >
+            ↑
+          </button>
+        )}
+
         {/* Close / Dismiss Mini Player */}
         <button
           type="button"
@@ -131,8 +159,8 @@ export function FloatingRadioMiniPlayer({
         </button>
       </div>
 
-      {/* Bottom Controls: Volume + Jump back to /radio */}
-      <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2">
+      {/* Bottom Controls (Desktop & Tablet >= 640px): Volume + Jump back to /radio */}
+      <div className="hidden items-center justify-between gap-2 border-t border-border/60 pt-2 sm:flex">
         <div className="flex flex-1 items-center gap-1.5">
           <button
             type="button"
@@ -183,6 +211,7 @@ export function FloatingRadioMiniPlayer({
           </button>
         )}
       </div>
-    </aside>
+    </aside>,
+    document.body,
   )
 }
