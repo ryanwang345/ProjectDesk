@@ -4,7 +4,6 @@ import {
   ArrowRight,
   BookmarkCheck,
   BookmarkPlus,
-  Clock,
   ExternalLink,
   Headphones,
   Mic,
@@ -13,6 +12,7 @@ import {
   Radio,
   RefreshCw,
   Sparkles,
+  Umbrella,
   Volume2,
   VolumeX,
 } from 'lucide-react'
@@ -20,16 +20,19 @@ import { InteractiveGlossText } from '@/components/interactive-gloss-text'
 import { useEnglish } from '@/hooks/use-english'
 import { useI18n } from '@/i18n'
 import {
+  classifyArticleTopic,
   extractLiveCollocations,
   extractLiveKeyLexis,
   extractLiveLiaisons,
   fetchLiveRadioBulletin,
+  fetchRichTorontoWeather,
   getCachedLiveRadioBulletin,
   STATION_680_NEWS,
   type LiveStreamStation,
   type RadioBulletin,
   type RadioCollocationItem,
   type RadioLiveArticle,
+  type RadioLiveWeather,
   type RadioNewsWheelSegment,
   type RadioVocabularyItem,
 } from '@/lib/radio-news'
@@ -42,7 +45,341 @@ export type RadioNewsPlayerProps = {
   station?: LiveStreamStation
 }
 
-const SLOT_COLORS = ['bg-primary', 'bg-amber-400', 'bg-sky-400', 'bg-violet-400']
+function WeatherIconSvg({ code = 2, size = 'md' }: { code?: number; size?: 'sm' | 'lg' | 'md' }) {
+  const cls = size === 'lg' ? 'size-11 sm:size-12' : size === 'sm' ? 'size-5' : 'size-7'
+  const isClear = code === 0 || code === 1
+  const isRain = (code >= 51 && code <= 67) || (code >= 80 && code <= 82)
+  const isSnow = (code >= 71 && code <= 77) || (code >= 85 && code <= 86)
+
+  if (isClear) {
+    return (
+      <svg viewBox="0 0 64 64" className={cls} aria-hidden="true">
+        <circle cx="32" cy="32" r="14" fill="#fbbf24" stroke="#f59e0b" strokeWidth="2" />
+        {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => (
+          <line
+            key={deg}
+            x1="32"
+            y1="8"
+            x2="32"
+            y2="13"
+            stroke="#fbbf24"
+            strokeWidth="3"
+            strokeLinecap="round"
+            transform={`rotate(${deg} 32 32)`}
+          />
+        ))}
+      </svg>
+    )
+  }
+
+  return (
+    <svg viewBox="0 0 64 64" className={cls} aria-hidden="true">
+      {code <= 2 && (
+        <g>
+          <circle cx="22" cy="24" r="10" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1.5" />
+          {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => (
+            <line
+              key={deg}
+              x1="22"
+              y1="8"
+              x2="22"
+              y2="11"
+              stroke="#fbbf24"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              transform={`rotate(${deg} 22 24)`}
+            />
+          ))}
+        </g>
+      )}
+      <path
+        d="M22 44h24a10 10 0 0 0 1.5-19.8A13 13 0 0 0 23 21a11 11 0 0 0-1 23Z"
+        fill="#f8fafc"
+        stroke="#cbd5e1"
+        strokeWidth="1.5"
+      />
+      {isRain && (
+        <g stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="25" y1="48" x2="23" y2="55" />
+          <line x1="34" y1="48" x2="32" y2="55" />
+          <line x1="43" y1="48" x2="41" y2="55" />
+        </g>
+      )}
+      {isSnow && (
+        <g fill="#bae6fd">
+          <circle cx="25" cy="51" r="2.2" />
+          <circle cx="34" cy="53" r="2.2" />
+          <circle cx="43" cy="51" r="2.2" />
+        </g>
+      )}
+    </svg>
+  )
+}
+
+function TorontoWeatherWidget({
+  weather,
+  updatedTimeLabel,
+  zh,
+  onRefresh,
+  isRefreshing,
+}: {
+  weather?: RadioLiveWeather
+  updatedTimeLabel: string | null
+  zh: boolean
+  onRefresh: () => void
+  isRefreshing: boolean
+}) {
+  const temp = weather ? Math.round(weather.temperatureC) : 6
+  const feels = weather ? Math.round(weather.feelsLikeC) : 3
+  const high = weather?.highC ?? temp + 1
+  const low = weather?.lowC ?? temp - 4
+  const yHigh = weather?.yesterdayHighC ?? temp - 1
+  const yLow = weather?.yesterdayLowC ?? temp - 5
+  const yLabel = weather?.yesterdayLabel ?? 'Yesterday'
+  const cond = zh ? weather?.conditionZh || '多云间晴' : weather?.condition || 'Partly cloudy'
+  const wind = weather ? Math.round(weather.windSpeedKmh) : 13
+  const gust = weather ? Math.round(weather.windGustsKmh) : 30
+  const compass = weather?.windCompass ?? 'NW'
+  const pressure = weather?.pressureKpa ?? 101.3
+  const humidity = weather?.humidityPct ?? 61
+  const visibility = weather?.visibilityKm ?? 24
+  const ceiling = weather?.ceilingM ?? 3400
+  const sunrise = weather?.sunrise ?? '7:10AM'
+  const sunset = weather?.sunset ?? '4:53PM'
+  const precipAlert = zh
+    ? weather?.precipAlertZh || '未来 3 小时内预计无明显降水'
+    : weather?.precipAlertEn || 'No significant precipitation expected within the next 3 hours'
+  const hourlySummary = zh
+    ? weather?.hourlySummaryZh || `今日${cond}，稍晚云层渐开。伴有阵风。`
+    : weather?.hourlySummaryEn || 'Cloudy with clear breaks developing in the evening. Windy.'
+
+  const hourlyList =
+    weather?.hourly && weather.hourly.length >= 5
+      ? weather.hourly.slice(0, 5)
+      : [
+          { timeLabel: '12pm', tempC: temp + 1, feelsLikeC: feels + 1, precipProbPct: 30, weatherCode: 2 },
+          { timeLabel: '1pm', tempC: temp + 1, feelsLikeC: feels, precipProbPct: 30, weatherCode: 3 },
+          { timeLabel: '2pm', tempC: temp + 1, feelsLikeC: feels, precipProbPct: 30, weatherCode: 3 },
+          { timeLabel: '3pm', tempC: temp + 1, feelsLikeC: feels, precipProbPct: 30, weatherCode: 3 },
+          { timeLabel: '4pm', tempC: temp, feelsLikeC: feels, precipProbPct: 30, weatherCode: 2 },
+        ]
+
+  const todayDateStr = weather?.observedAt
+    ? new Date(weather.observedAt).toLocaleDateString(zh ? 'zh-CN' : 'en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : zh
+      ? '今日日出日落'
+      : 'Sunrise / Sunset'
+
+  return (
+    <section className="rounded-2xl bg-gradient-to-br from-[#4f86c6] via-[#376fb2] to-[#235391] p-3.5 text-white shadow-sm sm:p-4">
+      {/* Compact Header */}
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-baseline gap-2.5">
+          <h2 className="font-display text-base font-bold tracking-tight text-white sm:text-lg">
+            Toronto, ON
+          </h2>
+          <span className="text-[11px] text-white/80">
+            {updatedTimeLabel
+              ? zh
+                ? `更新于 ${updatedTimeLabel}`
+                : `Updated at ${updatedTimeLabel}`
+              : zh
+                ? '多伦多实时气象观测站'
+                : 'Live Toronto Airport & Downtown Telemetry'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <a
+            href="https://www.theweathernetwork.com/en/city/ca/ontario/toronto/hourly"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded-full border border-white/30 bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/95 transition hover:bg-white/20"
+          >
+            {zh ? '完整 72 小时' : 'Full 72 hours'} <ArrowRight className="size-3" />
+          </a>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-1 rounded-full border border-white/35 bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-sm transition hover:bg-white/25"
+          >
+            <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
+            {isRefreshing ? (zh ? '同步中…' : 'Syncing…') : zh ? '同步气象与新闻' : 'Sync Live'}
+          </button>
+        </div>
+      </div>
+
+      {/* Main Current + Hourly Forecast Grid */}
+      <div className="grid grid-cols-1 items-stretch gap-2.5 lg:grid-cols-12">
+        {/* Current Temp Card */}
+        <div className="flex flex-col justify-between rounded-xl bg-[#193558]/75 p-3 backdrop-blur-sm lg:col-span-5">
+          <div className="flex items-center justify-between gap-3 px-1">
+            <div className="flex items-center gap-3">
+              <WeatherIconSvg code={weather?.weatherCode ?? 2} size="lg" />
+              <div className="flex items-start leading-none">
+                <span className="font-sans text-4xl font-light tracking-tighter text-white sm:text-5xl">
+                  {temp}
+                </span>
+                <span className="mt-0.5 text-base font-semibold text-white/90 sm:text-lg">°C</span>
+              </div>
+            </div>
+            <div className="flex flex-col text-right text-xs">
+              <span className="text-sm font-semibold text-white">{cond}</span>
+              <span className="text-[11px] font-medium text-white/85">
+                {zh ? `体感 ${feels}°` : `Feels ${feels}°`} · H:{high}° L:{low}°
+              </span>
+            </div>
+          </div>
+
+          <a
+            href="https://www.theweathernetwork.com/en/city/ca/ontario/toronto/current"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2.5 flex items-center justify-between rounded-lg bg-[#0f233c]/85 px-3 py-1.5 text-[11px] font-medium text-white/95 transition hover:bg-[#0f233c]"
+          >
+            <span className="flex items-center gap-2 truncate">
+              <Umbrella className="size-3.5 shrink-0 text-sky-300" />
+              <span className="truncate">{precipAlert}</span>
+            </span>
+            <ArrowRight className="size-3 shrink-0 text-white/75" />
+          </a>
+        </div>
+
+        {/* Hourly Forecast Section */}
+        <div className="flex flex-col justify-between gap-2 lg:col-span-7">
+          <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+            {hourlyList.map((h) => (
+              <div
+                key={h.timeLabel}
+                className="flex flex-col items-center justify-between rounded-xl bg-[#132c4a]/85 px-1.5 py-1.5 text-center"
+              >
+                <span className="text-[11px] font-semibold text-white/90">{h.timeLabel}</span>
+                <div className="my-0.5">
+                  <WeatherIconSvg code={h.weatherCode} size="sm" />
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-bold text-white">{h.tempC}°</span>
+                  <span className="text-[10px] text-white/70">({h.feelsLikeC}°)</span>
+                </div>
+                <span className="flex items-center gap-0.5 text-[10px] font-semibold text-sky-200">
+                  <span>🌧</span>
+                  <span>{h.precipProbPct}%</span>
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className=" truncate rounded-lg bg-[#132c4a]/85 px-3 py-1.5 text-[11px] font-medium text-white/95">
+            <span className="mr-1.5 font-bold text-sky-200">{zh ? '逐时趋势:' : 'Hourly:'}</span>
+            {hourlySummary}
+          </div>
+        </div>
+      </div>
+
+      {/* Today's Conditions Compact Strip */}
+      <div className="mt-2.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-7">
+        {/* 1. Sunrise & Sunset */}
+        <div className="flex flex-col justify-between rounded-xl bg-[#132c4a]/85 px-2.5 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-white/80">{todayDateStr}</span>
+            <svg viewBox="0 0 60 26" className="h-4 w-9 shrink-0" aria-hidden="true">
+              <path d="M4 22 A26 20 0 0 1 56 22" fill="rgba(255,255,255,0.12)" stroke="#93c5fd" strokeWidth="1.5" strokeDasharray="2 2" />
+              <circle cx="30" cy="8" r="4.5" fill="#fbbf24" />
+            </svg>
+          </div>
+          <div className="mt-1 flex items-center justify-between text-[10px] leading-tight text-white/90">
+            <span>↑ {sunrise}</span>
+            <span>↓ {sunset}</span>
+          </div>
+        </div>
+
+        {/* 2. Wind */}
+        <div className="flex flex-col justify-between rounded-xl bg-[#132c4a]/85 px-2.5 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-white/75">Wind</span>
+            <span className="text-[10px] font-semibold text-sky-300">{compass}</span>
+          </div>
+          <div className="mt-0.5 flex items-baseline justify-between">
+            <span className="text-xs font-bold text-white">
+              {wind} <span className="text-[10px] font-normal text-white/75">km/h</span>
+            </span>
+            <span className="text-[10px] text-white/80">Gust {gust}</span>
+          </div>
+        </div>
+
+        {/* 3. Pressure */}
+        <div className="flex flex-col justify-between rounded-xl bg-[#132c4a]/85 px-2.5 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-white/75">Pressure</span>
+            <svg viewBox="0 0 40 22" className="h-3.5 w-6 shrink-0" aria-hidden="true">
+              <path d="M4 19 A16 16 0 0 1 36 19" fill="none" stroke="#86efac" strokeWidth="3.5" strokeLinecap="round" />
+              <line x1="20" y1="19" x2="15" y2="8" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </div>
+          <span className="mt-0.5 text-xs font-bold text-white">
+            {pressure.toFixed(1)} <span className="text-[10px] font-normal text-white/80">↑kPa</span>
+          </span>
+        </div>
+
+        {/* 4. Humidity */}
+        <div className="flex flex-col justify-between rounded-xl bg-[#132c4a]/85 px-2.5 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-white/75">Humidity</span>
+            <span className="text-[10px] font-semibold text-amber-300">
+              {humidity >= 60 ? 'Humid' : humidity >= 35 ? 'Moderate' : 'Dry'}
+            </span>
+          </div>
+          <span className="mt-0.5 text-xs font-bold text-white">{humidity}%</span>
+        </div>
+
+        {/* 5. Visibility */}
+        <div className="flex flex-col justify-between rounded-xl bg-[#132c4a]/85 px-2.5 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-white/75">Visibility</span>
+            <span className="text-[10px] text-sky-200">Clear</span>
+          </div>
+          <span className="mt-0.5 text-xs font-bold text-white">
+            {visibility} <span className="text-[10px] font-normal text-white/80">km</span>
+          </span>
+        </div>
+
+        {/* 6. Ceiling */}
+        <div className="flex flex-col justify-between rounded-xl bg-[#132c4a]/85 px-2.5 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-white/75">Ceiling</span>
+            <span className="text-[10px] text-white/70">Cloud base</span>
+          </div>
+          <span className="mt-0.5 text-xs font-bold text-white">
+            {ceiling} <span className="text-[10px] font-normal text-white/80">m</span>
+          </span>
+        </div>
+
+        {/* 7. Yesterday */}
+        <div className="flex flex-col justify-between rounded-xl bg-[#132c4a]/85 px-2.5 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-white/75">Yesterday</span>
+            <span className="text-[10px] text-white/70">{yLabel}</span>
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 text-xs font-bold text-white">
+            <span>
+              <span className="mr-0.5 text-[10px] font-normal text-white/70">H</span>
+              {yHigh}°
+            </span>
+            <span className="text-white/90">
+              <span className="mr-0.5 text-[10px] font-normal text-white/70">L</span>
+              {yLow}°
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
 
 export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerProps) {
   const { locale } = useI18n()
@@ -67,7 +404,6 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
   const [activeSegmentId, setActiveSegmentId] = useState<string>(station.wheelSegments[0].id)
   const [selectedArticle, setSelectedArticle] = useState<RadioLiveArticle | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL')
-  const [studyCardFilter, setStudyCardFilter] = useState<'ALL' | 'WORDS' | 'PHRASES'>('ALL')
   const [showChinese, setShowChinese] = useState(true)
   const [activeWordToAdd, setActiveWordToAdd] = useState<string | null>(null)
 
@@ -93,8 +429,24 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
     (a) => a.source.toLowerCase().includes('citynews') || a.link.toLowerCase().includes('citynews.ca'),
   )
   const baseArticles = cityNewsArticles
-  const displayedFeedArticles =
-    categoryFilter === 'ALL' ? baseArticles : baseArticles.filter((a) => a.category === categoryFilter)
+  const filterArticlesByKey = (key: string) => {
+    if (key === 'ALL') return baseArticles
+    if (key.startsWith('TOPIC:')) {
+      const topicId = key.slice(6)
+      return baseArticles.filter((a) => classifyArticleTopic(a).id === topicId)
+    }
+    return baseArticles.filter((a) => a.category === key)
+  }
+  const displayedFeedArticles = filterArticlesByKey(categoryFilter)
+  const activeTopic = classifyArticleTopic(
+    selectedArticle ??
+      currentSegment.relatedArticles?.[0] ?? {
+        title: currentSegment.title,
+        summary: currentSegment.text,
+        category: currentSegment.timeMark,
+        link: currentSegment.sourceUrl ?? '',
+      },
+  )
 
   // Fetch real-time 680 News / CityNews Toronto bulletin on mount and every 5 minutes
   useEffect(() => {
@@ -107,6 +459,11 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
       }).then((data) => {
         if (active && data && data.segments.length > 0) {
           setLiveBulletin(data)
+        }
+      })
+      void fetchRichTorontoWeather().then((richW) => {
+        if (active && richW) {
+          setLiveBulletin((prev) => (prev ? { ...prev, weather: richW } : prev))
         }
       })
     }
@@ -358,7 +715,6 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
       : isPlaying
         ? zh ? '680 直播信号已连接' : '680 live signal connected'
         : zh ? '直播待命' : 'Standby'
-  const segIndex = Math.max(0, segments.findIndex((x) => x.id === currentSegment.id))
   const clip = (seg: RadioNewsWheelSegment) => formatDurationClock(seg.endSecond - seg.startSecond)
   const updatedTimeLabel = liveBulletin?.updatedAt
     ? new Date(liveBulletin.updatedAt).toLocaleTimeString(zh ? 'zh-CN' : 'en-CA', {
@@ -504,102 +860,18 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
         </div>
       </section>
 
-      {/* News clock slots */}
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-            <Clock className="size-4 text-primary" />
-            {zh ? '680 新闻轮盘 (The 680 News Clock)' : 'The 680 News Clock'}
-            {liveBulletin?.isLive && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                <span className="size-1.5 animate-pulse rounded-full bg-primary" />
-                {zh ? `实时快讯 (${updatedTimeLabel ?? '刚刚'})` : `Live Feed (${updatedTimeLabel ?? 'Just now'})`}
-              </span>
-            )}
-          </h2>
-          <button
-            type="button"
-            onClick={() => void handleRefreshLiveNews()}
-            disabled={isRefreshingNews}
-            className={cn(btn, 'px-2.5 py-1 text-[11px]')}
-          >
-            <RefreshCw className={cn('size-3 text-primary', isRefreshingNews && 'animate-spin')} />
-            {isRefreshingNews ? (zh ? '正在同步实时新闻…' : 'Syncing live news…') : zh ? '同步最新新闻' : 'Sync Live News'}
-          </button>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {station.wheelFeatures.map((feat, i) => {
-            const seg = segments[i]
-            const selected = i === segIndex
-            const slotTitle = zh ? (seg?.titleZh || feat.titleZh) : (seg?.title || feat.title)
-            const slotDesc = zh
-              ? (seg?.relatedArticles?.[0]?.summaryZh || seg?.textZh || feat.descZh)
-              : (seg?.relatedArticles?.[0]?.summary || seg?.text || feat.desc)
-            return (
-              <button
-                key={feat.title}
-                type="button"
-                onClick={() => {
-                  setSelectedArticle(null)
-                  if (seg) setActiveSegmentId(seg.id)
-                }}
-                className={cn(
-                  'flex flex-col gap-2 rounded-2xl border p-4 text-left transition',
-                  selected ? 'border-primary/60 bg-primary/10' : 'border-border bg-card hover:border-primary/40',
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                    <span className={cn('size-2.5 rounded-full', SLOT_COLORS[i])} />
-                    {zh ? ['路况与天气', '大都会要闻', '商业财经', '体育与文化'][i] : ['Traffic & Weather', 'Top Headlines', 'Business & TSX', 'Sports & Culture'][i]}
-                  </span>
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {selected ? (zh ? '已载入' : 'Active') : `Slot 0${i + 1}`}
-                  </span>
-                </div>
-                <span className="line-clamp-2 font-display text-base font-semibold text-foreground">{slotTitle}</span>
-                <span className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">{slotDesc}</span>
-                <span className="mt-auto flex items-center justify-between pt-1 text-xs font-semibold text-primary">
-                  <span>{selected ? (zh ? '已载入文稿 ✓' : 'Transcript loaded ✓') : zh ? '载入文稿' : 'Load transcript'}</span>
-                  {seg?.sourceName && (
-                    <span className="font-mono text-[10px] font-normal text-muted-foreground">{seg.sourceName}</span>
-                  )}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </section>
+      {/* Toronto, ON Weather Widget (replaces The 680 News Clock) */}
+      <TorontoWeatherWidget
+        weather={liveBulletin?.weather}
+        updatedTimeLabel={updatedTimeLabel}
+        zh={zh}
+        onRefresh={() => void handleRefreshLiveNews()}
+        isRefreshing={isRefreshingNews}
+      />
 
-      {/* Now-selected hero */}
-      <section className="relative flex min-h-40 items-end overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary/25 via-card to-background p-5">
-        <Radio className="absolute top-5 right-6 size-24 text-primary/15" aria-hidden="true" />
-        <div className="relative">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded bg-primary px-2 py-0.5 text-[10px] font-bold tracking-wide text-primary-foreground uppercase">
-              {currentSegment.timeMark}
-            </span>
-            {liveBulletin?.isLive && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/15 px-2.5 py-0.5 text-[10px] font-bold text-primary">
-                <span className="size-1.5 animate-pulse rounded-full bg-primary" />
-                {zh ? `实时同步 (${updatedTimeLabel ?? '刚刚'})` : `LIVE (${updatedTimeLabel ?? 'Just now'})`}
-              </span>
-            )}
-            {liveBulletin?.weather && (
-              <span className="rounded-full border border-border bg-background/70 px-2.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                {zh
-                  ? `多伦多实时: ${Math.round(liveBulletin.weather.temperatureC)}°C · ${liveBulletin.weather.conditionZh} · 风速 ${Math.round(liveBulletin.weather.windSpeedKmh)} km/h`
-                  : `Toronto Live: ${Math.round(liveBulletin.weather.temperatureC)}°C · ${liveBulletin.weather.condition} · Wind ${Math.round(liveBulletin.weather.windSpeedKmh)} km/h`}
-              </span>
-            )}
-          </div>
-          <p className="mt-2 font-display text-lg font-semibold text-foreground">{zh ? currentSegment.titleZh : currentSegment.title}</p>
-        </div>
-      </section>
-
-      {/* Transcript + lexis */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <section className="flex flex-col gap-3 lg:col-span-8">
+      {/* Transcript + Collocations (Left 8 cols) & Key Lexis (Right 4 cols) */}
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
+        <section className="flex flex-col gap-3.5 lg:col-span-8">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
               <Headphones className="size-4 text-primary" />
@@ -614,47 +886,66 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                 onClick={() => void handleRefreshLiveNews()}
                 disabled={isRefreshingNews}
                 className={cn(btn, 'px-2.5 py-1 text-[11px]')}
-                title={zh ? '从 CityNews 680 / CBC 实时拉取最新新闻' : 'Fetch latest live news from CityNews 680 / CBC'}
+                title={zh ? '从 CityNews 680 实时拉取最新新闻' : 'Fetch latest live news from CityNews 680'}
               >
                 <RefreshCw className={cn('size-3 text-primary', isRefreshingNews && 'animate-spin')} />
                 {isRefreshingNews ? (zh ? '同步中…' : 'Syncing…') : zh ? '刷新实时新闻' : 'Refresh Live News'}
               </button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {segments.map((seg) => (
-              <button
-                key={seg.id}
-                type="button"
-                onClick={() => {
-                  setSelectedArticle(null)
-                  setActiveSegmentId(seg.id)
-                }}
-                className={cn(
-                  'rounded-full px-3.5 py-1.5 text-xs font-bold transition',
-                  !selectedArticle && seg.id === activeSegmentId
-                    ? 'bg-primary text-primary-foreground'
-                    : 'border border-border bg-card text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {seg.timeMark}
-              </button>
-            ))}
-            {selectedArticle && (
-              <button
-                type="button"
-                onClick={() => setSelectedArticle(null)}
-                className="rounded-full border border-primary/50 bg-primary/15 px-3.5 py-1.5 text-xs font-bold text-primary"
-              >
-                {zh ? '← 返回时段联播' : '← Back to slot digest'}
-              </button>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              {segments.map((seg) => (
+                <button
+                  key={seg.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedArticle(null)
+                    setActiveSegmentId(seg.id)
+                  }}
+                  className={cn(
+                    'rounded-full px-3.5 py-1.5 text-xs font-bold transition',
+                    !selectedArticle && seg.id === activeSegmentId
+                      ? 'bg-primary text-primary-foreground'
+                      : 'border border-border bg-card text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {seg.timeMark}
+                </button>
+              ))}
+              {selectedArticle && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedArticle(null)}
+                  className="rounded-full border border-primary/50 bg-primary/15 px-3.5 py-1.5 text-xs font-bold text-primary"
+                >
+                  {zh ? '← 返回时段联播' : '← Back to slot digest'}
+                </button>
+              )}
+            </div>
+
+            {liveBulletin?.weather && (
+              <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                {zh
+                  ? `多伦多: ${Math.round(liveBulletin.weather.temperatureC)}°C · ${liveBulletin.weather.conditionZh} · 风速 ${Math.round(liveBulletin.weather.windSpeedKmh)} km/h`
+                  : `Toronto: ${Math.round(liveBulletin.weather.temperatureC)}°C · ${liveBulletin.weather.condition} · Wind ${Math.round(liveBulletin.weather.windSpeedKmh)} km/h`}
+              </span>
             )}
           </div>
 
           <div className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="font-display text-lg font-semibold text-foreground">
+              <div className="min-w-0 flex-1">
+                <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className="rounded bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
+                    {selectedArticle ? selectedArticle.category : currentSegment.timeMark}
+                  </span>
+                  <span className="rounded border border-border bg-background/80 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                    {zh ? activeTopic.labelZh : activeTopic.labelEn}
+                  </span>
+                </div>
+                <h3 className="font-display text-lg font-semibold leading-snug text-foreground">
                   {selectedArticle
                     ? zh
                       ? selectedArticle.titleZh || selectedArticle.title
@@ -690,7 +981,7 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                     selectedArticle ? `${selectedArticle.title}. ${selectedArticle.summary}` : currentSegment.text,
                   )
                 }
-                className={btn}
+                className={cn(btn, 'shrink-0')}
               >
                 <Mic className="size-3.5 text-primary" /> {zh ? '朗读跟读 (Shadowing)' : 'Shadowing'}
               </button>
@@ -712,6 +1003,90 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                 {selectedArticle
                   ? `${selectedArticle.titleZh || selectedArticle.title}${selectedArticle.summaryZh ? ` —— ${selectedArticle.summaryZh}` : ''}`
                   : currentSegment.textZh}
+              </div>
+            )}
+
+            {activeCollocations.length > 0 && (
+              <div className="rounded-2xl border border-border bg-background/60 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="flex items-center gap-2 text-xs font-bold text-foreground">
+                    <Sparkles className="size-3.5 text-primary" />
+                    {zh ? '680 新闻短语搭配学习卡 (Collocations & Phrases)' : '680 News collocations & phrases'}
+                  </h4>
+                  <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                    {activeCollocations.length} {zh ? '组搭配' : 'phrases'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {activeCollocations.map((item) => {
+                    const isSaved = desk.cards.some(
+                      (c) => c.word.toLowerCase() === item.phrase.toLowerCase() && c.inReview,
+                    )
+                    const isAdding = activeWordToAdd === item.phrase
+                    return (
+                      <div
+                        key={item.phrase}
+                        className="flex flex-col justify-between rounded-xl border border-border bg-card p-3.5 transition hover:border-primary/40"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="font-display text-sm font-semibold text-foreground">
+                                  {item.phrase}
+                                </span>
+                                <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                                  {item.band}
+                                </span>
+                              </div>
+                              <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+                                <span>{zh ? item.patternZh : item.patternEn}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => void speakWord(item.phrase)}
+                                  aria-label={zh ? '朗读短语' : 'Pronounce phrase'}
+                                  className="hover:text-foreground"
+                                >
+                                  <Volume2 className="size-3.5 text-primary" />
+                                </button>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void handleAddCollocationToWordbook(item)}
+                              disabled={isAdding}
+                              className={cn(
+                                btn,
+                                'shrink-0 px-2.5 py-1 text-[11px]',
+                                isSaved && 'border-primary/50 bg-primary/10 text-primary',
+                              )}
+                            >
+                              {isSaved ? <BookmarkCheck className="size-3" /> : <BookmarkPlus className="size-3" />}
+                              {isSaved
+                                ? zh
+                                  ? '已收录'
+                                  : 'Saved'
+                                : isAdding
+                                  ? zh
+                                    ? '添加中…'
+                                    : 'Adding…'
+                                  : zh
+                                    ? '+ 生词本'
+                                    : '+ Review'}
+                            </button>
+                          </div>
+                          <p className="mt-2 text-xs font-semibold text-foreground">{item.meaningZh}</p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                            {zh ? item.usageZh : item.usageEn}
+                          </p>
+                        </div>
+                        <p className="mt-2 line-clamp-2 rounded-lg bg-muted/50 px-2.5 py-1.5 text-[11px] leading-relaxed text-muted-foreground italic">
+                          “{item.contextSnippet}”
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
 
@@ -744,150 +1119,53 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
         </section>
 
         <aside className="flex flex-col gap-3.5 lg:col-span-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="inline-flex rounded-full border border-border bg-background/60 p-0.5 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setStudyCardFilter('ALL')}
-                className={cn(
-                  'rounded-full px-2.5 py-1 transition',
-                  studyCardFilter === 'ALL'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {zh ? '全部学习卡' : 'All Cards'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setStudyCardFilter('WORDS')}
-                className={cn(
-                  'rounded-full px-2.5 py-1 transition',
-                  studyCardFilter === 'WORDS'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {zh ? `生词卡 (${activeKeyLexis.length})` : `Words (${activeKeyLexis.length})`}
-              </button>
-              <button
-                type="button"
-                onClick={() => setStudyCardFilter('PHRASES')}
-                className={cn(
-                  'rounded-full px-2.5 py-1 transition',
-                  studyCardFilter === 'PHRASES'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {zh ? `短语搭配 (${activeCollocations.length})` : `Phrases (${activeCollocations.length})`}
-              </button>
-            </div>
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+              <Sparkles className="size-4 text-primary" />
+              {zh ? '680 新闻高频词汇' : '680 News lexis'}
+            </h2>
+            <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+              {activeKeyLexis.length} {zh ? '核心词' : 'words'}
+            </span>
           </div>
 
-          {(studyCardFilter === 'ALL' || studyCardFilter === 'WORDS') && (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-                  <Sparkles className="size-4 text-primary" />
-                  {zh ? '680 新闻高频词汇' : '680 News lexis'}
-                </h2>
-                <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                  {activeKeyLexis.length} {zh ? '核心词' : 'words'}
-                </span>
-              </div>
-              {activeKeyLexis.map((item) => {
-                const isSaved = desk.cards.some((c) => c.word.toLowerCase() === item.word.toLowerCase() && c.inReview)
-                const isAdding = activeWordToAdd === item.word
-                return (
-                  <div key={item.word} className="rounded-2xl border border-border bg-card p-3.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-display text-base font-semibold text-foreground">{item.word}</span>
-                          <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">{item.band}</span>
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
-                          <span>{item.pos} · {item.ipa}</span>
-                          <button type="button" onClick={() => void speakWord(item.word)} aria-label={zh ? '朗读单词' : 'Pronounce'} className="hover:text-foreground">
-                            <Volume2 className="size-3.5 text-primary" />
-                          </button>
-                        </div>
+          <div className="flex flex-col gap-3">
+            {activeKeyLexis.map((item) => {
+              const isSaved = desk.cards.some((c) => c.word.toLowerCase() === item.word.toLowerCase() && c.inReview)
+              const isAdding = activeWordToAdd === item.word
+              return (
+                <div key={item.word} className="rounded-2xl border border-border bg-card p-3.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-display text-base font-semibold text-foreground">{item.word}</span>
+                        <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">{item.band}</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleAddLexisToWordbook(item)}
-                        disabled={isAdding}
-                        className={cn(btn, 'px-2.5', isSaved && 'border-primary/50 bg-primary/10 text-primary')}
-                      >
-                        {isSaved ? <BookmarkCheck className="size-3" /> : <BookmarkPlus className="size-3" />}
-                        {isSaved ? (zh ? '已收录' : 'Saved') : isAdding ? (zh ? '添加中…' : 'Adding…') : zh ? '+ 生词本' : '+ Review'}
-                      </button>
-                    </div>
-                    <p className="mt-2 text-sm font-medium text-foreground">{item.meaning}</p>
-                    <p className="mt-2 rounded-lg bg-muted/50 p-2 text-xs leading-relaxed text-muted-foreground italic">“{item.contextSnippet}”</p>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {(studyCardFilter === 'ALL' || studyCardFilter === 'PHRASES') && activeCollocations.length > 0 && (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between pt-1">
-                <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-                  <Sparkles className="size-4 text-primary" />
-                  {zh ? '680 新闻短语搭配学习卡' : '680 News collocations & phrases'}
-                </h2>
-                <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                  {activeCollocations.length} {zh ? '组搭配' : 'phrases'}
-                </span>
-              </div>
-              {activeCollocations.map((item) => {
-                const isSaved = desk.cards.some((c) => c.word.toLowerCase() === item.phrase.toLowerCase() && c.inReview)
-                const isAdding = activeWordToAdd === item.phrase
-                return (
-                  <div key={item.phrase} className="rounded-2xl border border-border bg-card p-3.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-display text-base font-semibold text-foreground">{item.phrase}</span>
-                          <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">{item.band}</span>
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
-                          <span>{zh ? item.patternZh : item.patternEn}</span>
-                          <button
-                            type="button"
-                            onClick={() => void speakWord(item.phrase)}
-                            aria-label={zh ? '朗读短语' : 'Pronounce phrase'}
-                            className="hover:text-foreground"
-                          >
-                            <Volume2 className="size-3.5 text-primary" />
-                          </button>
-                        </div>
+                      <div className="mt-0.5 flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                        <span>{item.pos} · {item.ipa}</span>
+                        <button type="button" onClick={() => void speakWord(item.word)} aria-label={zh ? '朗读单词' : 'Pronounce'} className="hover:text-foreground">
+                          <Volume2 className="size-3.5 text-primary" />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleAddCollocationToWordbook(item)}
-                        disabled={isAdding}
-                        className={cn(btn, 'shrink-0 px-2.5', isSaved && 'border-primary/50 bg-primary/10 text-primary')}
-                      >
-                        {isSaved ? <BookmarkCheck className="size-3" /> : <BookmarkPlus className="size-3" />}
-                        {isSaved ? (zh ? '已收录' : 'Saved') : isAdding ? (zh ? '添加中…' : 'Adding…') : zh ? '+ 生词本' : '+ Review'}
-                      </button>
                     </div>
-                    <p className="mt-2 text-sm font-medium text-foreground">{item.meaningZh}</p>
-                    <p className="mt-1.5 rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs leading-relaxed text-foreground/85">
-                      {zh ? item.usageZh : item.usageEn}
-                    </p>
-                    <p className="mt-2 rounded-lg bg-muted/50 p-2 text-xs leading-relaxed text-muted-foreground italic">
-                      “{item.contextSnippet}”
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleAddLexisToWordbook(item)}
+                      disabled={isAdding}
+                      className={cn(btn, 'px-2.5', isSaved && 'border-primary/50 bg-primary/10 text-primary')}
+                    >
+                      {isSaved ? <BookmarkCheck className="size-3" /> : <BookmarkPlus className="size-3" />}
+                      {isSaved ? (zh ? '已收录' : 'Saved') : isAdding ? (zh ? '添加中…' : 'Adding…') : zh ? '+ 生词本' : '+ Review'}
+                    </button>
                   </div>
-                )
-              })}
-            </div>
-          )}
+                  <p className="mt-2 text-sm font-medium text-foreground">{item.meaning}</p>
+                  <p className="mt-2 line-clamp-2 rounded-lg bg-muted/50 p-2 text-xs leading-relaxed text-muted-foreground italic">
+                    “{item.contextSnippet}”
+                  </p>
+                </div>
+              )
+            })}
+          </div>
 
           <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-xs leading-relaxed text-foreground/85">
             <p className="mb-1.5 flex items-center gap-2 font-bold text-primary">
@@ -927,21 +1205,46 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          {(['ALL', 'Traffic & Weather', 'Top Headlines', 'Business News', 'Sports & Culture'] as const).map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setCategoryFilter(cat)}
-              className={cn(
-                'rounded-full px-3 py-1 text-xs font-semibold transition',
-                categoryFilter === cat
-                  ? 'bg-primary text-primary-foreground'
-                  : 'border border-border bg-background/60 text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {cat === 'ALL' ? (zh ? '全部栏目' : 'All Categories') : cat}
-            </button>
-          ))}
+          {(
+            [
+              { key: 'ALL', labelEn: 'All Categories', labelZh: '全部栏目' },
+              { key: 'Traffic & Weather', labelEn: 'Traffic & Weather', labelZh: '路况与气象' },
+              { key: 'Top Headlines', labelEn: 'Top Headlines', labelZh: '核心要闻' },
+              { key: 'Business News', labelEn: 'Business News', labelZh: '商业财经' },
+              { key: 'Sports & Culture', labelEn: 'Sports & Culture', labelZh: '体育与文化' },
+              { key: 'TOPIC:GTA', labelEn: 'GTA & Municipal', labelZh: '多伦多民生' },
+              { key: 'TOPIC:WORLD', labelEn: 'Canada & World', labelZh: '加国与国际' },
+              { key: 'TOPIC:CRIME', labelEn: 'Crime & Justice', labelZh: '治安与司法' },
+            ] as const
+          ).map((f) => {
+            const count = filterArticlesByKey(f.key).length
+            if (f.key.startsWith('TOPIC:') && count === 0) return null
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setCategoryFilter(f.key)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition',
+                  categoryFilter === f.key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border border-border bg-background/60 text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <span>{zh ? f.labelZh : f.labelEn}</span>
+                <span
+                  className={cn(
+                    'rounded-full px-1.5 py-0.2 font-mono text-[10px]',
+                    categoryFilter === f.key
+                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                      : 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
         </div>
 
         {displayedFeedArticles.length === 0 ? (
@@ -958,6 +1261,7 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {displayedFeedArticles.map((art, index) => {
               const isSelected = selectedArticle?.link === art.link && selectedArticle?.title === art.title
+              const topic = classifyArticleTopic(art)
               return (
                 <article
                   key={`${art.link}-${index}`}
@@ -968,10 +1272,13 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
                 >
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <span className="font-mono font-bold text-primary">#{String(index + 1).padStart(2, '0')}</span>
                         <span className="rounded bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
                           {art.category}
+                        </span>
+                        <span className="rounded border border-border bg-background/80 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                          {zh ? topic.labelZh : topic.labelEn}
                         </span>
                         <span className="font-medium">{art.source}</span>
                       </div>

@@ -39,15 +39,41 @@ export type RadioLiveArticle = {
   publishedAt: string
 }
 
+export type RadioHourlyForecastItem = {
+  timeLabel: string
+  tempC: number
+  feelsLikeC: number
+  precipProbPct: number
+  weatherCode: number
+}
+
 export type RadioLiveWeather = {
   temperatureC: number
   feelsLikeC: number
   windSpeedKmh: number
   windGustsKmh: number
   windDirection: string
+  windCompass?: string
   condition: string
   conditionZh: string
   observedAt: string
+  weatherCode?: number
+  highC?: number
+  lowC?: number
+  yesterdayHighC?: number
+  yesterdayLowC?: number
+  yesterdayLabel?: string
+  sunrise?: string
+  sunset?: string
+  pressureKpa?: number
+  humidityPct?: number
+  visibilityKm?: number
+  ceilingM?: number
+  precipAlertEn?: string
+  precipAlertZh?: string
+  hourlySummaryEn?: string
+  hourlySummaryZh?: string
+  hourly?: RadioHourlyForecastItem[]
 }
 
 export type RadioNewsWheelSegment = {
@@ -77,7 +103,46 @@ export type RadioBulletin = {
   liveArticles: RadioLiveArticle[]
 }
 
-const RADIO_CACHE_KEY = 'projectdesk.radio.citynews680.v5'
+const RADIO_CACHE_KEY = 'projectdesk.radio.citynews680.v7'
+
+const COMMON_NEWS_IPA: Record<string, string> = {
+  framework: '/ˈfreɪm.wɜːk/',
+  possibility: '/ˌpɒs.əˈbɪl.ə.ti/',
+  discussion: '/dɪˈskʌʃ.ən/',
+  security: '/sɪˈkjʊə.rə.ti/',
+  benefit: '/ˈben.ɪ.fɪt/',
+  weaken: '/ˈwiː.kən/',
+  reshape: '/ˌriːˈʃeɪp/',
+  continent: '/ˈkɒn.tɪ.nənt/',
+  border: '/ˈbɔː.dər/',
+  effort: '/ˈef.ət/',
+  stoppage: '/ˈstɒp.ɪdʒ/',
+  disruption: '/dɪsˈrʌp.ʃən/',
+  departure: '/dɪˈpɑː.tʃər/',
+  normal: '/ˈnɔː.məl/',
+  authority: '/ɔːˈθɒr.ə.ti/',
+  passenger: '/ˈpæs.ən.dʒər/',
+  cancel: '/ˈkæn.səl/',
+  delay: '/dɪˈleɪ/',
+  facility: '/fəˈsɪl.ə.ti/',
+  statement: '/ˈsteɪt.mənt/',
+  dangerous: '/ˈdeɪn.dʒər.əs/',
+  reporter: '/rɪˈpɔː.tər/',
+  agenda: '/əˈdʒen.də/',
+  embargo: '/ɪmˈbɑː.ɡəʊ/',
+  exclusively: '/ɪkˈskluː.sɪv.li/',
+  exclusive: '/ɪkˈskluː.sɪv/',
+  inflation: '/ɪnˈfleɪ.ʃən/',
+  mortgage: '/ˈmɔː.ɡɪdʒ/',
+  collision: '/kəˈlɪʒ.ən/',
+  investigation: '/ɪnˌves.tɪˈɡeɪ.ʃən/',
+  emergency: '/ɪˈmɜː.dʒən.si/',
+  suspect: '/ˈsʌs.pekt/',
+  legislation: '/ˌledʒ.ɪsˈleɪ.ʃən/',
+  provincial: '/prəˈvɪn.ʃəl/',
+  municipal: '/mjuːˈnɪs.ɪ.pəl/',
+  corridor: '/ˈkɒr.ɪ.dɔːr/',
+}
 
 const RADIO_BOILERPLATE_STOPWORDS = new Set([
   'this', 'that', 'with', 'from', 'have', 'will', 'would', 'could', 'should', 'your', 'here', 'more', 'most',
@@ -96,6 +161,8 @@ const RADIO_BOILERPLATE_STOPWORDS = new Set([
   'traffic', 'weather', 'business', 'sports', 'culture', 'metro', 'market', 'economic', 'developments',
   'breaking', 'northerly', 'northeasterly', 'easterly', 'southeasterly', 'southerly', 'southwesterly',
   'westerly', 'northwesterly', 'first', 'second', 'third', 'three', 'four', 'five', 'seven', 'eight', 'nine',
+  'president', 'official', 'officials', 'people', 'country', 'countries', 'government', 'minister', 'american',
+  'americans', 'vladimir', 'cloudy', 'partly',
 ])
 
 function splitIntoSentences(text: string): string[] {
@@ -116,6 +183,31 @@ function isBoilerplateSentence(sentence: string): boolean {
     low.startsWith('in 680 sports') ||
     low.startsWith('stay tuned to 680')
   )
+}
+
+function formatCleanSnippet(rawSentence: string, target: string, maxLen = 140): string {
+  const s = rawSentence
+    .replace(/^[A-Z][A-Za-z\s,.]{2,35}(?:\([A-Za-z0-9\s]+\))?\s*[—–-]\s*/, '')
+    .trim()
+  if (s.length <= maxLen) return s
+
+  const idx = s.toLowerCase().indexOf(target.toLowerCase())
+  if (idx === -1 || idx + target.length <= maxLen - 15) {
+    return truncateCleanSentence(s, maxLen)
+  }
+
+  // Target appears later in a long sentence: start at the nearest clause boundary before target
+  const before = s.slice(0, idx)
+  const clauseStart = Math.max(before.lastIndexOf(', '), before.lastIndexOf('; '), before.lastIndexOf(' — '))
+  if (clauseStart >= 15 && s.length - (clauseStart + 2) <= maxLen + 20) {
+    const tail = s.slice(clauseStart + 2).trim()
+    return `...${truncateCleanSentence(tail, maxLen)}`
+  }
+
+  const windowStart = Math.max(0, idx - 35)
+  const spaceIdx = s.indexOf(' ', windowStart)
+  const start = spaceIdx !== -1 && spaceIdx < idx ? spaceIdx + 1 : windowStart
+  return `...${truncateCleanSentence(s.slice(start).trim(), maxLen)}`
 }
 
 export function extractLiveKeyLexis(text: string): RadioVocabularyItem[] {
@@ -155,9 +247,14 @@ export function extractLiveKeyLexis(text: string): RadioVocabularyItem[] {
     seenWords.add(low)
     seenWords.add(rootWord)
 
+    const resolvedIpa =
+      dictEntry.ipa !== `/${dictEntry.word}/` && dictEntry.ipa !== `/${low}/`
+        ? dictEntry.ipa
+        : COMMON_NEWS_IPA[rootWord] ?? COMMON_NEWS_IPA[low] ?? dictEntry.ipa
+
     // Prefer words from the actual news headline/story over the weather intro sentence
     const inNewsBody = !sentence.toLowerCase().startsWith('over at toronto pearson')
-    const hasRealIpa = dictEntry.ipa !== `/${dictEntry.word}/` && dictEntry.ipa !== `/${low}/`
+    const hasRealIpa = resolvedIpa !== `/${dictEntry.word}/` && resolvedIpa !== `/${low}/`
     const score =
       (inNewsBody ? 20 : 0) +
       (hasRealIpa ? 15 : 0) +
@@ -167,11 +264,11 @@ export function extractLiveKeyLexis(text: string): RadioVocabularyItem[] {
       score,
       item: {
         word: rootWord,
-        pos: dictEntry.pos,
-        ipa: dictEntry.ipa,
+        pos: dictEntry.pos === 'n. pl.' ? 'n.' : dictEntry.pos,
+        ipa: resolvedIpa,
         meaning: dictEntry.meaningZh,
         band: dictEntry.band,
-        contextSnippet: sentence.length > 170 ? truncateCleanSentence(sentence, 170) : sentence,
+        contextSnippet: formatCleanSnippet(sentence, rawTok, 140),
       },
     })
   }
@@ -203,7 +300,7 @@ export function extractLiveCollocations(text: string): RadioCollocationItem[] {
       allSentences.find((s) => re.test(s)) ??
       targetSentences[0] ??
       text
-    return hit.length > 170 ? truncateCleanSentence(hit, 170) : hit
+    return formatCleanSnippet(hit, phrase, 135)
   }
 
   const out: RadioCollocationItem[] = []
@@ -536,6 +633,176 @@ function dedupeArticles(list: RadioLiveArticle[]): RadioLiveArticle[] {
   return out
 }
 
+function padNormalizedWords(s: string): string {
+  const norm = s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return norm ? ` ${norm} ` : ''
+}
+
+function countWholeKeywordHits(padded: string, keywords: readonly string[]): number {
+  if (!padded) return 0
+  let hits = 0
+  for (const kw of keywords) {
+    if (padded.includes(` ${kw} `)) hits++
+  }
+  return hits
+}
+
+const TRAFFIC_STRONG_KW = [
+  'traffic', 'weather', 'ttc', 'metrolinx', 'gardiner', 'dvp', 'don valley',
+  'highway 401', 'highway 400', 'highway 404', 'highway 427', 'qew',
+  'go transit', 'up express', 'eglinton crosstown', 'lane closure', 'road closure',
+  'ground stop', 'flight delay', 'flight delays', 'flight disruption', 'flight disruptions',
+  'air traffic', 'environment canada', 'snowfall', 'heat warning', 'rainfall',
+  'thunderstorm', 'blizzard', 'freezing rain', 'wind warning', 'fog advisory', 'shuttle buses',
+] as const
+
+const TRAFFIC_MEDIUM_KW = [
+  'highway', 'subway', 'streetcar', 'commute', 'commuters', 'collision', 'crash',
+  'delays', 'airport', 'pearson', 'flights', 'airline', 'airlines', 'faa',
+  'snow', 'rain', 'storm', 'forecast', 'temperature', 'celsius', 'overcast',
+  'gusts', 'pedestrian', 'cyclist', 'intersection', 'expressway', 'lanes', 'stoppage',
+] as const
+
+const BUSINESS_STRONG_KW = [
+  'tsx', 'bank of canada', 'interest rate', 'interest rates', 'inflation', 'gdp',
+  'economy', 'economic', 'stock market', 'wall street', 'tariff', 'tariffs',
+  'housing market', 'real estate', 'mortgage', 'unemployment', 'cost of living',
+  'retail sales', 'trade war', 'central bank', 'loonie', 'oil prices', 'earnings', 'recession',
+] as const
+
+const BUSINESS_MEDIUM_KW = [
+  'business', 'market', 'markets', 'stocks', 'shares', 'dollar', 'trade',
+  'housing', 'rent', 'tenants', 'landlords', 'jobs', 'workers', 'strike',
+  'union', 'wages', 'consumers', 'grocery', 'prices', 'affordability',
+  'company', 'corporate', 'investors', 'revenue', 'profit', 'bank', 'banking', 'budget', 'tax', 'taxes',
+] as const
+
+const SPORTS_STRONG_KW = [
+  'maple leafs', 'blue jays', 'raptors', 'argonauts', 'toronto fc', 'tfc',
+  'nhl', 'nba', 'mlb', 'nfl', 'cfl', 'wnba', 'sceptres', 'stanley cup',
+  'playoffs', 'playoff', 'world series', 'super bowl', 'world cup', 'olympics',
+  'tiff', 'concert', 'festival', 'box office', 'grammy', 'oscar', 'juno', 'lottery', 'lotto max',
+] as const
+
+const SPORTS_MEDIUM_KW = [
+  'hockey', 'baseball', 'basketball', 'soccer', 'football', 'tennis', 'golf',
+  'athlete', 'coach', 'stadium', 'arena', 'scotiabank arena', 'rogers centre',
+  'bmo field', 'tournament', 'championship', 'roster', 'museum', 'gallery',
+  'theatre', 'music', 'culture', 'entertainment', 'celebrity', 'movie', 'film', 'weekend', 'harbourfront',
+] as const
+
+const HEADLINES_STRONG_KW = [
+  'prime minister', 'premier', 'doug ford', 'mark carney', 'olivia chow', 'mayor',
+  'city hall', 'city council', 'queen s park', 'parliament', 'ottawa', 'police',
+  'tps', 'opp', 'shooting', 'stabbing', 'homicide', 'arrested', 'charged',
+  'suspect', 'investigation', 'court', 'supreme court', 'hospital', 'healthcare',
+  'ukraine', 'ukrainian', 'russia', 'russian', 'zelenskyy', 'putin', 'nato',
+  'moscow', 'kyiv', 'trump', 'white house', 'foreign affairs', 'security framework',
+] as const
+
+function scoreClientArticleSlots(title: string, summary: string, meta = ''): Record<string, number> {
+  const titlePad = padNormalizedWords(title)
+  const summaryPad = padNormalizedWords(summary)
+  const metaPad = padNormalizedWords(meta)
+
+  const scoreWith = (strong: readonly string[], medium: readonly string[] = []) =>
+    countWholeKeywordHits(titlePad, strong) * 5 +
+    countWholeKeywordHits(summaryPad, strong) * 2 +
+    countWholeKeywordHits(metaPad, strong) * 3 +
+    countWholeKeywordHits(titlePad, medium) * 3 +
+    countWholeKeywordHits(summaryPad, medium) * 1
+
+  const scores: Record<string, number> = {
+    'Traffic & Weather': scoreWith(TRAFFIC_STRONG_KW, TRAFFIC_MEDIUM_KW),
+    'Business News': scoreWith(BUSINESS_STRONG_KW, BUSINESS_MEDIUM_KW),
+    'Sports & Culture': scoreWith(SPORTS_STRONG_KW, SPORTS_MEDIUM_KW),
+    'Top Headlines': scoreWith(HEADLINES_STRONG_KW) + 1,
+  }
+
+  // Prevent war, geopolitics, or violent crime stories from ever entering Traffic & Weather
+  if (
+    countWholeKeywordHits(titlePad, [
+      'ukraine', 'ukrainian', 'russia', 'russian', 'zelenskyy', 'putin', 'nato',
+      'homicide', 'shooting', 'stabbing', 'murder', 'parliament',
+    ]) > 0
+  ) {
+    scores['Traffic & Weather'] -= 15
+  }
+
+  return scores
+}
+
+export type RadioNewsTopic = {
+  id: 'TRAFFIC' | 'WEATHER' | 'CRIME' | 'WORLD' | 'GTA' | 'BUSINESS' | 'SPORTS' | 'CULTURE'
+  labelEn: string
+  labelZh: string
+}
+
+export function classifyArticleTopic(a: Pick<RadioLiveArticle, 'title' | 'summary' | 'category' | 'link'>): RadioNewsTopic {
+  const pad = padNormalizedWords(`${a.title} ${a.summary}`)
+  if (
+    countWholeKeywordHits(pad, [
+      'weather', 'forecast', 'temperature', 'celsius', 'snow', 'snowfall', 'rain', 'rainfall',
+      'storm', 'thunderstorm', 'wind', 'gusts', 'overcast', 'environment canada', 'heat warning', 'blizzard',
+    ]) >= 2
+  ) {
+    return { id: 'WEATHER', labelEn: 'Weather & Climate', labelZh: '气象与环境' }
+  }
+  if (
+    a.category === 'Traffic & Weather' ||
+    countWholeKeywordHits(pad, [
+      'traffic', 'ttc', 'subway', 'metrolinx', 'go transit', 'gardiner', 'dvp', 'highway',
+      '401', 'commute', 'lane closure', 'ground stop', 'flights', 'air traffic', 'airport', 'faa', 'stoppage',
+    ]) >= 1
+  ) {
+    return { id: 'TRAFFIC', labelEn: 'Traffic & Transit', labelZh: '交通与出行' }
+  }
+  if (a.category === 'Business News') {
+    return { id: 'BUSINESS', labelEn: 'Economy & Markets', labelZh: '财经与楼市' }
+  }
+  if (a.category === 'Sports & Culture') {
+    if (
+      countWholeKeywordHits(pad, [
+        'maple leafs', 'blue jays', 'raptors', 'argonauts', 'tfc', 'nhl', 'nba', 'mlb', 'nfl',
+        'hockey', 'baseball', 'basketball', 'soccer', 'playoff', 'playoffs', 'game', 'coach', 'athlete', 'tournament',
+      ]) >= 1
+    ) {
+      return { id: 'SPORTS', labelEn: 'Pro Sports', labelZh: '体育赛事' }
+    }
+    return { id: 'CULTURE', labelEn: 'Culture & Lifestyle', labelZh: '文娱与生活' }
+  }
+  if (
+    countWholeKeywordHits(pad, [
+      'police', 'tps', 'opp', 'shooting', 'stabbing', 'homicide', 'murder', 'suspect',
+      'arrested', 'charged', 'investigation', 'collision', 'crash', 'court', 'trial', 'robbery',
+    ]) >= 1
+  ) {
+    return { id: 'CRIME', labelEn: 'Crime & Justice', labelZh: '治安与司法' }
+  }
+  if (
+    countWholeKeywordHits(pad, [
+      'ukraine', 'ukrainian', 'russia', 'russian', 'zelenskyy', 'putin', 'nato', 'moscow',
+      'kyiv', 'trump', 'white house', 'united states', 'europe', 'european', 'prime minister', 'ottawa', 'parliament',
+    ]) >= 1
+  ) {
+    return { id: 'WORLD', labelEn: 'Canada & World', labelZh: '加国与国际' }
+  }
+  return { id: 'GTA', labelEn: 'GTA & Municipal', labelZh: '多伦多民生' }
+}
+
+function classifyClientArticle(title: string, summary: string, fallbackSlot = 'Top Headlines', meta = ''): string {
+  const scores = scoreClientArticleSlots(title, summary, meta)
+  let bestSlot = fallbackSlot || 'Top Headlines'
+  let bestScore = scores[bestSlot] ?? 1
+  for (const slot of ['Traffic & Weather', 'Business News', 'Sports & Culture'] as const) {
+    if (scores[slot] > bestScore && scores[slot] >= 2) {
+      bestScore = scores[slot]
+      bestSlot = slot
+    }
+  }
+  return bestSlot
+}
+
 function partitionClientArticlesBySlot(allArticles: RadioLiveArticle[]): Record<string, RadioLiveArticle[]> {
   const slots = ['Traffic & Weather', 'Top Headlines', 'Business News', 'Sports & Culture'] as const
   const bySlot: Record<string, RadioLiveArticle[]> = {
@@ -544,12 +811,23 @@ function partitionClientArticlesBySlot(allArticles: RadioLiveArticle[]): Record<
     'Business News': [],
     'Sports & Culture': [],
   }
+
   for (const art of allArticles) {
-    const slot = bySlot[art.category] ? art.category : classifyClientArticle(art.title, art.summary, 'Top Headlines')
+    const slot = classifyClientArticle(art.title, art.summary, 'Top Headlines', art.link)
     art.category = slot
     bySlot[slot].push(art)
   }
-  // Rebalance empty slots by moving distinct articles from the largest slot so no two slots ever share the same article
+
+  // Sort each slot's articles so the highest-relevance article leads the broadcast slot
+  for (const slot of slots) {
+    bySlot[slot].sort(
+      (a, b) =>
+        scoreClientArticleSlots(b.title, b.summary, b.link)[slot] -
+        scoreClientArticleSlots(a.title, a.summary, a.link)[slot],
+    )
+  }
+
+  // Rebalance empty slots using the best-matching candidate (never forcing geopolitical/crime into Traffic & Weather)
   for (const slot of slots) {
     if (bySlot[slot].length > 0) continue
     let donor = ''
@@ -561,10 +839,23 @@ function partitionClientArticlesBySlot(allArticles: RadioLiveArticle[]): Record<
       }
     }
     if (donor) {
-      const moved = bySlot[donor].pop()
-      if (moved) {
-        moved.category = slot
-        bySlot[slot].push(moved)
+      let bestIdx = -1
+      let bestScore = -999
+      for (let i = 0; i < bySlot[donor].length; i++) {
+        if (i === 0 && bySlot[donor].length > 1) continue
+        const sc = scoreClientArticleSlots(bySlot[donor][i].title, bySlot[donor][i].summary, bySlot[donor][i].link)[slot]
+        if (sc > bestScore) {
+          bestScore = sc
+          bestIdx = i
+        }
+      }
+      if (slot === 'Traffic & Weather' && bestScore < 0) continue
+      if (bestIdx >= 0) {
+        const [moved] = bySlot[donor].splice(bestIdx, 1)
+        if (moved) {
+          moved.category = slot
+          bySlot[slot].push(moved)
+        }
       }
     }
   }
@@ -599,6 +890,7 @@ export async function fetchLiveRadioBulletin(
   forceRefresh = false,
   onPartial?: (bulletin: RadioBulletin) => void,
 ): Promise<RadioBulletin | null> {
+  const richWeatherPromise = fetchRichTorontoWeather()
   try {
     const endpoint = forceRefresh ? '/api/radio/news/refresh' : '/api/radio/news'
     const controller = new AbortController()
@@ -615,25 +907,14 @@ export async function fetchLiveRadioBulletin(
         const existingCityNews = dedupeArticles(
           (Array.isArray(data.liveArticles) ? data.liveArticles : []).filter(isCityNewsArticle),
         )
-        const segTitles = data.segments.map((s) => normalizeDedupTitle(s.title))
-        const hasDuplicateSegments = new Set(segTitles).size < segTitles.length
-        const hasNonCityNewsSegment = data.segments.some(
-          (s) => s.sourceName && !s.sourceName.toLowerCase().includes('citynews') && !s.sourceName.toLowerCase().includes('680'),
-        )
-        const hasOverlongSegment = data.segments.some((s) => s.text.length > 620)
-
-        if (existingCityNews.length >= 4 && !hasDuplicateSegments && !hasNonCityNewsSegment && !hasOverlongSegment) {
+        if (existingCityNews.length >= 4) {
+          const richWeather = await richWeatherPromise
+          if (richWeather) {
+            data.weather = richWeather
+          }
+          const bySlot = partitionClientArticlesBySlot(existingCityNews)
           data.liveArticles = existingCityNews
-          data.segments = data.segments.map((seg) => {
-            const liveLex = extractLiveKeyLexis(seg.text)
-            const liveLiaisons = extractLiveLiaisons(seg.text)
-            return {
-              ...seg,
-              keyLexis: liveLex.length > 0 ? liveLex : seg.keyLexis,
-              liaisons: liveLiaisons.length > 0 ? liveLiaisons : seg.liaisons,
-              relatedArticles: dedupeArticles((seg.relatedArticles ?? []).filter(isCityNewsArticle)),
-            }
-          })
+          data.segments = buildSegmentsFromSlotMap(bySlot, data.weather)
           saveCachedLiveRadioBulletin(data)
           return data
         }
@@ -642,11 +923,168 @@ export async function fetchLiveRadioBulletin(
   } catch {
     // Fall through to direct browser live fetch
   }
-  const bulletin = await fetchBrowserLiveBulletin(onPartial)
+  const bulletin = await fetchBrowserLiveBulletin(onPartial, richWeatherPromise)
   if (bulletin) {
     saveCachedLiveRadioBulletin(bulletin)
   }
   return bulletin
+}
+
+function degToCompassAbbr(deg: number): string {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  return dirs[Math.max(0, Math.floor((deg + 22.5) / 45) % 8)]
+}
+
+function formatHour12(isoTime: string): string {
+  const m = isoTime.match(/T(\d{2}):/)
+  const h = m ? parseInt(m[1], 10) : new Date(isoTime).getHours()
+  if (h === 0) return '12am'
+  if (h === 12) return '12pm'
+  return h > 12 ? `${h - 12}pm` : `${h}am`
+}
+
+function formatClockAmPm(isoTime?: string, fallback = '7:10AM'): string {
+  if (!isoTime) return fallback
+  const m = isoTime.match(/T(\d{2}):(\d{2})/)
+  if (!m) return fallback
+  const h = parseInt(m[1], 10)
+  const mins = m[2]
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}:${mins}${ampm}`
+}
+
+export async function fetchRichTorontoWeather(): Promise<RadioLiveWeather | undefined> {
+  try {
+    const r = await fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=43.6532&longitude=-79.3832&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,visibility&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&past_days=1&forecast_days=2&timezone=America%2FToronto',
+    )
+    if (!r.ok) return undefined
+    const d = (await r.json()) as {
+      current?: {
+        time: string
+        temperature_2m: number
+        apparent_temperature: number
+        relative_humidity_2m?: number
+        precipitation?: number
+        weather_code: number
+        surface_pressure?: number
+        wind_speed_10m: number
+        wind_direction_10m: number
+        wind_gusts_10m: number
+        cloud_cover?: number
+        visibility?: number
+      }
+      hourly?: {
+        time: string[]
+        temperature_2m: number[]
+        apparent_temperature: number[]
+        precipitation_probability: number[]
+        weather_code: number[]
+      }
+      daily?: {
+        time: string[]
+        temperature_2m_max: number[]
+        temperature_2m_min: number[]
+        sunrise: string[]
+        sunset: string[]
+      }
+    }
+    if (!d.current) return undefined
+    const cond = describeWmoCode(d.current.weather_code)
+    const curHourPrefix = d.current.time.slice(0, 13)
+    const hTimes = d.hourly?.time ?? []
+    let startIdx = hTimes.findIndex((t) => t.startsWith(curHourPrefix))
+    if (startIdx < 0) startIdx = 24
+
+    const hourly: RadioHourlyForecastItem[] = []
+    for (let i = startIdx; i < Math.min(hTimes.length, startIdx + 5); i++) {
+      hourly.push({
+        timeLabel: formatHour12(hTimes[i]),
+        tempC: Math.round(d.hourly?.temperature_2m?.[i] ?? d.current.temperature_2m),
+        feelsLikeC: Math.round(d.hourly?.apparent_temperature?.[i] ?? d.current.apparent_temperature),
+        precipProbPct: Math.round(d.hourly?.precipitation_probability?.[i] ?? 10),
+        weatherCode: d.hourly?.weather_code?.[i] ?? d.current.weather_code,
+      })
+    }
+
+    const next3Probs = hourly.slice(0, 3).map((h) => h.precipProbPct)
+    const maxNext3Prob = next3Probs.length > 0 ? Math.max(...next3Probs) : 0
+    const isRainingNow = (d.current.precipitation ?? 0) > 0 || d.current.weather_code >= 51
+    const precipAlertEn = isRainingNow
+      ? 'Light precipitation currently moving across the GTA'
+      : maxNext3Prob >= 35
+        ? `Precipitation possible within the next 3 hours (${maxNext3Prob}% chance)`
+        : 'No significant precipitation expected within the next 3 hours'
+    const precipAlertZh = isRainingNow
+      ? '大多伦多地区当前有降水云系经过'
+      : maxNext3Prob >= 35
+        ? `未来 3 小时内可能出现降水（概率 ${maxNext3Prob}%）`
+        : '未来 3 小时内预计无明显降水'
+
+    const windHintEn =
+      d.current.wind_gusts_10m >= 30 || d.current.wind_speed_10m >= 20
+        ? 'Windy.'
+        : 'Light to moderate breeze.'
+    const windHintZh =
+      d.current.wind_gusts_10m >= 30 || d.current.wind_speed_10m >= 20
+        ? '伴有明显阵风。'
+        : '风力轻缓。'
+
+    const hourlySummaryEn = `${cond.en} with clear breaks developing later today. ${windHintEn}`
+    const hourlySummaryZh = `今日${cond.zh}，稍晚云层渐开。${windHintZh}`
+
+    const todayIdx = (d.daily?.time?.length ?? 0) >= 2 ? 1 : 0
+    const yestIdx = 0
+    const yestDateStr = d.daily?.time?.[yestIdx]
+    const yesterdayLabel = yestDateStr
+      ? new Date(`${yestDateStr}T12:00:00`).toLocaleDateString('en-CA', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        })
+      : 'Yesterday'
+
+    const humidity = Math.round(d.current.relative_humidity_2m ?? 61)
+    const pressureKpa = d.current.surface_pressure
+      ? Math.round((d.current.surface_pressure / 10) * 10) / 10
+      : 101.3
+    const visibilityKm = d.current.visibility
+      ? Math.max(1, Math.round(d.current.visibility / 1000))
+      : 24
+    const ceilingM = Math.max(600, Math.round(((100 - humidity) * 87) / 100) * 100)
+
+    return {
+      temperatureC: d.current.temperature_2m,
+      feelsLikeC: d.current.apparent_temperature,
+      windSpeedKmh: d.current.wind_speed_10m,
+      windGustsKmh: d.current.wind_gusts_10m,
+      windDirection: degToCardinal(d.current.wind_direction_10m),
+      windCompass: degToCompassAbbr(d.current.wind_direction_10m),
+      condition: cond.en,
+      conditionZh: cond.zh,
+      observedAt: d.current.time,
+      weatherCode: d.current.weather_code,
+      highC: Math.round(d.daily?.temperature_2m_max?.[todayIdx] ?? d.current.temperature_2m + 1),
+      lowC: Math.round(d.daily?.temperature_2m_min?.[todayIdx] ?? d.current.temperature_2m - 4),
+      yesterdayHighC: Math.round(d.daily?.temperature_2m_max?.[yestIdx] ?? d.current.temperature_2m - 1),
+      yesterdayLowC: Math.round(d.daily?.temperature_2m_min?.[yestIdx] ?? d.current.temperature_2m - 5),
+      yesterdayLabel,
+      sunrise: formatClockAmPm(d.daily?.sunrise?.[todayIdx], '7:10AM'),
+      sunset: formatClockAmPm(d.daily?.sunset?.[todayIdx], '4:53PM'),
+      pressureKpa,
+      humidityPct: humidity,
+      visibilityKm,
+      ceilingM,
+      precipAlertEn,
+      precipAlertZh,
+      hourlySummaryEn,
+      hourlySummaryZh,
+      hourly,
+    }
+  } catch {
+    return undefined
+  }
 }
 
 function describeWmoCode(code: number): { en: string; zh: string } {
@@ -702,20 +1140,6 @@ async function translateEnToZh(text: string): Promise<string> {
   }
 }
 
-function classifyClientArticle(title: string, summary: string, fallbackSlot: string): string {
-  const s = `${title} ${summary}`.toLowerCase()
-  if (/(traffic|weather|highway|401|gardiner|dvp|don valley|ttc|subway|go transit|metrolinx|commute|lane|closure|collision|crash|snow|rain|storm|wind|temperature|forecast|pearson)/.test(s)) {
-    return 'Traffic & Weather'
-  }
-  if (/(tsx|bank of canada|interest rate|inflation|economy|economic|market|stock|dollar|tariff|trade|business|housing|mortgage|retail|jobs|gdp)/.test(s)) {
-    return 'Business News'
-  }
-  if (/(maple leafs|blue jays|raptors|argonauts|tfc|nhl|nba|mlb|hockey|baseball|basketball|soccer|playoff|concert|festival|tiff|culture|weekend|harbourfront)/.test(s)) {
-    return 'Sports & Culture'
-  }
-  return fallbackSlot
-}
-
 function truncateCleanSentence(raw: string, maxLen = 320): string {
   const s = raw.replace(/\s*\.\.\.\s*$/, '').trim()
   if (!s) return ''
@@ -758,6 +1182,9 @@ function parseRssXmlItems(xmlText: string, source: string, fallbackSlot: string)
       if (!title) continue
       const link = (node.querySelector('link')?.textContent ?? '').trim()
       const pubDate = (node.querySelector('pubDate')?.textContent ?? '').trim()
+      const xmlCats = Array.from(node.querySelectorAll('category'))
+        .map((c) => c.textContent ?? '')
+        .join(' ')
       const rawDesc = node.querySelector('description')?.textContent ?? ''
       const encodedNode =
         node.getElementsByTagNameNS('*', 'encoded')[0] ?? node.getElementsByTagName('content:encoded')[0]
@@ -780,7 +1207,7 @@ function parseRssXmlItems(xmlText: string, source: string, fallbackSlot: string)
         summary,
         link,
         source,
-        category: classifyClientArticle(title, summary, fallbackSlot),
+        category: classifyClientArticle(title, summary, fallbackSlot, `${link} ${xmlCats}`),
         publishedAt: pubDate || new Date().toISOString(),
       })
     }
@@ -799,7 +1226,14 @@ async function fetchFeedArticlesInBrowser(f: {
     const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(f.url)}`)
     if (!res.ok) throw new Error('rss2json failed')
     const data = (await res.json()) as {
-      items?: { title?: string; description?: string; content?: string; link?: string; pubDate?: string }[]
+      items?: {
+        title?: string
+        description?: string
+        content?: string
+        link?: string
+        pubDate?: string
+        categories?: string[]
+      }[]
     }
     const items = (data.items ?? []).map((it) => {
       const title = stripHtml(it.title ?? '')
@@ -812,13 +1246,14 @@ async function fetchFeedArticlesInBrowser(f: {
           .trim()
       }
       const summary = truncateCleanSentence(rawDesc, 320)
+      const meta = `${it.link ?? ''} ${(it.categories ?? []).join(' ')}`
       return {
         title,
         titleZh: '',
         summary,
         link: it.link ?? '',
         source: f.source,
-        category: classifyClientArticle(title, summary, f.slot),
+        category: classifyClientArticle(title, summary, f.slot, meta),
         publishedAt: it.pubDate ?? new Date().toISOString(),
       } satisfies RadioLiveArticle
     })
@@ -865,7 +1300,9 @@ function buildSegmentsFromSlotMap(
       const lines = [
         'This is 680 News. Time for traffic and weather together on the 1s.',
         `Over at Toronto Pearson International Airport and downtown Toronto, current conditions are ${cond.toLowerCase()} at ${temp} degrees Celsius, feeling like ${feels}, with ${weather?.windDirection ?? 'westerly'} winds at ${wind} kilometers an hour and gusts up to ${gust}.`,
-        ...(top ? [cleanBroadcastPair(top.title, top.summary)] : []),
+        top
+          ? cleanBroadcastPair(top.title, top.summary)
+          : 'In the 680 News airborne traffic centre, major commuter corridors across the Gardiner Expressway, the Don Valley Parkway, and Highway 401 are being monitored closely for rush-hour volume and arterial slowdowns.',
       ]
       const text = lines.join(' ')
       const liveLex = extractLiveKeyLexis(text)
@@ -879,7 +1316,7 @@ function buildSegmentsFromSlotMap(
         text,
         textZh: top?.summaryZh
           ? `这里是 680 News 路况与天气连播。多伦多皮尔逊国际机场及市中心当前${condZh}，气温 ${temp}°C（体感 ${feels}°C），阵风达 ${gust} km/h。${top.titleZh ? `${top.titleZh}：` : ''}${top.summaryZh}`
-          : fb.textZh,
+          : `这里是 680 News 路况与天气连播。多伦多皮尔逊国际机场及市中心当前${condZh}，气温 ${temp}°C（体感 ${feels}°C），阵风达 ${gust} km/h。680 空中交通中心正在密切监测嘉甸拿高速（Gardiner Expressway）、当河谷大道（DVP）及 401 号高速等主干道的通勤车流与缓慢路段。`,
         publishedAt: top?.publishedAt ?? new Date().toISOString(),
         sourceUrl: top?.link ?? 'https://toronto.citynews.ca/traffic/',
         sourceName: top?.source ?? 'CityNews 680 Traffic & Weather',
@@ -946,38 +1383,10 @@ async function translateArticlesAndSegments(
 
 async function fetchBrowserLiveBulletin(
   onPartial?: (bulletin: RadioBulletin) => void,
+  existingWeatherPromise?: Promise<RadioLiveWeather | undefined>,
 ): Promise<RadioBulletin | null> {
   try {
-    const weatherPromise = fetch(
-      'https://api.open-meteo.com/v1/forecast?latitude=43.6532&longitude=-79.3832&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m&timezone=America%2FToronto',
-    )
-      .then(async (r) => {
-        if (!r.ok) return undefined
-        const d = (await r.json()) as {
-          current?: {
-            time: string
-            temperature_2m: number
-            apparent_temperature: number
-            weather_code: number
-            wind_speed_10m: number
-            wind_gusts_10m: number
-            wind_direction_10m: number
-          }
-        }
-        if (!d.current) return undefined
-        const cond = describeWmoCode(d.current.weather_code)
-        return {
-          temperatureC: d.current.temperature_2m,
-          feelsLikeC: d.current.apparent_temperature,
-          windSpeedKmh: d.current.wind_speed_10m,
-          windGustsKmh: d.current.wind_gusts_10m,
-          windDirection: degToCardinal(d.current.wind_direction_10m),
-          condition: cond.en,
-          conditionZh: cond.zh,
-          observedAt: d.current.time,
-        } satisfies RadioLiveWeather
-      })
-      .catch(() => undefined)
+    const weatherPromise = existingWeatherPromise ?? fetchRichTorontoWeather()
 
     const feeds = [
       { url: 'https://toronto.citynews.ca/feed/', source: 'CityNews 680 Toronto', slot: 'Top Headlines' },

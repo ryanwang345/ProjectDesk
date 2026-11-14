@@ -607,41 +607,118 @@ func parseRSSItems(xmlBytes []byte, spec feedSpec) []RadioLiveArticle {
 }
 
 func classifyRadioArticle(a RadioLiveArticle) string {
-	combined := strings.ToLower(a.Title + " " + a.Summary + " " + a.Category)
-	switch {
-	case containsAnyKeyword(combined,
-		"traffic", "weather", "highway", "401", "gardiner", "dvp", "don valley",
-		"ttc", "subway", "go transit", "metrolinx", "eglinton", "commute",
-		"lane", "closure", "collision", "crash", "snow", "rain", "storm", "wind",
-		"temperature", "forecast", "environment canada", "pearson airport",
-	):
-		return "Traffic & Weather"
-	case containsAnyKeyword(combined,
-		"tsx", "bank of canada", "interest rate", "inflation", "economy", "economic",
-		"market", "stock", "dollar", "tariff", "trade", "business", "housing market",
-		"mortgage", "retail", "jobs", "unemployment", "gdp", "investing", "earnings",
-	):
-		return "Business News"
-	case containsAnyKeyword(combined,
-		"maple leafs", "blue jays", "raptors", "argonauts", "tfc", "nhl", "nba", "mlb",
-		"hockey", "baseball", "basketball", "soccer", "playoff", "tournament", "concert",
-		"festival", "tiff", "art", "museum", "culture", "weekend", "harbourfront", "athlete",
-	):
-		return "Sports & Culture"
-	}
-	if a.Category != "" {
-		return a.Category
-	}
-	return "Top Headlines"
-}
+	scores := scoreRadioArticleSlots(a)
+	bestSlot := "Top Headlines"
+	bestScore := scores["Top Headlines"]
 
-func containsAnyKeyword(haystack string, keywords ...string) bool {
-	for _, kw := range keywords {
-		if strings.Contains(haystack, kw) {
-			return true
+	for _, slot := range []string{"Traffic & Weather", "Business News", "Sports & Culture"} {
+		if scores[slot] > bestScore && scores[slot] >= 2 {
+			bestScore = scores[slot]
+			bestSlot = slot
 		}
 	}
-	return false
+	return bestSlot
+}
+
+func padNormalizedWords(s string) string {
+	norm := strings.TrimSpace(nonAlphaNumRe.ReplaceAllString(strings.ToLower(s), " "))
+	if norm == "" {
+		return ""
+	}
+	return " " + norm + " "
+}
+
+func countKeywordHits(padded string, keywords ...string) int {
+	if padded == "" {
+		return 0
+	}
+	hits := 0
+	for _, kw := range keywords {
+		if strings.Contains(padded, " "+kw+" ") {
+			hits++
+		}
+	}
+	return hits
+}
+
+func scoreRadioArticleSlots(a RadioLiveArticle) map[string]int {
+	titlePad := padNormalizedWords(a.Title)
+	summaryPad := padNormalizedWords(a.Summary)
+	metaPad := padNormalizedWords(a.Category + " " + a.Link)
+
+	scoreWith := func(strong, medium []string) int {
+		s := 0
+		s += countKeywordHits(titlePad, strong...) * 5
+		s += countKeywordHits(summaryPad, strong...) * 2
+		s += countKeywordHits(metaPad, strong...) * 3
+		s += countKeywordHits(titlePad, medium...) * 3
+		s += countKeywordHits(summaryPad, medium...) * 1
+		return s
+	}
+
+	trafficStrong := []string{
+		"traffic", "weather", "ttc", "metrolinx", "gardiner", "dvp", "don valley",
+		"highway 401", "highway 400", "highway 404", "highway 427", "qew",
+		"go transit", "up express", "eglinton crosstown", "lane closure", "road closure",
+		"ground stop", "flight delay", "flight delays", "flight disruption", "flight disruptions",
+		"air traffic", "environment canada", "snowfall", "heat warning", "rainfall",
+		"thunderstorm", "blizzard", "freezing rain", "wind warning", "fog advisory", "shuttle buses",
+	}
+	trafficMedium := []string{
+		"highway", "subway", "streetcar", "commute", "commuters", "collision", "crash",
+		"delays", "airport", "pearson", "flights", "airline", "airlines", "faa",
+		"snow", "rain", "storm", "forecast", "temperature", "celsius", "overcast",
+		"gusts", "pedestrian", "cyclist", "intersection", "expressway", "lanes", "stoppage",
+	}
+
+	businessStrong := []string{
+		"tsx", "bank of canada", "interest rate", "interest rates", "inflation", "gdp",
+		"economy", "economic", "stock market", "wall street", "tariff", "tariffs",
+		"housing market", "real estate", "mortgage", "unemployment", "cost of living",
+		"retail sales", "trade war", "central bank", "loonie", "oil prices", "earnings", "recession",
+	}
+	businessMedium := []string{
+		"business", "market", "markets", "stocks", "shares", "dollar", "trade",
+		"housing", "rent", "tenants", "landlords", "jobs", "workers", "strike",
+		"union", "wages", "consumers", "grocery", "prices", "affordability",
+		"company", "corporate", "investors", "revenue", "profit", "bank", "banking", "budget", "tax", "taxes",
+	}
+
+	sportsStrong := []string{
+		"maple leafs", "blue jays", "raptors", "argonauts", "toronto fc", "tfc",
+		"nhl", "nba", "mlb", "nfl", "cfl", "wnba", "sceptres", "stanley cup",
+		"playoffs", "playoff", "world series", "super bowl", "world cup", "olympics",
+		"tiff", "concert", "festival", "box office", "grammy", "oscar", "juno", "lottery", "lotto max",
+	}
+	sportsMedium := []string{
+		"hockey", "baseball", "basketball", "soccer", "football", "tennis", "golf",
+		"athlete", "coach", "stadium", "arena", "scotiabank arena", "rogers centre",
+		"bmo field", "tournament", "championship", "roster", "museum", "gallery",
+		"theatre", "music", "culture", "entertainment", "celebrity", "movie", "film", "weekend", "harbourfront",
+	}
+
+	headlinesStrong := []string{
+		"prime minister", "premier", "doug ford", "mark carney", "olivia chow", "mayor",
+		"city hall", "city council", "queen s park", "parliament", "ottawa", "police",
+		"tps", "opp", "shooting", "stabbing", "homicide", "arrested", "charged",
+		"suspect", "investigation", "court", "supreme court", "hospital", "healthcare",
+		"ukraine", "ukrainian", "russia", "russian", "zelenskyy", "putin", "nato",
+		"moscow", "kyiv", "trump", "white house", "foreign affairs", "security framework",
+	}
+
+	scores := map[string]int{
+		"Traffic & Weather": scoreWith(trafficStrong, trafficMedium),
+		"Business News":     scoreWith(businessStrong, businessMedium),
+		"Sports & Culture":  scoreWith(sportsStrong, sportsMedium),
+		"Top Headlines":     scoreWith(headlinesStrong, nil) + 1,
+	}
+
+	// Exclude international war/politics/crime stories from falsely entering Traffic & Weather
+	if countKeywordHits(titlePad, "ukraine", "ukrainian", "russia", "russian", "zelenskyy", "putin", "nato", "homicide", "shooting", "stabbing", "murder", "parliament") > 0 {
+		scores["Traffic & Weather"] -= 15
+	}
+
+	return scores
 }
 
 func cleanPlainText(raw string) string {
@@ -705,7 +782,7 @@ func partitionUniqueArticlesBySlot(allArticles []RadioLiveArticle) map[string][]
 		bySlot[slot] = append(bySlot[slot], allArticles[i])
 	}
 
-	// Rebalance empty slots by moving distinct articles from the largest slot (never duplicating across slots)
+	// Rebalance empty slots by selecting the best-matching article from a donor slot (never moving geopolitical/crime into Traffic & Weather)
 	for _, slot := range slots {
 		if len(bySlot[slot]) > 0 {
 			continue
@@ -719,14 +796,31 @@ func partitionUniqueArticlesBySlot(allArticles []RadioLiveArticle) map[string][]
 			}
 		}
 		if donor != "" {
-			moved := bySlot[donor][len(bySlot[donor])-1]
-			bySlot[donor] = bySlot[donor][:len(bySlot[donor])-1]
-			moved.Category = slot
-			bySlot[slot] = append(bySlot[slot], moved)
-			for i := range allArticles {
-				if normalizeDedupTitle(allArticles[i].Title) == normalizeDedupTitle(moved.Title) {
-					allArticles[i].Category = slot
-					break
+			bestIdx := -1
+			bestScore := -999
+			for idx, candArt := range bySlot[donor] {
+				if idx == 0 && len(bySlot[donor]) > 1 {
+					continue // keep the donor's #1 lead story
+				}
+				sc := scoreRadioArticleSlots(candArt)[slot]
+				if sc > bestScore {
+					bestScore = sc
+					bestIdx = idx
+				}
+			}
+			if slot == "Traffic & Weather" && bestScore < 0 {
+				continue
+			}
+			if bestIdx >= 0 {
+				moved := bySlot[donor][bestIdx]
+				bySlot[donor] = append(bySlot[donor][:bestIdx], bySlot[donor][bestIdx+1:]...)
+				moved.Category = slot
+				bySlot[slot] = append(bySlot[slot], moved)
+				for i := range allArticles {
+					if normalizeDedupTitle(allArticles[i].Title) == normalizeDedupTitle(moved.Title) {
+						allArticles[i].Category = slot
+						break
+					}
 				}
 			}
 		}
