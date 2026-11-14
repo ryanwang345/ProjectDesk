@@ -21,6 +21,7 @@ import { useEnglish } from '@/hooks/use-english'
 import { useI18n } from '@/i18n'
 import {
   fetchLiveRadioBulletin,
+  getCachedLiveRadioBulletin,
   STATION_680_NEWS,
   type LiveStreamStation,
   type RadioBulletin,
@@ -57,11 +58,10 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
   const [playbackRate, setPlaybackRate] = useState<0.5 | 0.8 | 1 | 1.1 | 1.25>(1)
 
   // Active news wheel segment & live news bulletin state
-  const [liveBulletin, setLiveBulletin] = useState<RadioBulletin | null>(null)
+  const [liveBulletin, setLiveBulletin] = useState<RadioBulletin | null>(() => getCachedLiveRadioBulletin())
   const [isRefreshingNews, setIsRefreshingNews] = useState(false)
   const [activeSegmentId, setActiveSegmentId] = useState<string>(station.wheelSegments[0].id)
   const [selectedArticle, setSelectedArticle] = useState<RadioLiveArticle | null>(null)
-  const [feedSourceFilter, setFeedSourceFilter] = useState<'citynews' | 'all'>('citynews')
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL')
   const [showChinese, setShowChinese] = useState(true)
   const [activeWordToAdd, setActiveWordToAdd] = useState<string | null>(null)
@@ -76,8 +76,7 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
   const cityNewsArticles = allFeedArticles.filter(
     (a) => a.source.toLowerCase().includes('citynews') || a.link.toLowerCase().includes('citynews.ca'),
   )
-  const baseArticles =
-    feedSourceFilter === 'citynews' && cityNewsArticles.length > 0 ? cityNewsArticles : allFeedArticles
+  const baseArticles = cityNewsArticles
   const displayedFeedArticles =
     categoryFilter === 'ALL' ? baseArticles : baseArticles.filter((a) => a.category === categoryFilter)
 
@@ -85,7 +84,11 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
   useEffect(() => {
     let active = true
     const loadLive = (force: boolean) => {
-      void fetchLiveRadioBulletin(force).then((data) => {
+      void fetchLiveRadioBulletin(force, (partial) => {
+        if (active && partial.segments.length > 0) {
+          setLiveBulletin(partial)
+        }
+      }).then((data) => {
         if (active && data && data.segments.length > 0) {
           setLiveBulletin(data)
         }
@@ -103,7 +106,11 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
     if (isRefreshingNews) return
     setIsRefreshingNews(true)
     try {
-      const data = await fetchLiveRadioBulletin(true)
+      const data = await fetchLiveRadioBulletin(true, (partial) => {
+        if (partial.segments.length > 0) {
+          setLiveBulletin(partial)
+        }
+      })
       if (data && data.segments.length > 0) {
         setLiveBulletin(data)
       }
@@ -657,82 +664,6 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
               </div>
             )}
 
-            {(baseArticles.length > 0 || (currentSegment.relatedArticles && currentSegment.relatedArticles.length > 0)) && (
-              <div className="rounded-2xl border border-border bg-background/60 p-4">
-                <h4 className="mb-2.5 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Radio className="size-3.5 text-primary" />
-                    {zh ? 'toronto.citynews.ca/feed/ 实时新闻列表' : 'toronto.citynews.ca/feed/ Live News Feed'}
-                  </span>
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {(baseArticles.length > 0 ? baseArticles : (currentSegment.relatedArticles ?? [])).length}{' '}
-                    {zh ? '条实时新闻' : 'live stories'}
-                  </span>
-                </h4>
-                <div className="flex flex-col gap-2">
-                  {(baseArticles.length > 0 ? baseArticles : (currentSegment.relatedArticles ?? [])).map((art, idx) => (
-                    <div key={`${art.link || art.title}-${idx}`} className="rounded-xl border border-border bg-card p-3 text-xs">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                            <span className="rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary">
-                              #{idx + 1}
-                            </span>
-                            <span className="rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                              {art.category}
-                            </span>
-                            <span className="font-mono text-[10px] text-muted-foreground">{art.source}</span>
-                          </div>
-                          <p className="font-semibold text-foreground">
-                            <InteractiveGlossText text={art.title} contextSentence={art.title} />
-                          </p>
-                          {showChinese && art.titleZh && (
-                            <p className="mt-0.5 text-muted-foreground">{art.titleZh}</p>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedArticle(art)}
-                            className="rounded-full border border-border px-2 py-1 text-[10px] font-semibold text-primary hover:border-primary/50"
-                          >
-                            {zh ? '精听' : 'Study'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void speakWord(`${art.title}. ${art.summary}`)}
-                            aria-label={zh ? '朗读快讯' : 'Read headline'}
-                            className="rounded-full border border-border p-1.5 text-primary hover:border-primary/50"
-                          >
-                            <Volume2 className="size-3.5" />
-                          </button>
-                          {art.link && (
-                            <a
-                              href={art.link}
-                              target="_blank"
-                              rel="noreferrer"
-                              aria-label={zh ? '打开原文' : 'Open article'}
-                              className="rounded-full border border-border p-1.5 text-muted-foreground hover:border-primary/50 hover:text-foreground"
-                            >
-                              <ExternalLink className="size-3.5" />
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                      {art.summary && (
-                        <p className="mt-1.5 leading-relaxed text-muted-foreground">
-                          <InteractiveGlossText text={art.summary} contextSentence={art.summary} />
-                        </p>
-                      )}
-                      {showChinese && art.summaryZh && (
-                        <p className="mt-1 leading-relaxed text-muted-foreground/85">{art.summaryZh}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {currentSegment.liaisons.length > 0 && (
               <div className="rounded-2xl border border-border bg-background/60 p-4">
                 <h4 className="mb-3 flex items-center gap-2 text-xs font-bold text-foreground">
@@ -832,39 +763,13 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center rounded-full border border-border bg-background/60 p-0.5 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setFeedSourceFilter('citynews')}
-                className={cn(
-                  'rounded-full px-3 py-1 transition',
-                  feedSourceFilter === 'citynews'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                toronto.citynews.ca/feed/ ({cityNewsArticles.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFeedSourceFilter('all')}
-                className={cn(
-                  'rounded-full px-3 py-1 transition',
-                  feedSourceFilter === 'all'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {zh ? `全部新闻源 (${allFeedArticles.length})` : `All Feeds (${allFeedArticles.length})`}
-              </button>
-            </div>
             <a
               href="https://toronto.citynews.ca/feed/"
               target="_blank"
               rel="noreferrer"
               className={cn(btn, 'px-3 py-1 text-xs')}
             >
-              RSS Feed <ExternalLink className="size-3" />
+              toronto.citynews.ca/feed/ <ExternalLink className="size-3" />
             </a>
           </div>
         </div>

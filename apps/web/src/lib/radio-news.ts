@@ -63,47 +63,139 @@ export type RadioBulletin = {
   liveArticles: RadioLiveArticle[]
 }
 
-export async function fetchLiveRadioBulletin(forceRefresh = false): Promise<RadioBulletin | null> {
+const RADIO_CACHE_KEY = 'projectdesk.radio.citynews680.v3'
+
+function isCityNewsArticle(a: RadioLiveArticle): boolean {
+  return a.source.toLowerCase().includes('citynews') || a.link.toLowerCase().includes('citynews.ca')
+}
+
+function normalizeDedupTitle(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+function normalizeDedupLink(link: string): string {
+  return link.toLowerCase().split(/[?#]/)[0].replace(/\/+$/, '').trim()
+}
+
+function dedupeArticles(list: RadioLiveArticle[]): RadioLiveArticle[] {
+  const seenTitles = new Set<string>()
+  const seenLinks = new Set<string>()
+  const out: RadioLiveArticle[] = []
+  for (const a of list) {
+    const tKey = normalizeDedupTitle(a.title)
+    const lKey = normalizeDedupLink(a.link)
+    if (!tKey || seenTitles.has(tKey) || (lKey && seenLinks.has(lKey))) continue
+    seenTitles.add(tKey)
+    if (lKey) seenLinks.add(lKey)
+    out.push(a)
+  }
+  return out
+}
+
+function partitionClientArticlesBySlot(allArticles: RadioLiveArticle[]): Record<string, RadioLiveArticle[]> {
+  const slots = ['Traffic & Weather', 'Top Headlines', 'Business News', 'Sports & Culture'] as const
+  const bySlot: Record<string, RadioLiveArticle[]> = {
+    'Traffic & Weather': [],
+    'Top Headlines': [],
+    'Business News': [],
+    'Sports & Culture': [],
+  }
+  for (const art of allArticles) {
+    const slot = bySlot[art.category] ? art.category : classifyClientArticle(art.title, art.summary, 'Top Headlines')
+    art.category = slot
+    bySlot[slot].push(art)
+  }
+  // Rebalance empty slots by moving distinct articles from the largest slot so no two slots ever share the same article
+  for (const slot of slots) {
+    if (bySlot[slot].length > 0) continue
+    let donor = ''
+    let maxLen = 1
+    for (const candidate of slots) {
+      if (bySlot[candidate].length > maxLen) {
+        maxLen = bySlot[candidate].length
+        donor = candidate
+      }
+    }
+    if (donor) {
+      const moved = bySlot[donor].pop()
+      if (moved) {
+        moved.category = slot
+        bySlot[slot].push(moved)
+      }
+    }
+  }
+  return bySlot
+}
+
+export function getCachedLiveRadioBulletin(): RadioBulletin | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(RADIO_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as RadioBulletin
+    if (parsed && Array.isArray(parsed.segments) && parsed.segments.length > 0) {
+      return parsed
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return null
+}
+
+function saveCachedLiveRadioBulletin(bulletin: RadioBulletin): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(RADIO_CACHE_KEY, JSON.stringify(bulletin))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export async function fetchLiveRadioBulletin(
+  forceRefresh = false,
+  onPartial?: (bulletin: RadioBulletin) => void,
+): Promise<RadioBulletin | null> {
   try {
     const endpoint = forceRefresh ? '/api/radio/news/refresh' : '/api/radio/news'
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3500)
     const resp = await fetch(endpoint, {
       method: forceRefresh ? 'POST' : 'GET',
       headers: { Accept: 'application/json' },
-    })
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId))
+
     if (resp.ok) {
       const data = (await resp.json()) as RadioBulletin
       if (data && Array.isArray(data.segments) && data.segments.length > 0 && data.isLive) {
-        const existing = Array.isArray(data.liveArticles) ? data.liveArticles : []
-        const cityNewsCount = existing.filter(
-          (a) => a.source.toLowerCase().includes('citynews') || a.link.toLowerCase().includes('citynews.ca'),
-        ).length
-        if (cityNewsCount < 5) {
-          const browserCityNews = await fetchFeedArticlesInBrowser({
-            url: 'https://toronto.citynews.ca/feed/',
-            source: 'CityNews 680 Toronto',
-            slot: 'Top Headlines',
-          })
-          if (browserCityNews.length > 0) {
-            await translateArticlesBatch(browserCityNews)
-            const seen = new Set<string>()
-            const merged: RadioLiveArticle[] = []
-            for (const art of [...browserCityNews, ...existing]) {
-              const key = art.title.toLowerCase().trim()
-              if (key && !seen.has(key)) {
-                seen.add(key)
-                merged.push(art)
-              }
-            }
-            data.liveArticles = merged
-          }
+        const existingCityNews = dedupeArticles(
+          (Array.isArray(data.liveArticles) ? data.liveArticles : []).filter(isCityNewsArticle),
+        )
+        const segTitles = data.segments.map((s) => normalizeDedupTitle(s.title))
+        const hasDuplicateSegments = new Set(segTitles).size < segTitles.length
+        const hasNonCityNewsSegment = data.segments.some(
+          (s) => s.sourceName && !s.sourceName.toLowerCase().includes('citynews') && !s.sourceName.toLowerCase().includes('680'),
+        )
+
+        if (existingCityNews.length >= 4 && !hasDuplicateSegments && !hasNonCityNewsSegment) {
+          data.liveArticles = existingCityNews
+          data.segments = data.segments.map((seg) => ({
+            ...seg,
+            relatedArticles: dedupeArticles((seg.relatedArticles ?? []).filter(isCityNewsArticle)),
+          }))
+          saveCachedLiveRadioBulletin(data)
+          return data
         }
-        return data
       }
     }
   } catch {
     // Fall through to direct browser live fetch
   }
-  return fetchBrowserLiveBulletin()
+  const bulletin = await fetchBrowserLiveBulletin(onPartial)
+  if (bulletin) {
+    saveCachedLiveRadioBulletin(bulletin)
+  }
+  return bulletin
 }
 
 function describeWmoCode(code: number): { en: string; zh: string } {
@@ -224,26 +316,13 @@ async function fetchFeedArticlesInBrowser(f: {
   source: string
   slot: string
 }): Promise<RadioLiveArticle[]> {
-  // 1. Try raw RSS XML via AllOrigins to get 100% of <item> entries in the feed without truncation
-  try {
-    const xmlRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(f.url)}`)
-    if (xmlRes.ok) {
-      const xmlText = await xmlRes.text()
-      const parsed = parseRssXmlItems(xmlText, f.source, f.slot)
-      if (parsed.length > 0) return parsed
-    }
-  } catch {
-    // Fall through to rss2json
-  }
-
-  // 2. Fallback to rss2json
-  try {
+  const fromRss2Json = async (): Promise<RadioLiveArticle[]> => {
     const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(f.url)}`)
-    if (!res.ok) return []
+    if (!res.ok) throw new Error('rss2json failed')
     const data = (await res.json()) as {
       items?: { title?: string; description?: string; content?: string; link?: string; pubDate?: string }[]
     }
-    return (data.items ?? []).map((it) => {
+    const items = (data.items ?? []).map((it) => {
       const title = stripHtml(it.title ?? '')
       const rawBody = (it.content && it.content.length > (it.description?.length ?? 0)) ? it.content : (it.description ?? '')
       const summary = stripHtml(rawBody)
@@ -260,31 +339,117 @@ async function fetchFeedArticlesInBrowser(f: {
         publishedAt: it.pubDate ?? new Date().toISOString(),
       } satisfies RadioLiveArticle
     })
+    if (items.length === 0) throw new Error('empty rss2json')
+    return items
+  }
+
+  const fromAllOriginsXml = async (): Promise<RadioLiveArticle[]> => {
+    const xmlRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(f.url)}`)
+    if (!xmlRes.ok) throw new Error('allorigins failed')
+    const xmlText = await xmlRes.text()
+    const parsed = parseRssXmlItems(xmlText, f.source, f.slot)
+    if (parsed.length === 0) throw new Error('empty xml')
+    return parsed
+  }
+
+  try {
+    return await Promise.any([fromRss2Json(), fromAllOriginsXml()])
   } catch {
     return []
   }
 }
 
-async function translateArticlesBatch(articles: RadioLiveArticle[]): Promise<void> {
-  const batchSize = 10
-  await Promise.all(
-    Array.from({ length: Math.ceil(articles.length / batchSize) }, async (_, bIdx) => {
-      const slice = articles.slice(bIdx * batchSize, (bIdx + 1) * batchSize)
-      const [zhTitles, zhSummaries] = await Promise.all([
-        translateEnToZh(slice.map((a) => a.title.replace(/\n/g, ' ')).join('\n')),
-        translateEnToZh(slice.map((a) => a.summary.replace(/\n/g, ' ')).join('\n')),
-      ])
-      const titleLines = zhTitles ? zhTitles.split('\n') : []
-      const summaryLines = zhSummaries ? zhSummaries.split('\n') : []
-      slice.forEach((art, idx) => {
-        if (titleLines[idx]) art.titleZh = titleLines[idx].trim()
-        if (summaryLines[idx]) art.summaryZh = summaryLines[idx].trim()
-      })
-    }),
-  )
+function buildSegmentsFromSlotMap(
+  bySlot: Record<string, RadioLiveArticle[]>,
+  weather: RadioLiveWeather | undefined,
+): RadioNewsWheelSegment[] {
+  const base = STATION_680_NEWS.wheelSegments
+  return base.map((fb, idx) => {
+    const slotName = ['Traffic & Weather', 'Top Headlines', 'Business News', 'Sports & Culture'][idx]
+    const list = bySlot[slotName] ?? []
+
+    if (idx === 0 && (weather || list.length > 0)) {
+      const temp = weather ? Math.round(weather.temperatureC) : 12
+      const feels = weather ? Math.round(weather.feelsLikeC) : 10
+      const wind = weather ? Math.round(weather.windSpeedKmh) : 20
+      const gust = weather ? Math.round(weather.windGustsKmh) : 32
+      const cond = weather?.condition ?? 'Partly cloudy'
+      const condZh = weather?.conditionZh ?? '多云间晴'
+      const top = list[0]
+      const title = top
+        ? `680 Live (${temp}°C ${cond}): ${top.title}`
+        : `680 News Live Weather & Traffic: ${temp}°C ${cond} in Toronto`
+      const lines = [
+        'This is 680 News. Time for traffic and weather together on the 1s.',
+        `Over at Toronto Pearson International Airport and downtown Toronto, current conditions are ${cond.toLowerCase()} at ${temp} degrees Celsius, feeling like ${feels}, with ${weather?.windDirection ?? 'westerly'} winds at ${wind} kilometers an hour and gusts up to ${gust}.`,
+        ...list.slice(0, 2).map((a) => `${a.title}. ${a.summary}`),
+      ]
+      const text = lines.join(' ')
+      return {
+        ...fb,
+        title,
+        titleZh: top?.titleZh
+          ? `680 实时 (${temp}°C ${condZh})：${top.titleZh}`
+          : `680 实时路况与气象：多伦多当前 ${temp}°C ${condZh}（体感 ${feels}°C）`,
+        text,
+        textZh: top?.summaryZh
+          ? `这里是 680 News 路况与天气连播。多伦多皮尔逊国际机场及市中心当前${condZh}，气温 ${temp}°C（体感 ${feels}°C），阵风达 ${gust} km/h。${top.titleZh ? `${top.titleZh}：` : ''}${top.summaryZh}`
+          : fb.textZh,
+        publishedAt: top?.publishedAt ?? new Date().toISOString(),
+        sourceUrl: top?.link ?? 'https://toronto.citynews.ca/traffic/',
+        sourceName: top?.source ?? 'CityNews 680 Traffic & Weather',
+        relatedArticles: list,
+      }
+    }
+
+    if (list.length === 0) return fb
+    const top = list[0]
+    const leadIns = [
+      'This is 680 News.',
+      'From the 680 Newsroom, checking top breaking stories across the Greater Toronto Area.',
+      'In 680 Business, tracking the latest market and economic developments.',
+      'In 680 Sports and Metro Culture, here is what is happening around Toronto and across the leagues.',
+    ]
+    const text = [
+      leadIns[idx],
+      ...list.slice(0, 2).map((a) => `${a.title}. ${a.summary}`),
+      'Stay tuned to 680 NewsRadio Toronto for continuous live coverage.',
+    ].join(' ')
+    const combinedZh = list
+      .slice(0, 2)
+      .map((a) => `${a.titleZh || a.title}${a.summaryZh ? `：${a.summaryZh}` : ''}`)
+      .join(' ')
+    return {
+      ...fb,
+      title: top.title,
+      titleZh: top.titleZh || top.title,
+      text,
+      textZh: combinedZh || fb.textZh,
+      publishedAt: top.publishedAt,
+      sourceUrl: top.link,
+      sourceName: top.source,
+      relatedArticles: list,
+    }
+  })
 }
 
-async function fetchBrowserLiveBulletin(): Promise<RadioBulletin | null> {
+async function translateArticlesBatch(articles: RadioLiveArticle[]): Promise<void> {
+  if (articles.length === 0) return
+  const [zhTitles, zhSummaries] = await Promise.all([
+    translateEnToZh(articles.map((a) => a.title.replace(/\n/g, ' ')).join('\n')),
+    translateEnToZh(articles.map((a) => a.summary.slice(0, 260).replace(/\n/g, ' ')).join('\n')),
+  ])
+  const titleLines = zhTitles ? zhTitles.split('\n') : []
+  const summaryLines = zhSummaries ? zhSummaries.split('\n') : []
+  articles.forEach((art, idx) => {
+    if (titleLines[idx]) art.titleZh = titleLines[idx].trim()
+    if (summaryLines[idx]) art.summaryZh = summaryLines[idx].trim()
+  })
+}
+
+async function fetchBrowserLiveBulletin(
+  onPartial?: (bulletin: RadioBulletin) => void,
+): Promise<RadioBulletin | null> {
   try {
     const weatherPromise = fetch(
       'https://api.open-meteo.com/v1/forecast?latitude=43.6532&longitude=-79.3832&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m&timezone=America%2FToronto',
@@ -319,120 +484,37 @@ async function fetchBrowserLiveBulletin(): Promise<RadioBulletin | null> {
 
     const feeds = [
       { url: 'https://toronto.citynews.ca/feed/', source: 'CityNews 680 Toronto', slot: 'Top Headlines' },
-      { url: 'https://www.cbc.ca/webfeed/rss/rss-canada-toronto', source: 'CBC Toronto', slot: 'Top Headlines' },
-      { url: 'https://www.cbc.ca/webfeed/rss/rss-business', source: 'CBC Business', slot: 'Business News' },
-      { url: 'https://www.cbc.ca/webfeed/rss/rss-sports', source: 'CBC Sports', slot: 'Sports & Culture' },
     ]
 
-    const feedPromises = feeds.map((f) => fetchFeedArticlesInBrowser(f))
-
-    const [weather, ...feedLists] = await Promise.all([weatherPromise, ...feedPromises])
-    const allArticles: RadioLiveArticle[] = []
-    const seen = new Set<string>()
-    for (const list of feedLists) {
-      for (const a of list) {
-        const key = a.title.toLowerCase()
-        if (a.title && !seen.has(key)) {
-          seen.add(key)
-          allArticles.push(a)
-        }
-      }
-    }
+    const [weather, ...feedLists] = await Promise.all([
+      weatherPromise,
+      ...feeds.map((f) => fetchFeedArticlesInBrowser(f)),
+    ])
+    const allArticles = dedupeArticles(feedLists.flat())
 
     if (!weather && allArticles.length === 0) return null
 
+    const bySlot = partitionClientArticlesBySlot(allArticles)
+
+    // Emit immediate English live bulletin before waiting for translation
+    if (onPartial) {
+      onPartial({
+        updatedAt: new Date().toISOString(),
+        source: 'CityNews 680 Toronto (toronto.citynews.ca/feed/)',
+        isLive: true,
+        weather,
+        segments: buildSegmentsFromSlotMap(bySlot, weather),
+        liveArticles: [...allArticles],
+      })
+    }
+
     await translateArticlesBatch(allArticles)
 
-    const bySlot: Record<string, RadioLiveArticle[]> = {
-      'Traffic & Weather': [],
-      'Top Headlines': [],
-      'Business News': [],
-      'Sports & Culture': [],
-    }
-    for (const art of allArticles) {
-      bySlot[art.category] = bySlot[art.category] ?? []
-      bySlot[art.category].push(art)
-    }
-    for (const slot of Object.keys(bySlot)) {
-      if (bySlot[slot].length === 0 && allArticles.length > 0) {
-        bySlot[slot] = allArticles.slice(0, 2)
-      }
-    }
-
-    const base = STATION_680_NEWS.wheelSegments
-    const segments: RadioNewsWheelSegment[] = await Promise.all(
-      base.map(async (fb, idx) => {
-        const slotName = ['Traffic & Weather', 'Top Headlines', 'Business News', 'Sports & Culture'][idx]
-        const list = bySlot[slotName] ?? []
-
-        if (idx === 0 && (weather || list.length > 0)) {
-          const temp = weather ? Math.round(weather.temperatureC) : 12
-          const feels = weather ? Math.round(weather.feelsLikeC) : 10
-          const wind = weather ? Math.round(weather.windSpeedKmh) : 20
-          const gust = weather ? Math.round(weather.windGustsKmh) : 32
-          const cond = weather?.condition ?? 'Partly cloudy'
-          const condZh = weather?.conditionZh ?? '多云间晴'
-          const top = list[0]
-          const title = top
-            ? `680 Live (${temp}°C ${cond}): ${top.title}`
-            : `680 News Live Weather & Traffic: ${temp}°C ${cond} in Toronto`
-          const lines = [
-            'This is 680 News. Time for traffic and weather together on the 1s.',
-            `Over at Toronto Pearson International Airport and downtown Toronto, current conditions are ${cond.toLowerCase()} at ${temp} degrees Celsius, feeling like ${feels}, with ${weather?.windDirection ?? 'westerly'} winds at ${wind} kilometers an hour and gusts up to ${gust}.`,
-            ...list.slice(0, 2).map((a) => `${a.title}. ${a.summary}`),
-          ]
-          const text = lines.join(' ')
-          const [titleZh, textZh] = await Promise.all([
-            top ? translateEnToZh(title) : Promise.resolve(`680 实时路况与气象：多伦多当前 ${temp}°C ${condZh}（体感 ${feels}°C）`),
-            translateEnToZh(text),
-          ])
-          return {
-            ...fb,
-            title,
-            titleZh: titleZh || `680 实时路况与气象：多伦多当前 ${temp}°C ${condZh}`,
-            text,
-            textZh: textZh || fb.textZh,
-            publishedAt: top?.publishedAt ?? new Date().toISOString(),
-            sourceUrl: top?.link ?? 'https://toronto.citynews.ca/traffic/',
-            sourceName: top?.source ?? 'CityNews 680 Traffic & Weather',
-            relatedArticles: list,
-          }
-        }
-
-        if (list.length === 0) return fb
-        const top = list[0]
-        const leadIns = [
-          'This is 680 News.',
-          'From the 680 Newsroom, checking top breaking stories across the Greater Toronto Area.',
-          'In 680 Business, tracking the latest market and economic developments.',
-          'In 680 Sports and Metro Culture, here is what is happening around Toronto and across the leagues.',
-        ]
-        const text = [
-          leadIns[idx],
-          ...list.slice(0, 3).map((a) => `${a.title}. ${a.summary}`),
-          'Stay tuned to 680 NewsRadio Toronto for continuous live coverage.',
-        ].join(' ')
-        const [titleZh, textZh] = await Promise.all([
-          top.titleZh ? Promise.resolve(top.titleZh) : translateEnToZh(top.title),
-          translateEnToZh(text),
-        ])
-        return {
-          ...fb,
-          title: top.title,
-          titleZh: titleZh || top.title,
-          text,
-          textZh: textZh || fb.textZh,
-          publishedAt: top.publishedAt,
-          sourceUrl: top.link,
-          sourceName: top.source,
-          relatedArticles: list,
-        }
-      }),
-    )
+    const segments = buildSegmentsFromSlotMap(bySlot, weather)
 
     return {
       updatedAt: new Date().toISOString(),
-      source: 'CityNews 680 Toronto / CBC / Open-Meteo Live',
+      source: 'CityNews 680 Toronto (toronto.citynews.ca/feed/)',
       isLive: true,
       weather,
       segments,

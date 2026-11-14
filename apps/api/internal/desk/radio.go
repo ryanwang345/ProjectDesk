@@ -81,18 +81,47 @@ type RadioBulletin struct {
 }
 
 type radioNewsService struct {
-	mu        sync.Mutex
-	cached    *RadioBulletin
-	expiresAt time.Time
-	client    *http.Client
-	lexicon   map[string]RadioVocabularyItem
-	lexOnce   sync.Once
+	mu         sync.Mutex
+	cached     *RadioBulletin
+	expiresAt  time.Time
+	refreshing bool
+	client     *http.Client
+	lexicon    map[string]RadioVocabularyItem
+	lexOnce    sync.Once
 }
 
 func newRadioNewsService() *radioNewsService {
-	return &radioNewsService{
-		client: &http.Client{Timeout: 6 * time.Second},
+	s := &radioNewsService{
+		client: &http.Client{Timeout: 4 * time.Second},
 	}
+	go s.refreshInBackground()
+	return s
+}
+
+func (s *radioNewsService) refreshInBackground() {
+	s.mu.Lock()
+	if s.refreshing {
+		s.mu.Unlock()
+		return
+	}
+	s.refreshing = true
+	s.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	bulletin := s.buildLiveBulletin(ctx)
+
+	s.mu.Lock()
+	if bulletin.IsLive || s.cached == nil {
+		s.cached = &bulletin
+	}
+	if bulletin.IsLive {
+		s.expiresAt = time.Now().Add(5 * time.Minute)
+	} else {
+		s.expiresAt = time.Now().Add(1 * time.Minute)
+	}
+	s.refreshing = false
+	s.mu.Unlock()
 }
 
 func (h *Handler) registerRadio(mux *http.ServeMux) {
@@ -113,9 +142,13 @@ func (h *Handler) refreshRadioNews(w http.ResponseWriter, r *http.Request) {
 
 func (s *radioNewsService) GetBulletin(ctx context.Context, force bool) RadioBulletin {
 	s.mu.Lock()
-	if !force && s.cached != nil && time.Now().Before(s.expiresAt) {
+	if !force && s.cached != nil {
 		out := *s.cached
+		expired := time.Now().After(s.expiresAt)
 		s.mu.Unlock()
+		if expired {
+			go s.refreshInBackground()
+		}
 		return out
 	}
 	s.mu.Unlock()
@@ -162,26 +195,6 @@ var liveFeedSpecs = []feedSpec{
 		source:      "CityNews 680 Toronto",
 		defaultSlot: "Top Headlines",
 	},
-	{
-		url:         "https://www.cbc.ca/webfeed/rss/rss-canada-toronto",
-		source:      "CBC Toronto",
-		defaultSlot: "Top Headlines",
-	},
-	{
-		url:         "https://globalnews.ca/toronto/feed/",
-		source:      "Global News Toronto",
-		defaultSlot: "Top Headlines",
-	},
-	{
-		url:         "https://www.cbc.ca/webfeed/rss/rss-business",
-		source:      "CBC Business",
-		defaultSlot: "Business News",
-	},
-	{
-		url:         "https://www.cbc.ca/webfeed/rss/rss-sports",
-		source:      "CBC Sports",
-		defaultSlot: "Sports & Culture",
-	},
 }
 
 func (s *radioNewsService) buildLiveBulletin(ctx context.Context) RadioBulletin {
@@ -212,13 +225,18 @@ func (s *radioNewsService) buildLiveBulletin(ctx context.Context) RadioBulletin 
 
 	var allArticles []RadioLiveArticle
 	seenTitles := map[string]bool{}
+	seenLinks := map[string]bool{}
 	for _, list := range feedResults {
 		for _, a := range list {
-			key := strings.ToLower(strings.TrimSpace(a.Title))
-			if key == "" || seenTitles[key] {
+			titleKey := normalizeDedupTitle(a.Title)
+			linkKey := normalizeDedupLink(a.Link)
+			if titleKey == "" || seenTitles[titleKey] || (linkKey != "" && seenLinks[linkKey]) {
 				continue
 			}
-			seenTitles[key] = true
+			seenTitles[titleKey] = true
+			if linkKey != "" {
+				seenLinks[linkKey] = true
+			}
 			allArticles = append(allArticles, a)
 		}
 	}
@@ -226,29 +244,7 @@ func (s *radioNewsService) buildLiveBulletin(ctx context.Context) RadioBulletin 
 	fallbackSegments := defaultRadioSegments()
 	isLive := len(allArticles) > 0 || weather != nil
 
-	bySlot := map[string][]RadioLiveArticle{
-		"Traffic & Weather": {},
-		"Top Headlines":     {},
-		"Business News":     {},
-		"Sports & Culture":  {},
-	}
-
-	for _, art := range allArticles {
-		slot := classifyRadioArticle(art)
-		bySlot[slot] = append(bySlot[slot], art)
-	}
-
-	// Ensure Top Headlines and other buckets have stories if available from general pool
-	for _, slot := range []string{"Top Headlines", "Traffic & Weather", "Business News", "Sports & Culture"} {
-		if len(bySlot[slot]) == 0 && len(allArticles) > 0 {
-			for _, art := range allArticles {
-				if len(bySlot[slot]) >= 2 {
-					break
-				}
-				bySlot[slot] = append(bySlot[slot], art)
-			}
-		}
-	}
+	bySlot := partitionUniqueArticlesBySlot(allArticles)
 
 	nowStr := time.Now().UTC().Format(time.RFC3339)
 	segments := make([]RadioNewsWheelSegment, 4)
@@ -311,7 +307,7 @@ func (s *radioNewsService) buildLiveBulletin(ctx context.Context) RadioBulletin 
 
 	return RadioBulletin{
 		UpdatedAt:    nowStr,
-		Source:       "CityNews 680 Toronto / CBC / Open-Meteo Live",
+		Source:       "CityNews 680 Toronto (toronto.citynews.ca/feed/)",
 		IsLive:       isLive,
 		Weather:      weather,
 		Segments:     segments,
@@ -513,31 +509,46 @@ func (s *radioNewsService) fetchRSSArticles(ctx context.Context, spec feedSpec) 
 		spec.url,
 		"https://api.allorigins.win/raw?url=" + url.QueryEscape(spec.url),
 	}
+	raceCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	resCh := make(chan []RadioLiveArticle, len(urls))
 	for _, targetURL := range urls {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
-		if err != nil {
-			continue
-		}
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-		req.Header.Set("Accept", "application/rss+xml, application/xml, text/xml, text/html, */*;q=0.9")
-		req.Header.Set("Accept-Language", "en-CA,en-US;q=0.9,en;q=0.8")
+		go func(u string) {
+			req, err := http.NewRequestWithContext(raceCtx, http.MethodGet, u, nil)
+			if err != nil {
+				resCh <- nil
+				return
+			}
+			req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+			req.Header.Set("Accept", "application/rss+xml, application/xml, text/xml, text/html, */*;q=0.9")
+			req.Header.Set("Accept-Language", "en-CA,en-US;q=0.9,en;q=0.8")
 
-		resp, err := s.client.Do(req)
-		if err != nil {
-			continue
-		}
-		if resp.StatusCode != http.StatusOK {
+			resp, err := s.client.Do(req)
+			if err != nil {
+				resCh <- nil
+				return
+			}
+			if resp.StatusCode != http.StatusOK {
+				resp.Body.Close()
+				resCh <- nil
+				return
+			}
+
+			body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 			resp.Body.Close()
-			continue
-		}
+			if err != nil {
+				resCh <- nil
+				return
+			}
 
-		body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-		resp.Body.Close()
-		if err != nil {
-			continue
-		}
+			resCh <- parseRSSItems(body, spec)
+		}(targetURL)
+	}
 
-		if items := parseRSSItems(body, spec); len(items) > 0 {
+	for range urls {
+		if items := <-resCh; len(items) > 0 {
+			cancel()
 			return items
 		}
 	}
@@ -668,11 +679,77 @@ func truncateSentence(s string, maxLen int) string {
 	return cut + "..."
 }
 
+var nonAlphaNumRe = regexp.MustCompile(`[^a-z0-9]+`)
+
+func normalizeDedupTitle(title string) string {
+	return strings.TrimSpace(nonAlphaNumRe.ReplaceAllString(strings.ToLower(title), " "))
+}
+
+func normalizeDedupLink(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return ""
+	}
+	if idx := strings.IndexAny(raw, "?#"); idx >= 0 {
+		raw = raw[:idx]
+	}
+	return strings.TrimSuffix(raw, "/")
+}
+
+func partitionUniqueArticlesBySlot(allArticles []RadioLiveArticle) map[string][]RadioLiveArticle {
+	slots := []string{"Traffic & Weather", "Top Headlines", "Business News", "Sports & Culture"}
+	bySlot := map[string][]RadioLiveArticle{
+		"Traffic & Weather": {},
+		"Top Headlines":     {},
+		"Business News":     {},
+		"Sports & Culture":  {},
+	}
+
+	for i := range allArticles {
+		slot := classifyRadioArticle(allArticles[i])
+		allArticles[i].Category = slot
+		bySlot[slot] = append(bySlot[slot], allArticles[i])
+	}
+
+	// Rebalance empty slots by moving distinct articles from the largest slot (never duplicating across slots)
+	for _, slot := range slots {
+		if len(bySlot[slot]) > 0 {
+			continue
+		}
+		donor := ""
+		maxCount := 1
+		for _, candidate := range slots {
+			if len(bySlot[candidate]) > maxCount {
+				maxCount = len(bySlot[candidate])
+				donor = candidate
+			}
+		}
+		if donor != "" {
+			moved := bySlot[donor][len(bySlot[donor])-1]
+			bySlot[donor] = bySlot[donor][:len(bySlot[donor])-1]
+			moved.Category = slot
+			bySlot[slot] = append(bySlot[slot], moved)
+			for i := range allArticles {
+				if normalizeDedupTitle(allArticles[i].Title) == normalizeDedupTitle(moved.Title) {
+					allArticles[i].Category = slot
+					break
+				}
+			}
+		}
+	}
+
+	return bySlot
+}
+
 func cleanBroadcastSentence(title, summary string) string {
 	title = strings.TrimSpace(title)
 	summary = strings.TrimSpace(summary)
 	if title == "" && summary == "" {
 		return ""
+	}
+	if summary != "" && title != "" && strings.HasPrefix(strings.ToLower(summary), strings.ToLower(title)) {
+		summary = strings.TrimSpace(summary[len(title):])
+		summary = strings.TrimLeft(summary, ".:-–— ")
 	}
 	if title != "" && !strings.HasSuffix(title, ".") && !strings.HasSuffix(title, "!") && !strings.HasSuffix(title, "?") {
 		title += "."
