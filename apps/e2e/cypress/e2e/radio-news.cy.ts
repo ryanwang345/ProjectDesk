@@ -16,9 +16,9 @@ describe('680 News live radio', () => {
 
   it('switches clock segments and shows lexis and liaisons', () => {
     cy.contains('button', 'Top Headlines').first().click()
-    cy.contains('Waterfront').should('be.visible')
+    cy.contains('Original broadcast transcript').should('be.visible')
     cy.contains('Liaisons & Reductions').should('be.visible')
-    cy.contains('municipal').should('be.visible')
+    cy.contains('680 新闻高频词汇').should('be.visible')
   })
 
   it('toggles bilingual view', () => {

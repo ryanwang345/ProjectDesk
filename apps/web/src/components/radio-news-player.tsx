@@ -11,6 +11,7 @@ import {
   Pause,
   Play,
   Radio,
+  RefreshCw,
   Sparkles,
   Volume2,
   VolumeX,
@@ -19,8 +20,10 @@ import { InteractiveGlossText } from '@/components/interactive-gloss-text'
 import { useEnglish } from '@/hooks/use-english'
 import { useI18n } from '@/i18n'
 import {
+  fetchLiveRadioBulletin,
   STATION_680_NEWS,
   type LiveStreamStation,
+  type RadioBulletin,
   type RadioNewsWheelSegment,
   type RadioVocabularyItem,
 } from '@/lib/radio-news'
@@ -52,13 +55,49 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
   const [liveListeningSeconds, setLiveListeningSeconds] = useState(0)
   const [playbackRate, setPlaybackRate] = useState<0.5 | 0.8 | 1 | 1.1 | 1.25>(1)
 
-  // Active news wheel segment
+  // Active news wheel segment & live news bulletin state
+  const [liveBulletin, setLiveBulletin] = useState<RadioBulletin | null>(null)
+  const [isRefreshingNews, setIsRefreshingNews] = useState(false)
   const [activeSegmentId, setActiveSegmentId] = useState<string>(station.wheelSegments[0].id)
   const [showChinese, setShowChinese] = useState(true)
   const [activeWordToAdd, setActiveWordToAdd] = useState<string | null>(null)
 
+  const segments: RadioNewsWheelSegment[] =
+    liveBulletin && liveBulletin.segments.length > 0 ? liveBulletin.segments : station.wheelSegments
+
   const currentSegment: RadioNewsWheelSegment =
-    station.wheelSegments.find((s) => s.id === activeSegmentId) || station.wheelSegments[0]
+    segments.find((s) => s.id === activeSegmentId) || segments[0]
+
+  // Fetch real-time 680 News / CityNews Toronto bulletin on mount and every 5 minutes
+  useEffect(() => {
+    let active = true
+    const loadLive = (force: boolean) => {
+      void fetchLiveRadioBulletin(force).then((data) => {
+        if (active && data && data.segments.length > 0) {
+          setLiveBulletin(data)
+        }
+      })
+    }
+    loadLive(false)
+    const timer = window.setInterval(() => loadLive(false), 5 * 60 * 1000)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [])
+
+  async function handleRefreshLiveNews() {
+    if (isRefreshingNews) return
+    setIsRefreshingNews(true)
+    try {
+      const data = await fetchLiveRadioBulletin(true)
+      if (data && data.segments.length > 0) {
+        setLiveBulletin(data)
+      }
+    } finally {
+      setIsRefreshingNews(false)
+    }
+  }
 
   // Track live listening timer
   useEffect(() => {
@@ -241,8 +280,14 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
       : isPlaying
         ? zh ? '680 直播信号已连接' : '680 live signal connected'
         : zh ? '直播待命' : 'Standby'
-  const segIndex = Math.max(0, station.wheelSegments.findIndex((x) => x.id === currentSegment.id))
+  const segIndex = Math.max(0, segments.findIndex((x) => x.id === currentSegment.id))
   const clip = (seg: RadioNewsWheelSegment) => formatDurationClock(seg.endSecond - seg.startSecond)
+  const updatedTimeLabel = liveBulletin?.updatedAt
+    ? new Date(liveBulletin.updatedAt).toLocaleTimeString(zh ? 'zh-CN' : 'en-CA', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null
 
   return (
     <div className="flex flex-col gap-5">
@@ -389,7 +434,7 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {station.wheelFeatures.map((feat, i) => {
-            const seg = station.wheelSegments[i]
+            const seg = segments[i]
             const selected = i === segIndex
             return (
               <button
@@ -422,12 +467,27 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
       </section>
 
       {/* Now-selected hero */}
-      <section className="relative flex h-40 items-end overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary/25 via-card to-background p-5">
+      <section className="relative flex min-h-40 items-end overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary/25 via-card to-background p-5">
         <Radio className="absolute top-5 right-6 size-24 text-primary/15" aria-hidden="true" />
         <div className="relative">
-          <span className="rounded bg-primary px-2 py-0.5 text-[10px] font-bold tracking-wide text-primary-foreground uppercase">
-            {currentSegment.timeMark}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded bg-primary px-2 py-0.5 text-[10px] font-bold tracking-wide text-primary-foreground uppercase">
+              {currentSegment.timeMark}
+            </span>
+            {liveBulletin?.isLive && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/15 px-2.5 py-0.5 text-[10px] font-bold text-primary">
+                <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+                {zh ? `实时同步 (${updatedTimeLabel ?? '刚刚'})` : `LIVE (${updatedTimeLabel ?? 'Just now'})`}
+              </span>
+            )}
+            {liveBulletin?.weather && (
+              <span className="rounded-full border border-border bg-background/70 px-2.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                {zh
+                  ? `多伦多实时: ${Math.round(liveBulletin.weather.temperatureC)}°C · ${liveBulletin.weather.conditionZh} · 风速 ${Math.round(liveBulletin.weather.windSpeedKmh)} km/h`
+                  : `Toronto Live: ${Math.round(liveBulletin.weather.temperatureC)}°C · ${liveBulletin.weather.condition} · Wind ${Math.round(liveBulletin.weather.windSpeedKmh)} km/h`}
+              </span>
+            )}
+          </div>
           <p className="mt-2 font-display text-lg font-semibold text-foreground">{zh ? currentSegment.titleZh : currentSegment.title}</p>
         </div>
       </section>
@@ -440,12 +500,24 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
               <Headphones className="size-4 text-primary" />
               {zh ? '680 核心时段原声与精听文稿' : '680 News transcripts'}
             </h2>
-            <span className="text-xs text-muted-foreground">
-              {zh ? '划过或点击单词即可查看释义并一键加入生词本' : 'Hover or click any word for the dictionary'}
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {zh ? '划过或点击单词即可查看释义并一键加入生词本' : 'Hover or click any word for the dictionary'}
+              </span>
+              <button
+                type="button"
+                onClick={() => void handleRefreshLiveNews()}
+                disabled={isRefreshingNews}
+                className={cn(btn, 'px-2.5 py-1 text-[11px]')}
+                title={zh ? '从 CityNews 680 / CBC 实时拉取最新新闻' : 'Fetch latest live news from CityNews 680 / CBC'}
+              >
+                <RefreshCw className={cn('size-3 text-primary', isRefreshingNews && 'animate-spin')} />
+                {isRefreshingNews ? (zh ? '同步中…' : 'Syncing…') : zh ? '刷新实时新闻' : 'Refresh Live News'}
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {station.wheelSegments.map((seg) => (
+            {segments.map((seg) => (
               <button
                 key={seg.id}
                 type="button"
@@ -464,8 +536,21 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="font-display text-lg font-semibold text-foreground">{zh ? currentSegment.titleZh : currentSegment.title}</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {zh ? '播音主播：' : 'Anchor: '}{currentSegment.anchor}
+                <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>{zh ? '播音主播：' : 'Anchor: '}{currentSegment.anchor}</span>
+                  {currentSegment.sourceName && (
+                    <span>· {currentSegment.sourceName}</span>
+                  )}
+                  {currentSegment.sourceUrl && (
+                    <a
+                      href={currentSegment.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                    >
+                      {zh ? '查看新闻原文' : 'Original report'} <ExternalLink className="size-3" />
+                    </a>
+                  )}
                 </p>
               </div>
               <button type="button" onClick={() => void speakWord(currentSegment.text)} className={btn}>
@@ -485,6 +570,60 @@ export function RadioNewsPlayer({ station = STATION_680_NEWS }: RadioNewsPlayerP
               <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm leading-relaxed text-muted-foreground">
                 <span className="mb-1 block text-xs font-semibold text-foreground">{zh ? '中文对照' : 'Translation'}</span>
                 {currentSegment.textZh}
+              </div>
+            )}
+
+            {currentSegment.relatedArticles && currentSegment.relatedArticles.length > 0 && (
+              <div className="rounded-2xl border border-border bg-background/60 p-4">
+                <h4 className="mb-2.5 flex items-center justify-between text-xs font-bold text-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Radio className="size-3.5 text-primary" />
+                    {zh ? '本时段实时新闻源 (Live News Feed)' : 'Live News Feed for this Slot'}
+                  </span>
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {currentSegment.relatedArticles.length} {zh ? '条最新快讯' : 'live stories'}
+                  </span>
+                </h4>
+                <div className="flex flex-col gap-2">
+                  {currentSegment.relatedArticles.map((art) => (
+                    <div key={art.link || art.title} className="rounded-xl border border-border bg-card p-3 text-xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-foreground">{art.title}</p>
+                          {showChinese && art.titleZh && (
+                            <p className="mt-0.5 text-muted-foreground">{art.titleZh}</p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => void speakWord(`${art.title}. ${art.summary}`)}
+                            aria-label={zh ? '朗读快讯' : 'Read headline'}
+                            className="rounded-full border border-border p-1.5 text-primary hover:border-primary/50"
+                          >
+                            <Volume2 className="size-3.5" />
+                          </button>
+                          {art.link && (
+                            <a
+                              href={art.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={zh ? '打开原文' : 'Open article'}
+                              className="rounded-full border border-border p-1.5 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                            >
+                              <ExternalLink className="size-3.5" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                      {art.summary && (
+                        <p className="mt-1.5 leading-relaxed text-muted-foreground">
+                          <InteractiveGlossText text={art.summary} contextSentence={art.summary} />
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

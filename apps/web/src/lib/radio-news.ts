@@ -14,6 +14,28 @@ export type RadioLiaison = {
   note: string
 }
 
+export type RadioLiveArticle = {
+  title: string
+  titleZh: string
+  summary: string
+  summaryZh?: string
+  link: string
+  source: string
+  category: string
+  publishedAt: string
+}
+
+export type RadioLiveWeather = {
+  temperatureC: number
+  feelsLikeC: number
+  windSpeedKmh: number
+  windGustsKmh: number
+  windDirection: string
+  condition: string
+  conditionZh: string
+  observedAt: string
+}
+
 export type RadioNewsWheelSegment = {
   id: string
   timeMark: string // e.g. "Traffic on the 1s", "Top of the Hour :00", "Business at :26"
@@ -24,8 +46,39 @@ export type RadioNewsWheelSegment = {
   endSecond: number
   text: string
   textZh: string
+  publishedAt?: string
+  sourceUrl?: string
+  sourceName?: string
   liaisons: RadioLiaison[]
   keyLexis: RadioVocabularyItem[]
+  relatedArticles?: RadioLiveArticle[]
+}
+
+export type RadioBulletin = {
+  updatedAt: string
+  source: string
+  isLive: boolean
+  weather?: RadioLiveWeather
+  segments: RadioNewsWheelSegment[]
+  liveArticles: RadioLiveArticle[]
+}
+
+export async function fetchLiveRadioBulletin(forceRefresh = false): Promise<RadioBulletin | null> {
+  try {
+    const endpoint = forceRefresh ? '/api/radio/news/refresh' : '/api/radio/news'
+    const resp = await fetch(endpoint, {
+      method: forceRefresh ? 'POST' : 'GET',
+      headers: { Accept: 'application/json' },
+    })
+    if (!resp.ok) return null
+    const data = (await resp.json()) as RadioBulletin
+    if (!data || !Array.isArray(data.segments) || data.segments.length === 0) {
+      return null
+    }
+    return data
+  } catch {
+    return null
+  }
 }
 
 export type LiveStreamStation = {
