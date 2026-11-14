@@ -1,6 +1,0 @@
-# The app URL and other run settings are in ../.env.
-environment: dev
-
-image:
-  # Set a specific build number tag when deploying (e.g. --set image.tag=<build-number>).
-  tag: ""

@@ -32,6 +32,10 @@ def main(config) {
             dir('apps/e2e') {
               echo "[apps/e2e] Linting E2E Helm charts across environments..."
               sh '''
+                if [ ! -d "chart" ]; then
+                  echo "[apps/e2e] No local Helm chart (moved to ProjectDesk-GitOps); skipping lint."
+                  exit 0
+                fi
                 for env in dev staging prod; do
                   if [ -f "chart/values-${env}.yaml" ]; then
                     helm lint ./chart \
