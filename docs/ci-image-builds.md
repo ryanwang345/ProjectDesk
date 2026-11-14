@@ -8,12 +8,10 @@ there is no Docker socket, host mount, privileged container, or shared service.
 
 ## Tags and deployment
 
-- Changed components publish `docker.io/$DOCKERHUB_USER/project-desk-<app>:$BUILD_NUMBER`.
-- Builds on `main` also publish `:latest` for each selected component.
-- Changes to `Jenkinsfile` select all components so builder changes are exercised.
-- After a successful push on `main`, Jenkins commits the selected web/API tags to
-  `deploy/helm/values.yaml` with `[skip ci]`. Argo CD reconciles that commit.
-- The separate E2E dev CronJob pulls `:latest`. Jenkins typechecks its specs;
+- Changed components publish `docker.io/$DOCKERHUB_USER/project-desk-<app>:$BUILD_NUMBER` (no `:latest` tag is published).
+- Changes to `Jenkinsfile` select web and API so builder changes are exercised.
+- After a successful push on `main`, Jenkins triggers `ProjectDesk-Deploy` for `dev` with the specific `$BUILD_NUMBER` tag. Argo CD reconciles that commit.
+- The separate E2E dev CronJob requires a specific build number tag (`--set image.tag=<build-number>`). Jenkins typechecks its specs;
   browser execution happens in the CronJob or through `npm run e2e`.
 
 Docker Hub credentials are written with owner-only permissions to a temporary

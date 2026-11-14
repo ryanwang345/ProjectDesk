@@ -21,7 +21,7 @@ spec:
     fsGroup: 1000
   containers:
     - name: git
-      image: alpine/git:latest
+      image: alpine/git:v2.47.2
       command: ['cat']
       tty: true
       resources:

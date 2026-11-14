@@ -20,8 +20,7 @@ cronjob:
 
 image:
   repository: docker.io/rwang345/project-desk-e2e
-  # Required. Dev uses latest so each run pulls the newest Jenkins push.
-  # A build number still works when you want one fixed image.
+  # Required. Pass a specific Jenkins build number tag (no :latest tag is used).
   tag: ""
   pullPolicy: Always
 

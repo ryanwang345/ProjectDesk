@@ -2,4 +2,5 @@
 environment: dev
 
 image:
-  tag: "latest"
+  # Set a specific build number tag when deploying (e.g. --set image.tag=<build-number>).
+  tag: ""

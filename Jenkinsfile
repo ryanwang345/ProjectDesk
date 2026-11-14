@@ -364,19 +364,8 @@ spec:
                 CONTEXT="$WORKSPACE/apps/${app}"
 
                 IMAGE="docker.io/${DOCKERHUB_USER}/project-desk-${app}"
-
                 IMAGE_TAGS="${IMAGE}:${BUILD_NUMBER}"
 
-                # BRANCH_NAME is set by multibranch jobs, GIT_BRANCH by plain
-                # pipeline jobs ("origin/main").
-                BRANCH="${BRANCH_NAME:-${GIT_BRANCH:-}}"
-                BRANCH="${BRANCH#origin/}"
-
-                if [ "$BRANCH" = "main" ]; then
-                  IMAGE_TAGS="${IMAGE_TAGS},${IMAGE}:latest"
-                fi
-
-                # CSV quoting keeps both image names in one exporter option.
                 OUTPUT=$(printf 'type=image,"name=%s",push=true' "$IMAGE_TAGS")
                 set -- build \
                   --progress=plain \

@@ -80,10 +80,6 @@ def main(config) {
               IMAGE="docker.io/${BUILD_IMAGE_REPO}"
               IMAGE_TAGS="${IMAGE}:${BUILD_IMAGE_TAG}"
 
-              if [ "${BUILD_IMAGE_BRANCH}" = "${BUILD_IMAGE_LATEST_BRANCH}" ]; then
-                IMAGE_TAGS="${IMAGE_TAGS},${IMAGE}:latest"
-              fi
-
               OUTPUT=$(printf 'type=image,"name=%s",push=true' "$IMAGE_TAGS")
 
               echo "[BuildKit] Building and publishing ${IMAGE_TAGS} from apps/e2e..."
