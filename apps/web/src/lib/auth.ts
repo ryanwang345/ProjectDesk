@@ -73,9 +73,21 @@ export function initializeAuth(): Promise<void> {
 
 export async function signIn() {
   try {
-    await client?.login({ redirectUri: window.location.href })
+    const redirectUri =
+      window.location.pathname === '/register'
+        ? `${window.location.origin}/`
+        : window.location.href
+    await client?.login({ redirectUri })
   } catch {
     publish({ status: 'error', error: 'Unable to open sign-in. Please try again.' })
+  }
+}
+
+export async function registerAccount() {
+  try {
+    await client?.register({ redirectUri: `${window.location.origin}/` })
+  } catch {
+    publish({ status: 'error', error: 'Unable to open Keycloak registration. Please verify user registration is enabled on your realm.' })
   }
 }
 
