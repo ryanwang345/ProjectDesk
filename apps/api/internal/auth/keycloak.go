@@ -14,6 +14,22 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
+type contextKey string
+
+const userIDContextKey contextKey = "projectdesk_user_id"
+
+// UserIDFromContext returns the authenticated Keycloak subject (sub) from ctx,
+// or an empty string if the request has no authenticated user.
+func UserIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(userIDContextKey).(string)
+	return v
+}
+
+// WithUserID attaches a user identifier to ctx for downstream handlers and tests.
+func WithUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, userIDContextKey, userID)
+}
+
 type Config struct {
 	Enabled  bool   `json:"enabled"`
 	URL      string `json:"url,omitempty"`
@@ -83,7 +99,11 @@ func Protect(ctx context.Context, cfg Config, next http.Handler) (http.Handler, 
 		// Only infrastructure probes are public; application data needs a token.
 		probe := r.Method == http.MethodGet && (r.URL.Path == "/api/healthz" || r.URL.Path == "/api/readyz")
 		if !cfg.Enabled || probe {
-			next.ServeHTTP(w, r)
+			ctxWithUser := r.Context()
+			if !cfg.Enabled {
+				ctxWithUser = WithUserID(ctxWithUser, "local-anonymous")
+			}
+			next.ServeHTTP(w, r.WithContext(ctxWithUser))
 			return
 		}
 		parts := strings.Fields(r.Header.Get("Authorization"))
@@ -106,7 +126,7 @@ func Protect(ctx context.Context, cfg Config, next http.Handler) (http.Handler, 
 			return
 		}
 		w.Header().Set("Cache-Control", "private, no-store")
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(WithUserID(r.Context(), token.Subject)))
 	}), nil
 }
 

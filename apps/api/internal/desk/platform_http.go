@@ -22,6 +22,8 @@ func (h *Handler) registerPlatform(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/readyz", h.ready)
 	mux.HandleFunc("GET /api/platform", h.platformStatus)
 	mux.HandleFunc("GET /api/repos", h.repos)
+	mux.HandleFunc("GET /api/user/features", h.getUserFeatures)
+	mux.HandleFunc("PUT /api/user/features", h.putUserFeatures)
 
 	mux.HandleFunc("GET /api/providers", h.listProviders)
 	mux.HandleFunc("GET /api/providers/kinds", h.providerKinds)

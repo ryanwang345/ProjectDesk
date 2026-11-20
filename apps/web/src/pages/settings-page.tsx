@@ -11,7 +11,7 @@ export function SettingsPage() {
     <div className="space-y-2">
       <h1 className="flex items-center gap-3 font-display text-3xl font-semibold"><SlidersHorizontal className="size-6 text-primary" aria-hidden="true" />{zh ? '设置' : 'Settings'}</h1>
       <p className="text-sm leading-relaxed text-muted-foreground">{zh ? '选择要使用的页面。关闭后，页面会从导航栏隐藏，也无法通过网址打开。' : 'Choose which pages to use. Turning a page off hides it from navigation and blocks direct URL access.'}</p>
-      <p className="text-xs text-muted-foreground">{zh ? '更改自动保存在此浏览器中。设置页面始终可用。' : 'Changes save automatically in this browser. Settings always stays available.'}</p>
+      <p className="text-xs text-muted-foreground">{zh ? '更改会自动保存到当前登录账号并在多设备间同步。设置页面始终可用。' : 'Changes save automatically to your signed-in account and sync across devices. Settings always stays available.'}</p>
     </div>
     {saveError && <p role="alert" className="rounded-xl border border-destructive/30 p-3 text-sm text-destructive">{zh ? '无法保存设置。请允许浏览器存储后重试。' : 'Could not save your settings. Allow browser storage and try again.'}</p>}
     <section className="overflow-hidden rounded-3xl border border-border bg-card">

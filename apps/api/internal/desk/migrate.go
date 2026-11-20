@@ -595,6 +595,13 @@ UPDATE english_cards SET pronunciation = '/prɪˌsɪp.ɪˈteɪ.ʃən/' WHERE low
 UPDATE english_cards SET pronunciation = '/kəˈmjuːt/' WHERE lower(word) = 'commute' AND (pronunciation = '' OR pronunciation LIKE '%...%');
 UPDATE english_cards SET pronunciation = '/ˈkrɒs.wɪnd/' WHERE lower(word) = 'crosswind' AND (pronunciation = '' OR pronunciation LIKE '%...%');
 `},
+	{19, `
+CREATE TABLE IF NOT EXISTS user_feature_preferences (
+    user_id TEXT PRIMARY KEY,
+    features JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+`},
 }
 
 const migrationAdvisoryLockID int64 = 47292001

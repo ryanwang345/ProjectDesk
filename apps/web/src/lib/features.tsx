@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { MessageKey } from '@/i18n'
+import { authFetch, getAuthState, subscribeAuth } from '@/lib/auth'
 
 export const FEATURES = [
   { id: 'learn', label: 'english.tabLearn', to: '/english' },
@@ -19,11 +20,42 @@ type FeatureFlags = Record<FeatureId, boolean>
 export const FEATURE_STORAGE_KEY = 'projectdesk.features.v1'
 const defaults = Object.fromEntries(FEATURES.map(({ id }) => [id, true])) as FeatureFlags
 
-function readFlags(): FeatureFlags {
+function storageKeyForUser(subject?: string): string {
+  return subject ? `${FEATURE_STORAGE_KEY}.${subject}` : FEATURE_STORAGE_KEY
+}
+
+function normalizeFlags(saved: Record<string, unknown> | null | undefined): FeatureFlags {
+  return Object.fromEntries(
+    FEATURES.map(({ id }) => [id, typeof saved?.[id] === 'boolean' ? saved[id] : true]),
+  ) as FeatureFlags
+}
+
+function readFlags(key: string): FeatureFlags {
   try {
-    const saved = JSON.parse(localStorage.getItem(FEATURE_STORAGE_KEY) ?? '{}')
-    return Object.fromEntries(FEATURES.map(({ id }) => [id, typeof saved?.[id] === 'boolean' ? saved[id] : true])) as FeatureFlags
-  } catch { return { ...defaults } }
+    const raw = localStorage.getItem(key)
+    if (raw) {
+      return normalizeFlags(JSON.parse(raw) as Record<string, unknown>)
+    }
+    // Seed new account-scoped key from legacy key if present
+    if (key !== FEATURE_STORAGE_KEY) {
+      const legacy = localStorage.getItem(FEATURE_STORAGE_KEY)
+      if (legacy) {
+        return normalizeFlags(JSON.parse(legacy) as Record<string, unknown>)
+      }
+    }
+    return { ...defaults }
+  } catch {
+    return { ...defaults }
+  }
+}
+
+function writeLocalFlags(key: string, flags: FeatureFlags): boolean {
+  try {
+    localStorage.setItem(key, JSON.stringify(flags))
+    return true
+  } catch {
+    return false
+  }
 }
 
 const FeatureContext = createContext<{
@@ -33,23 +65,76 @@ const FeatureContext = createContext<{
 } | null>(null)
 
 export function FeatureProvider({ children }: { children: ReactNode }) {
-  const [enabled, setFlags] = useState(readFlags)
+  const auth = useSyncExternalStore(subscribeAuth, getAuthState)
+  const userKey = storageKeyForUser(auth.status === 'authenticated' ? auth.subject : undefined)
+  const [enabledByKey, setEnabledByKey] = useState<{ key: string; flags: FeatureFlags }>(() => ({
+    key: userKey,
+    flags: readFlags(userKey),
+  }))
   const [saveError, setSaveError] = useState(false)
+
+  const enabled = enabledByKey.key === userKey ? enabledByKey.flags : readFlags(userKey)
+
   useEffect(() => {
-    const sync = (event: StorageEvent) => {
-      if (event.key === FEATURE_STORAGE_KEY || event.key === null) setFlags(readFlags())
+    const syncStorage = (event: StorageEvent) => {
+      if (event.key === userKey || event.key === null) {
+        setEnabledByKey({ key: userKey, flags: readFlags(userKey) })
+      }
     }
-    window.addEventListener('storage', sync)
-    return () => window.removeEventListener('storage', sync)
-  }, [])
+    window.addEventListener('storage', syncStorage)
+    return () => window.removeEventListener('storage', syncStorage)
+  }, [userKey])
+
+  // Sync account feature preferences from PostgreSQL when authenticated (or local-anonymous)
+  useEffect(() => {
+    if (auth.status !== 'authenticated' && auth.status !== 'disabled') return
+    let active = true
+    void authFetch('/api/user/features')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { features?: Record<string, unknown> } | null) => {
+        if (!active || !data?.features) return
+        const remoteKeys = Object.keys(data.features)
+        if (remoteKeys.length > 0) {
+          const merged = normalizeFlags(data.features)
+          writeLocalFlags(userKey, merged)
+          setEnabledByKey({ key: userKey, flags: merged })
+        } else {
+          // First sign-in on this account: persist any existing local customization to the server
+          const localFlags = readFlags(userKey)
+          const hasCustom = FEATURES.some(({ id }) => localFlags[id] !== true)
+          if (hasCustom) {
+            void authFetch('/api/user/features', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ features: localFlags }),
+            }).catch(() => {})
+          }
+        }
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [auth.status, auth.subject, userKey])
+
   function setEnabled(id: FeatureId, value: boolean) {
-    const next = { ...enabled, [id]: value }
-    try {
-      localStorage.setItem(FEATURE_STORAGE_KEY, JSON.stringify(next))
-      setSaveError(false)
-      setFlags(next)
-    } catch { setSaveError(true) }
+    const current = enabledByKey.key === userKey ? enabledByKey.flags : readFlags(userKey)
+    const next = { ...current, [id]: value }
+    const ok = writeLocalFlags(userKey, next)
+    setSaveError(!ok)
+    setEnabledByKey({ key: userKey, flags: next })
+
+    if (auth.status === 'authenticated' || auth.status === 'disabled') {
+      void authFetch('/api/user/features', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ features: next }),
+      }).catch(() => {
+        setSaveError(true)
+      })
+    }
   }
+
   return <FeatureContext.Provider value={{ enabled, setEnabled, saveError }}>{children}</FeatureContext.Provider>
 }
 

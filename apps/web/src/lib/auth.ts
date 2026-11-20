@@ -4,6 +4,7 @@ type AuthConfig = { enabled: boolean; url?: string; realm?: string; clientId?: s
 export type AuthState = {
   status: 'loading' | 'authenticated' | 'anonymous' | 'disabled' | 'error'
   name?: string
+  subject?: string
   error?: string
 }
 
@@ -21,6 +22,7 @@ function signedIn() {
   publish({
     status: 'authenticated',
     name: client?.tokenParsed?.name || client?.tokenParsed?.preferred_username || 'Account',
+    subject: client?.tokenParsed?.sub,
   })
 }
 
