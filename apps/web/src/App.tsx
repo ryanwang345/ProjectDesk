@@ -24,6 +24,7 @@ const ReadingPage = lazy(() => import('@/pages/reading-page').then((m) => ({ def
 const RadioNewsPage = lazy(() => import('@/pages/radio-news-page').then((m) => ({ default: m.RadioNewsPage })))
 const AboutPage = lazy(() => import('@/pages/about-page').then((m) => ({ default: m.AboutPage })))
 const LiteraturePuzzlesPage = lazy(() => import('@/pages/literature-puzzles-page').then((m) => ({ default: m.LiteraturePuzzlesPage })))
+const GamePage = lazy(() => import('@/pages/game-page').then((m) => ({ default: m.GamePage })))
 const SettingsPage = lazy(() => import('@/pages/settings-page').then((m) => ({ default: m.SettingsPage })))
 const NotFoundPage = lazy(() => import('@/pages/not-found-page').then((m) => ({ default: m.NotFoundPage })))
 
@@ -193,6 +194,7 @@ function Frame() {
                 <Route path="desk" element={<BoardPage />} />
                 <Route path="board" element={<BoardPage />} />
                 <Route path="puzzles" element={<LiteraturePuzzlesPage />} />
+                <Route path="game" element={<GamePage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="words" element={<Navigate to="/english?tab=words" replace />} />
                 <Route path="vocabulary" element={<Navigate to="/english?tab=words" replace />} />

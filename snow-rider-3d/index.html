@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Snow Rider 3D</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #cfe9f7;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .overlay.interactive {
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    .hidden {
+      display: none !important;
+    }
+
+    /* Title Screen */
+    .title-wrap {
+      text-align: center;
+      transform: translateY(-24px);
+    }
+    .game-title {
+      font-size: clamp(2.8rem, 8vw, 5.5rem);
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      line-height: 0.95;
+      color: #38b6ff;
+      text-shadow:
+        0 3px 0 #155e96,
+        0 6px 0 #0d3c61,
+        0 12px 24px rgba(10, 35, 60, 0.45),
+        0 -2px 0 #e8f8ff;
+      -webkit-text-stroke: 2px #0f4c81;
+      margin-bottom: 10px;
+    }
+    .game-title .sub-3d {
+      display: block;
+      font-size: clamp(2.2rem, 6vw, 4.2rem);
+      color: #7dd3fc;
+    }
+    .tap-prompt {
+      margin-top: 34px;
+      font-size: clamp(1.3rem, 3.5vw, 2.2rem);
+      font-weight: 800;
+      color: #1e293b;
+      text-shadow: 0 2px 10px rgba(255, 255, 255, 0.9);
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    .controls-hint {
+      margin-top: 14px;
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: #334155;
+      background: rgba(255, 255, 255, 0.7);
+      padding: 6px 14px;
+      border-radius: 999px;
+      backdrop-filter: blur(6px);
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.95; }
+      50% { transform: scale(1.06); opacity: 0.7; }
+    }
+
+    /* HUD */
+    #hud {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+      z-index: 12;
+    }
+    .hud-pills {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      background: rgba(15, 23, 42, 0.65);
+      color: #f8fafc;
+      padding: 8px 14px;
+      border-radius: 12px;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      font-weight: 700;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .pill .val {
+      color: #38bdf8;
+      font-variant-numeric: tabular-nums;
+      font-size: 1.08rem;
+    }
+    .pill.gift .val {
+      color: #fbbf24;
+    }
+    #mute-btn {
+      pointer-events: auto;
+      cursor: pointer;
+      background: rgba(15, 23, 42, 0.65);
+      color: #f8fafc;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 8px 12px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      backdrop-filter: blur(8px);
+    }
+    #mute-btn:hover {
+      background: rgba(15, 23, 42, 0.85);
+    }
+
+    /* Game Over Card */
+    .gameover-card {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      padding: 28px 36px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+      border: 2px solid rgba(56, 189, 248, 0.5);
+      min-width: 280px;
+    }
+    .gameover-card h2 {
+      font-size: 2rem;
+      font-weight: 900;
+      color: #0f172a;
+      margin-bottom: 16px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #e2e8f0;
+      font-weight: 600;
+      color: #475569;
+    }
+    .stat-row strong {
+      color: #0284c7;
+      font-size: 1.1rem;
+    }
+    .restart-btn {
+      margin-top: 20px;
+      width: 100%;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #0ea5e9, #0284c7);
+      color: #fff;
+      font-size: 1.05rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(2, 132, 199, 0.35);
+      transition: transform 0.12s ease;
+    }
+    .restart-btn:hover {
+      transform: translateY(-1px);
+    }
+    .restart-btn:active {
+      transform: translateY(1px);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <div id="hud">
+    <div class="hud-pills">
+      <div class="pill">SCORE <span class="val" id="score-val">0</span></div>
+      <div class="pill gift">GIFTS <span class="val" id="gifts-val">0</span></div>
+      <div class="pill">BEST <span class="val" id="best-val">0</span></div>
+    </div>
+    <button id="mute-btn" type="button">🔊 Sound</button>
+  </div>
+
+  <div id="start-overlay" class="overlay interactive">
+    <div class="title-wrap">
+      <h1 class="game-title">
+        SNOW RIDER
+        <span class="sub-3d">3D</span>
+      </h1>
+      <p class="tap-prompt">Tap to start !</p>
+      <div class="controls-hint">A / D or ← / → to Steer · Space / ↑ to Jump</div>
+    </div>
+  </div>
+
+  <div id="gameover-overlay" class="overlay interactive hidden">
+    <div class="gameover-card">
+      <h2>WIPEOUT!</h2>
+      <div class="stat-row"><span>Distance Score</span><strong id="final-score">0</strong></div>
+      <div class="stat-row"><span>Gifts Collected</span><strong id="final-gifts">0</strong></div>
+      <div class="stat-row"><span>Best Score</span><strong id="final-best">0</strong></div>
+      <button id="restart-btn" class="restart-btn" type="button">Play Again (Space)</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.170.0/build/three.module.js"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    // --- Audio Synth (zero external assets) ---
+    class SoundFX {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+      ensure() {
+        if (this.muted) return null;
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+        return this.ctx;
+      }
+      playJump() {
+        const ctx = this.ensure();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(520, ctx.currentTime + 0.16);
+        gain.gain.setValueAtTime(0.14, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.18);
+      }
+      playGift() {
+        const ctx = this.ensure();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        [587.33, 880].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + i * 0.06);
+          gain.gain.setValueAtTime(0.15, now + i * 0.06);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.18);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(now + i * 0.06);
+          osc.stop(now + i * 0.06 + 0.19);
+        });
+      }
+      playCrash() {
+        const ctx = this.ensure();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(36, ctx.currentTime + 0.28);
+        gain.gain.setValueAtTime(0.22, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      }
+    }
+
+    const sfx = new SoundFX();
+
+    // --- DOM Elements ---
+    const canvas = document.getElementById('game-canvas');
+    const startOverlay = document.getElementById('start-overlay');
+    const gameoverOverlay = document.getElementById('gameover-overlay');
+    const restartBtn = document.getElementById('restart-btn');
+    const muteBtn = document.getElementById('mute-btn');
+    const scoreEl = document.getElementById('score-val');
+    const giftsEl = document.getElementById('gifts-val');
+    const bestEl = document.getElementById('best-val');
+    const finalScoreEl = document.getElementById('final-score');
+    const finalGiftsEl = document.getElementById('final-gifts');
+    const finalBestEl = document.getElementById('final-best');
+
+    const BEST_KEY = 'snow_rider_3d_best_v1';
+    let bestScore = Number(localStorage.getItem(BEST_KEY) || 0);
+    bestEl.textContent = bestScore;
+
+    muteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sfx.muted = !sfx.muted;
+      muteBtn.textContent = sfx.muted ? '🔇 Muted' : '🔊 Sound';
+    });
+
+    // --- Three.js Scene Setup ---
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xdbeeff);
+    scene.fog = new THREE.Fog(0xdbeeff, 35, 115);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 160);
+    camera.position.set(0, 5.2, 8.5);
+    camera.lookAt(0, 1.2, -10);
+
+    // Lighting
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x93c5fd, 0.95);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfffbeb, 1.15);
+    dirLight.position.set(18, 32, 16);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(1024, 1024);
+    dirLight.shadow.camera.near = 5;
+    dirLight.shadow.camera.far = 90;
+    const d = 28;
+    dirLight.shadow.camera.left = -d;
+    dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d;
+    dirLight.shadow.camera.bottom = -d;
+    scene.add(dirLight);
+
+    // --- Shared Low-Poly Materials ---
+    const matSnow = new THREE.MeshStandardMaterial({
+      color: 0xf0f8ff,
+      roughness: 0.85,
+      flatShading: true,
+      vertexColors: true,
+    });
+    const matCliff = new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      roughness: 0.95,
+      flatShading: true,
+    });
+    const matSnowCap = new THREE.MeshStandardMaterial({
+      color: 0xe0f2fe,
+      roughness: 0.8,
+      flatShading: true,
+    });
+    const matWood = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.75, flatShading: true });
+    const matWoodDark = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.8, flatShading: true });
+    const matRunner = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, metalness: 0.4, roughness: 0.4, flatShading: true });
+    const matSnowmanBody = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.7, flatShading: true });
+    const matCarrot = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.6, flatShading: true });
+    const matCoal = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9, flatShading: true });
+    const matTree = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.85, flatShading: true });
+    const matTrunk = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9, flatShading: true });
+    const matRock = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.9, flatShading: true });
+    const matRamp = new THREE.MeshStandardMaterial({ color: 0xbae6fd, roughness: 0.5, flatShading: true });
+
+    // --- Build Low-Poly Wooden Sled ---
+    function createSled() {
+      const group = new THREE.Group();
+
+      // Left & right runners
+      [-0.52, 0.52].forEach((x) => {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 2.2), matRunner);
+        rail.position.set(x, 0.12, 0);
+        rail.castShadow = true;
+        group.add(rail);
+
+        const curl = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.36, 0.14), matRunner);
+        curl.position.set(x, 0.28, -1.08);
+        curl.rotation.x = -0.55;
+        curl.castShadow = true;
+        group.add(curl);
+      });
+
+      // Crossbars
+      [-0.65, 0.55].forEach((z) => {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.1, 0.14), matWoodDark);
+        bar.position.set(0, 0.24, z);
+        group.add(bar);
+      });
+
+      // Wooden deck planks
+      [-0.36, -0.12, 0.12, 0.36].forEach((x) => {
+        const plank = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 1.95), matWood);
+        plank.position.set(x, 0.33, 0.05);
+        plank.castShadow = true;
+        plank.receiveShadow = true;
+        group.add(plank);
+      });
+
+      // Backrest
+      const back = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.32, 0.1), matWoodDark);
+      back.position.set(0, 0.5, 0.92);
+      back.rotation.x = -0.25;
+      back.castShadow = true;
+      group.add(back);
+
+      return group;
+    }
+
+    const sled = createSled();
+    scene.add(sled);
+
+    // --- Obstacle & Collectible Factories ---
+    function createSnowman() {
+      const g = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.IcosahedronGeometry(0.85, 1), matSnowmanBody);
+      base.position.y = 0.78;
+      base.castShadow = true;
+      g.add(base);
+
+      const mid = new THREE.Mesh(new THREE.IcosahedronGeometry(0.62, 1), matSnowmanBody);
+      mid.position.y = 1.85;
+      mid.castShadow = true;
+      g.add(mid);
+
+      const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 1), matSnowmanBody);
+      head.position.y = 2.68;
+      head.castShadow = true;
+      g.add(head);
+
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.42, 5), matCarrot);
+      nose.rotation.x = Math.PI / 2;
+      nose.position.set(0, 2.66, 0.52);
+      g.add(nose);
+
+      [-0.14, 0.14].forEach((ex) => {
+        const eye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), matCoal);
+        eye.position.set(ex, 2.8, 0.4);
+        g.add(eye);
+      });
+
+      g.userData = { type: 'obstacle', radius: 0.85, height: 3.0 };
+      return g;
+    }
+
+    function createPineTree() {
+      const g = new THREE.Group();
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 0.9, 6), matTrunk);
+      trunk.position.y = 0.45;
+      trunk.castShadow = true;
+      g.add(trunk);
+
+      const tiers = [
+        { r: 1.25, h: 1.7, y: 1.5 },
+        { r: 0.95, h: 1.5, y: 2.45 },
+        { r: 0.65, h: 1.2, y: 3.3 },
+      ];
+      tiers.forEach((t) => {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(t.r, t.h, 7), matTree);
+        cone.position.y = t.y;
+        cone.castShadow = true;
+        g.add(cone);
+      });
+
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.65, 7), matSnowCap);
+      cap.position.y = 3.68;
+      g.add(cap);
+
+      g.userData = { type: 'obstacle', radius: 0.85, height: 3.8 };
+      return g;
+    }
+
+    function createRock() {
+      const g = new THREE.Group();
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.9, 0), matRock);
+      rock.scale.set(1.2, 0.8, 1.0);
+      rock.position.y = 0.55;
+      rock.rotation.set(Math.random(), Math.random(), 0);
+      rock.castShadow = true;
+      g.add(rock);
+
+      g.userData = { type: 'obstacle', radius: 0.85, height: 1.2 };
+      return g;
+    }
+
+    function createRamp() {
+      const g = new THREE.Group();
+      const shape = new THREE.Shape();
+      shape.moveTo(-1.3, 0);
+      shape.lineTo(1.3, 0);
+      shape.lineTo(1.3, 0.85);
+      shape.closePath();
+
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: 2.2, bevelEnabled: false });
+      geo.rotateY(Math.PI / 2);
+      geo.translate(-1.1, 0, 0);
+      const mesh = new THREE.Mesh(geo, matRamp);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      g.add(mesh);
+
+      g.userData = { type: 'ramp', radius: 1.25 };
+      return g;
+    }
+
+    const giftColors = [0xef4444, 0x3b82f6, 0x10b981, 0xa855f7];
+    function createGift() {
+      const g = new THREE.Group();
+      const boxMat = new THREE.MeshStandardMaterial({
+        color: giftColors[Math.floor(Math.random() * giftColors.length)],
+        roughness: 0.45,
+        flatShading: true,
+      });
+      const ribbonMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.35, flatShading: true });
+
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), boxMat);
+      box.castShadow = true;
+      g.add(box);
+
+      const r1 = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.94, 0.2), ribbonMat);
+      const r2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.94, 0.94), ribbonMat);
+      g.add(r1, r2);
+
+      g.position.y = 0.85;
+      g.userData = { type: 'gift', radius: 0.85 };
+      return g;
+    }
+
+    // --- Scrolling Low-Poly Snow Track Chunks ---
+    const TRACK_WIDTH = 28;
+    const CHUNK_LEN = 30;
+    const NUM_CHUNKS = 5;
+    const chunks = [];
+
+    function createTrackChunk(zCenter) {
+      const group = new THREE.Group();
+      group.position.z = zCenter;
+
+      // Faceted snow floor
+      const geo = new THREE.PlaneGeometry(TRACK_WIDTH, CHUNK_LEN, 12, 10);
+      geo.rotateX(-Math.PI / 2);
+      const pos = geo.attributes.position;
+      const colors = [];
+      const c1 = new THREE.Color(0xf8fcff);
+      const c2 = new THREE.Color(0xdbeafe);
+
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const edgeFactor = Math.max(0, Math.abs(x) - 8) * 0.08;
+        const jitter = (Math.sin(x * 0.8 + i) * 0.18) + edgeFactor;
+        pos.setY(i, jitter);
+        const col = (i % 2 === 0 ? c1 : c2).clone().lerp(c2, Math.random() * 0.45);
+        colors.push(col.r, col.g, col.b);
+      }
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geo.computeVertexNormals();
+
+      const floor = new THREE.Mesh(geo, matSnow);
+      floor.receiveShadow = true;
+      group.add(floor);
+
+      // Side rocky cliffs with snow caps
+      [-1, 1].forEach((side) => {
+        for (let z = -CHUNK_LEN / 2 + 3; z < CHUNK_LEN / 2; z += 6) {
+          const h = 3.2 + Math.random() * 2.5;
+          const cliff = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 0), matCliff);
+          cliff.scale.set(1.1, h / 3, 1.4);
+          cliff.position.set(side * (TRACK_WIDTH / 2 + 1.4), h * 0.45, z);
+          cliff.rotation.y = Math.random() * Math.PI;
+          group.add(cliff);
+
+          const snowTop = new THREE.Mesh(new THREE.DodecahedronGeometry(2.2, 0), matSnowCap);
+          snowTop.scale.set(1.1, 0.35, 1.3);
+          snowTop.position.set(side * (TRACK_WIDTH / 2 + 1.2), h * 0.92, z);
+          group.add(snowTop);
+        }
+      });
+
+      return group;
+    }
+
+    for (let i = 0; i < NUM_CHUNKS; i++) {
+      const chunk = createTrackChunk(10 - i * CHUNK_LEN);
+      chunks.push(chunk);
+      scene.add(chunk);
+    }
+
+    // --- Snowfall & Sled Spray Particles ---
+    const SNOW_COUNT = 260;
+    const snowGeo = new THREE.BufferGeometry();
+    const snowPos = new Float32Array(SNOW_COUNT * 3);
+    for (let i = 0; i < SNOW_COUNT; i++) {
+      snowPos[i * 3] = (Math.random() - 0.5) * 36;
+      snowPos[i * 3 + 1] = Math.random() * 18;
+      snowPos[i * 3 + 2] = (Math.random() - 0.5) * 80 - 20;
+    }
+    snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
+    const snowMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.22, transparent: true, opacity: 0.85 });
+    const snowPoints = new THREE.Points(snowGeo, snowMat);
+    scene.add(snowPoints);
+
+    // Runner spray particles
+    const sprayParticles = [];
+    const sprayGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
+    const sprayMat = new THREE.MeshBasicMaterial({ color: 0xbae6fd });
+
+    function emitSpray() {
+      [-0.5, 0.5].forEach((offsetX) => {
+        if (Math.random() > 0.65) return;
+        const p = new THREE.Mesh(sprayGeo, sprayMat);
+        p.position.set(sled.position.x + offsetX, 0.18, sled.position.z + 1.0);
+        p.userData = {
+          vx: (Math.random() - 0.5) * 1.8,
+          vy: 1.2 + Math.random() * 1.4,
+          vz: 4 + Math.random() * 2,
+          life: 0.45,
+        };
+        scene.add(p);
+        sprayParticles.push(p);
+      });
+    }
+
+    // --- Game State ---
+    let state = 'start'; // 'start' | 'playing' | 'gameover'
+    let entities = [];
+    let speed = 22;
+    let distance = 0;
+    let gifts = 0;
+    let bonusScore = 0;
+    let sledX = 0;
+    let sledY = 0;
+    let sledVelY = 0;
+    let isGrounded = true;
+    let spawnTimer = 0;
+
+    const LANE_LIMIT = TRACK_WIDTH / 2 - 2.2;
+    const keys = { left: false, right: false };
+
+    function clearEntities() {
+      for (const e of entities) scene.remove(e);
+      entities = [];
+    }
+
+    function spawnRow(zPos) {
+      const slots = Math.random() < 0.45 ? 3 : 2;
+      const usedX = [];
+      for (let i = 0; i < slots; i++) {
+        let x;
+        let tries = 0;
+        do {
+          x = (Math.random() - 0.5) * (LANE_LIMIT * 2);
+          tries++;
+        } while (usedX.some((ux) => Math.abs(ux - x) < 2.8) && tries < 8);
+        usedX.push(x);
+
+        const r = Math.random();
+        let obj;
+        if (r < 0.34) obj = createSnowman();
+        else if (r < 0.64) obj = createPineTree();
+        else if (r < 0.80) obj = createRock();
+        else if (r < 0.90) obj = createGift();
+        else obj = createRamp();
+
+        obj.position.x = x;
+        obj.position.z = zPos + (Math.random() - 0.5) * 3;
+        scene.add(obj);
+        entities.push(obj);
+      }
+    }
+
+    function populateInitialProps() {
+      clearEntities();
+      for (let z = -22; z >= -105; z -= 11) {
+        spawnRow(z);
+      }
+    }
+
+    function resetGame() {
+      speed = 22;
+      distance = 0;
+      gifts = 0;
+      bonusScore = 0;
+      sledX = 0;
+      sledY = 0;
+      sledVelY = 0;
+      isGrounded = true;
+      spawnTimer = 0;
+      sled.position.set(0, 0, 0);
+      sled.rotation.set(0, 0, 0);
+      scoreEl.textContent = '0';
+      giftsEl.textContent = '0';
+      populateInitialProps();
+    }
+
+    function startGame() {
+      sfx.ensure();
+      resetGame();
+      state = 'playing';
+      startOverlay.classList.add('hidden');
+      gameoverOverlay.classList.add('hidden');
+    }
+
+    function triggerGameOver() {
+      state = 'gameover';
+      sfx.playCrash();
+      const total = Math.floor(distance) + bonusScore;
+      if (total > bestScore) {
+        bestScore = total;
+        localStorage.setItem(BEST_KEY, String(bestScore));
+        bestEl.textContent = bestScore;
+      }
+      finalScoreEl.textContent = total;
+      finalGiftsEl.textContent = gifts;
+      finalBestEl.textContent = bestScore;
+      gameoverOverlay.classList.remove('hidden');
+    }
+
+    function jump(power = 11.5) {
+      if (state !== 'playing' || !isGrounded) return;
+      sledVelY = power;
+      isGrounded = false;
+      sfx.playJump();
+    }
+
+    // --- Input Handlers ---
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+        e.preventDefault();
+        if (state === 'start' || state === 'gameover') startGame();
+        else jump();
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+    });
+
+    // Touch / Pointer Steering
+    let pointerActive = false;
+    let lastPointerX = 0;
+    let pointerStartY = 0;
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (state !== 'playing') return;
+      pointerActive = true;
+      lastPointerX = e.clientX;
+      pointerStartY = e.clientY;
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!pointerActive || state !== 'playing') return;
+      const dx = e.clientX - lastPointerX;
+      lastPointerX = e.clientX;
+      sledX = THREE.MathUtils.clamp(sledX + dx * 0.045, -LANE_LIMIT, LANE_LIMIT);
+      if (pointerStartY - e.clientY > 45) {
+        jump();
+        pointerStartY = e.clientY;
+      }
+    });
+    window.addEventListener('pointerup', () => {
+      pointerActive = false;
+    });
+
+    startOverlay.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startGame();
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Populate initial background scene for title screen
+    populateInitialProps();
+
+    // --- Main Loop ---
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+
+      const moveSpeed = state === 'playing' ? speed : state === 'start' ? 10 : 0;
+
+      // Scroll track chunks
+      for (const chunk of chunks) {
+        chunk.position.z += moveSpeed * dt;
+        if (chunk.position.z > 25) {
+          chunk.position.z -= NUM_CHUNKS * CHUNK_LEN;
+        }
+      }
+
+      // Snowfall animation
+      const sArr = snowGeo.attributes.position.array;
+      for (let i = 0; i < SNOW_COUNT; i++) {
+        sArr[i * 3 + 1] -= 3.2 * dt;
+        sArr[i * 3 + 2] += moveSpeed * 0.65 * dt;
+        if (sArr[i * 3 + 1] < 0) sArr[i * 3 + 1] = 18;
+        if (sArr[i * 3 + 2] > 15) sArr[i * 3 + 2] = -65;
+      }
+      snowGeo.attributes.position.needsUpdate = true;
+
+      // Spray particles
+      for (let i = sprayParticles.length - 1; i >= 0; i--) {
+        const p = sprayParticles[i];
+        p.userData.life -= dt;
+        p.position.x += p.userData.vx * dt;
+        p.position.y += p.userData.vy * dt;
+        p.position.z += p.userData.vz * dt;
+        p.userData.vy -= 6 * dt;
+        p.scale.setScalar(Math.max(0.01, p.userData.life * 2));
+        if (p.userData.life <= 0) {
+          scene.remove(p);
+          sprayParticles.splice(i, 1);
+        }
+      }
+
+      if (state === 'start') {
+        // Gentle idle showcase glide
+        const t = clock.elapsedTime;
+        sled.position.x = Math.sin(t * 1.1) * 2.2;
+        sled.rotation.z = -Math.cos(t * 1.1) * 0.14;
+        emitSpray();
+        for (const e of entities) {
+          e.position.z += moveSpeed * dt;
+          if (e.position.z > 14) e.position.z -= 110;
+        }
+      }
+
+      if (state === 'playing') {
+        speed = Math.min(48, speed + dt * 0.42);
+        distance += speed * dt * 0.5;
+        scoreEl.textContent = Math.floor(distance) + bonusScore;
+
+        // Steering
+        const steerInput = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+        const steerSpeed = 16.5;
+        sledX = THREE.MathUtils.clamp(sledX + steerInput * steerSpeed * dt, -LANE_LIMIT, LANE_LIMIT);
+        sled.position.x = THREE.MathUtils.lerp(sled.position.x, sledX, 0.25);
+
+        // Tilt sled into turns
+        const targetRoll = -steerInput * 0.28;
+        sled.rotation.z = THREE.MathUtils.lerp(sled.rotation.z, targetRoll, 0.18);
+
+        // Vertical jump physics
+        if (!isGrounded) {
+          sledVelY -= 28 * dt;
+          sledY += sledVelY * dt;
+          sled.rotation.x = THREE.MathUtils.clamp(sledVelY * 0.035, -0.35, 0.45);
+          if (sledY <= 0) {
+            sledY = 0;
+            sledVelY = 0;
+            isGrounded = true;
+            sled.rotation.x = 0;
+          }
+        } else {
+          emitSpray();
+          sled.rotation.x = THREE.MathUtils.lerp(sled.rotation.x, 0, 0.2);
+        }
+        sled.position.y = sledY;
+
+        // Camera follow
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, sled.position.x * 0.55, 0.1);
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, 5.2 + sledY * 0.5, 0.1);
+        camera.lookAt(sled.position.x * 0.35, 1.2 + sledY * 0.4, -10);
+
+        // Spawn new rows
+        spawnTimer += speed * dt;
+        if (spawnTimer >= 10.5) {
+          spawnTimer = 0;
+          spawnRow(-105);
+        }
+
+        // Move & collide entities
+        for (let i = entities.length - 1; i >= 0; i--) {
+          const e = entities[i];
+          e.position.z += speed * dt;
+          if (e.userData.type === 'gift') {
+            e.rotation.y += 2.2 * dt;
+          }
+
+          // Collision check near sled
+          const dz = Math.abs(e.position.z - sled.position.z);
+          const dx = Math.abs(e.position.x - sled.position.x);
+          if (dz < 1.15 && dx < e.userData.radius + 0.48) {
+            if (e.userData.type === 'gift') {
+              gifts += 1;
+              bonusScore += 10;
+              giftsEl.textContent = gifts;
+              sfx.playGift();
+              scene.remove(e);
+              entities.splice(i, 1);
+              continue;
+            } else if (e.userData.type === 'ramp') {
+              if (sledY < 0.8) {
+                sledVelY = 14.5;
+                isGrounded = false;
+                sfx.playJump();
+              }
+            } else if (e.userData.type === 'obstacle') {
+              if (sledY < e.userData.height * 0.72) {
+                triggerGameOver();
+                break;
+              }
+            }
+          }
+
+          if (e.position.z > 14) {
+            scene.remove(e);
+            entities.splice(i, 1);
+          }
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>

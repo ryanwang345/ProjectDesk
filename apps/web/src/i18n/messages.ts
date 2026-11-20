@@ -10,6 +10,7 @@ export const en = {
   'nav.knowledge': 'Knowledge',
   'nav.settings': 'Settings',
   'nav.puzzles': 'Literature Puzzles',
+  'nav.game': 'Hydro Racer 3D',
   'nav.about': 'How it runs',
   'nav.primary': 'Primary',
 
@@ -503,6 +504,7 @@ export const zh: Record<MessageKey, string> = {
   'nav.knowledge': '知识',
   'nav.settings': '设置',
   'nav.puzzles': '文学谜题',
+  'nav.game': '3D 气垫船竞速',
   'nav.about': '如何运行',
   'nav.primary': '主导航',
 

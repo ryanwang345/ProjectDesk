@@ -12,6 +12,7 @@ export const FEATURES = [
   { id: 'radio', label: 'nav.radio', to: '/radio' },
   { id: 'me', label: 'english.tabMe', to: '/english?tab=me' },
   { id: 'desk', label: 'nav.desk', to: '/desk' },
+  { id: 'game', label: 'nav.game', to: '/game' },
   { id: 'about', label: 'nav.about', to: '/about' },
 ] as const satisfies ReadonlyArray<{ id: string; label: MessageKey; to: string }>
 

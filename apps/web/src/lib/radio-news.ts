@@ -211,6 +211,16 @@ function formatCleanSnippet(rawSentence: string, target: string, maxLen = 140): 
   return `...${truncateCleanSentence(s.slice(start).trim(), maxLen)}`
 }
 
+function isUnresolvedDictEntry(entry: ReturnType<typeof getDictionaryEntry> | null | undefined): boolean {
+  return (
+    !entry ||
+    Boolean(entry.isFallback) ||
+    entry.meaningZh.startsWith('专有名词') ||
+    entry.meaningZh.startsWith('暂无') ||
+    entry.meaningZh.startsWith('正在查询释义')
+  )
+}
+
 export function extractLiveKeyLexis(text: string): RadioVocabularyItem[] {
   const allSentences = splitIntoSentences(text)
   const storySentences = allSentences.filter((s) => !isBoilerplateSentence(s))
@@ -232,11 +242,7 @@ export function extractLiveKeyLexis(text: string): RadioVocabularyItem[] {
       text
 
     const dictEntry = getDictionaryEntry(low, [], sentence)
-    if (
-      !dictEntry ||
-      dictEntry.meaningZh.startsWith('专有名词') ||
-      dictEntry.meaningZh.startsWith('暂无')
-    ) {
+    if (isUnresolvedDictEntry(dictEntry)) {
       continue
     }
 
@@ -339,10 +345,9 @@ export function extractLiveCollocations(text: string): RadioCollocationItem[] {
       re: /\bas\s+part\s+of\s+(?:[a-z]+\s+)?(efforts|plans|measures|talks|initiatives|push|drive)\s+to\s+([a-z]+)\b/gi,
       build: (m) => {
         const verbEntry = getDictionaryEntry(m[2].toLowerCase(), [], m[0])
-        const verbZh =
-          verbEntry && !verbEntry.meaningZh.startsWith('专有名词')
-            ? shortChineseGloss(verbEntry.meaningZh)
-            : ''
+        const verbZh = !isUnresolvedDictEntry(verbEntry)
+          ? shortChineseGloss(verbEntry.meaningZh)
+          : ''
         return {
           phrase: m[0].trim(),
           patternZh: 'prep. + n. + to do 目的状语搭配',
@@ -376,7 +381,7 @@ export function extractLiveCollocations(text: string): RadioCollocationItem[] {
         const vEntry = getDictionaryEntry(v, [], m[0])
         const vZh = isFloat
           ? '初步提出（方案/构想）以试探反应'
-          : vEntry && !vEntry.meaningZh.startsWith('专有名词')
+          : !isUnresolvedDictEntry(vEntry)
             ? shortChineseGloss(vEntry.meaningZh)
             : '推动/引发'
         return {
@@ -403,11 +408,10 @@ export function extractLiveCollocations(text: string): RadioCollocationItem[] {
         const objLastWord = objRaw.split(/\s+/).pop()?.replace(/[^a-z]/gi, '').toLowerCase() ?? ''
         const vEntry = getDictionaryEntry(vLow, [], m[0])
         const oEntry = objLastWord ? getDictionaryEntry(objLastWord, [], m[0]) : null
-        const vZh = vEntry ? shortChineseGloss(vEntry.meaningZh) : vLow
-        const oZh =
-          oEntry && !oEntry.meaningZh.startsWith('专有名词')
-            ? shortChineseGloss(oEntry.meaningZh)
-            : objRaw
+        const vZh = !isUnresolvedDictEntry(vEntry) ? shortChineseGloss(vEntry.meaningZh) : vLow
+        const oZh = oEntry && !isUnresolvedDictEntry(oEntry)
+          ? shortChineseGloss(oEntry.meaningZh)
+          : objRaw
         return {
           phrase: m[0].trim(),
           patternZh: 'v. + n. 动宾核心搭配',
@@ -427,8 +431,8 @@ export function extractLiveCollocations(text: string): RadioCollocationItem[] {
         const parts = raw.toLowerCase().split(/\s+/)
         const e1 = getDictionaryEntry(parts[0], [], raw)
         const e2 = getDictionaryEntry(parts[parts.length - 1], [], raw)
-        const z1 = e1 && !e1.meaningZh.startsWith('专有名词') ? shortChineseGloss(e1.meaningZh) : parts[0]
-        const z2 = e2 && !e2.meaningZh.startsWith('专有名词') ? shortChineseGloss(e2.meaningZh) : parts[parts.length - 1]
+        const z1 = !isUnresolvedDictEntry(e1) ? shortChineseGloss(e1.meaningZh) : parts[0]
+        const z2 = !isUnresolvedDictEntry(e2) ? shortChineseGloss(e2.meaningZh) : parts[parts.length - 1]
         const specialMap: Record<string, string> = {
           'ground stop': '地面停飞令（航空管制措施）',
           'ripple effect': '连锁反应，波及效应',
@@ -511,14 +515,7 @@ export function extractLiveCollocations(text: string): RadioCollocationItem[] {
 
     const e1 = getDictionaryEntry(l1, [], pairMatch[0])
     const e2 = getDictionaryEntry(l2, [], pairMatch[0])
-    if (
-      !e1 ||
-      !e2 ||
-      e1.meaningZh.startsWith('专有名词') ||
-      e2.meaningZh.startsWith('专有名词') ||
-      e1.meaningZh.startsWith('暂无') ||
-      e2.meaningZh.startsWith('暂无')
-    ) {
+    if (isUnresolvedDictEntry(e1) || isUnresolvedDictEntry(e2)) {
       continue
     }
 

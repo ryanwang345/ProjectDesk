@@ -3,6 +3,7 @@ import {
   BookOpen,
   Compass,
   Flame,
+  Gamepad2,
   GraduationCap,
   Headphones,
   LayoutGrid,
@@ -90,6 +91,13 @@ const workspaceLinks: NavItem[] = [
     label: 'nav.desk',
     icon: LayoutGrid,
     match: (pathname) => pathname === '/desk' || pathname === '/board',
+  },
+  {
+    id: 'game',
+    to: '/game',
+    label: 'nav.game',
+    icon: Gamepad2,
+    match: (pathname) => pathname === '/game',
   },
   {
     id: 'about',
