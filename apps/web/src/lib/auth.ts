@@ -83,6 +83,28 @@ export async function signIn() {
   }
 }
 
+export async function setupPasskey() {
+  try {
+    await client?.login({
+      action: 'webauthn-register-passwordless',
+      redirectUri: window.location.href,
+    })
+  } catch {
+    publish({ status: 'error', error: 'Unable to open Passkey setup. Please try again.' })
+  }
+}
+
+export async function setupTwoFactor() {
+  try {
+    await client?.login({
+      action: 'CONFIGURE_TOTP',
+      redirectUri: window.location.href,
+    })
+  } catch {
+    publish({ status: 'error', error: 'Unable to open 2FA setup. Please try again.' })
+  }
+}
+
 export async function registerAccount() {
   try {
     await client?.register({ redirectUri: `${window.location.origin}/` })

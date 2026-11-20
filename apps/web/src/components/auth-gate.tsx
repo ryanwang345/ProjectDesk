@@ -1,10 +1,18 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { CheckCircle2, LogIn, LogOut, ShieldCheck, UserPlus } from 'lucide-react'
+import { CheckCircle2, Fingerprint, LogIn, LogOut, ShieldCheck, UserPlus } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { WindLandscape } from '@/components/wind-landscape'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
-import { getAuthState, initializeAuth, registerAccount, signIn, signOut, subscribeAuth } from '@/lib/auth'
+import {
+  getAuthState,
+  initializeAuth,
+  registerAccount,
+  setupPasskey,
+  signIn,
+  signOut,
+  subscribeAuth,
+} from '@/lib/auth'
 import './auth-gate.css'
 
 type AuthMode = 'signin' | 'register'
@@ -100,9 +108,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <p className="auth-card-description">
             {isRegister
               ? (zh
-                  ? '通过 Keycloak 创建统一学习账号，安全同步生词本、FSRS 记忆进度与听说读写记录。'
+                  ? '通过 Keycloak 自助创建学习账号，安全同步生词本、FSRS 记忆进度与听说读写记录。'
                   : 'Create a Keycloak account to unlock personalized FSRS vocabulary, reading, listening, and 680 News study history.')
-              : (zh ? '登录后继续你的学习之旅。' : 'Sign in to continue your learning journey.')}
+              : (zh
+                  ? '支持密码、邮箱及 Passkey（面容 / 指纹）无密码登录。'
+                  : 'Sign in with password, email, or a Passkey (Face ID / Touch ID).')}
           </p>
 
           {isRegister && auth.status !== 'error' && (
@@ -113,7 +123,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
               </li>
               <li>
                 <CheckCircle2 className="auth-perk-icon" aria-hidden="true" />
-                <span>{zh ? '多设备自动同步词库与雅思模考记录' : 'Sync vocabulary cards & IELTS progress across devices'}</span>
+                <span>{zh ? '登录后可一键绑定 Passkey 面容/指纹免密登录' : 'Bind Face ID / Touch ID Passkey & 2FA after sign-in'}</span>
               </li>
               <li>
                 <CheckCircle2 className="auth-perk-icon" aria-hidden="true" />
@@ -151,6 +161,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 <Button variant="outline" className="auth-secondary-button" onClick={() => switchMode('register')}>
                   <UserPlus className="size-4" aria-hidden="true" />{zh ? '注册新账号' : 'Create an account'}
                 </Button>
+                <p className="auth-methods-note">
+                  <Fingerprint className="size-3.5 shrink-0 text-[#205a43]" aria-hidden="true" />
+                  <span>
+                    {zh
+                      ? '已内置：账号密码 · 邮箱 · Passkey 免密 · 2FA 动态口令'
+                      : 'Built-in: Password · Email · Passkey · 2FA Authenticator'}
+                  </span>
+                </p>
               </div>
             )}
           </div>
@@ -179,12 +197,23 @@ export function AuthGate({ children }: { children: ReactNode }) {
 export function AccountMenu() {
   const auth = useSyncExternalStore(subscribeAuth, getAuthState)
   const { locale } = useI18n()
+  const zh = locale === 'zh'
   if (auth.status !== 'authenticated') return null
   return (
-    <div className="inline-flex min-w-0 items-center gap-2">
-      <span className="hidden max-w-32 truncate text-xs text-muted-foreground xl:inline" title={auth.name}>{auth.name}</span>
+    <div className="inline-flex min-w-0 items-center gap-1.5">
+      <span className="hidden max-w-28 truncate text-xs text-muted-foreground xl:inline" title={auth.name}>{auth.name}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="hidden sm:inline-flex"
+        title={zh ? '绑定面容/指纹 Passkey 无密码登录' : 'Set up Face ID / Touch ID Passkey'}
+        onClick={() => { void setupPasskey() }}
+      >
+        <Fingerprint className="size-3.5" aria-hidden="true" />
+        <span className="hidden lg:inline">{zh ? 'Passkey' : 'Passkey'}</span>
+      </Button>
       <Button variant="outline" size="sm" onClick={() => { void signOut() }}>
-        <LogOut className="size-3.5" aria-hidden="true" />{locale === 'zh' ? '退出登录' : 'Sign out'}
+        <LogOut className="size-3.5" aria-hidden="true" />{zh ? '退出登录' : 'Sign out'}
       </Button>
     </div>
   )
