@@ -8,7 +8,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { BookOpen, Pause, Play, Volume2, VolumeX } from 'lucide-react'
+import { BookOpen, Eye, Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import { useEnglish } from '@/hooks/use-english'
 import { useI18n } from '@/i18n'
 import type { EnglishCard } from '@/lib/english'
@@ -172,6 +172,65 @@ class SoundFX {
     osc.stop(ctx.currentTime + 0.15)
   }
 
+  playMissileLaunch() {
+    const ctx = this.ensure()
+    if (!ctx) return
+    const now = ctx.currentTime
+    // Filtered rocket ignition whoosh
+    const dur = 0.45
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate)
+    const ch = buf.getChannelData(0)
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.setValueAtTime(420, now)
+    filter.frequency.exponentialRampToValueAtTime(1600, now + dur)
+    filter.Q.value = 1.6
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.24, now)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + dur)
+    src.connect(filter).connect(gain).connect(ctx.destination)
+    src.start(now)
+    src.stop(now + dur)
+  }
+
+  playExplosion() {
+    const ctx = this.ensure()
+    if (!ctx) return
+    const now = ctx.currentTime
+    // Deep sub-bass boom
+    const osc = ctx.createOscillator()
+    const oscGain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(120, now)
+    osc.frequency.exponentialRampToValueAtTime(28, now + 0.55)
+    oscGain.gain.setValueAtTime(0.32, now)
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55)
+    osc.connect(oscGain).connect(ctx.destination)
+    osc.start(now)
+    osc.stop(now + 0.55)
+
+    // Blast noise burst
+    const dur = 0.65
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate)
+    const ch = buf.getChannelData(0)
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    const lp = ctx.createBiquadFilter()
+    lp.type = 'lowpass'
+    lp.frequency.setValueAtTime(950, now)
+    lp.frequency.exponentialRampToValueAtTime(140, now + dur)
+    const nGain = ctx.createGain()
+    nGain.gain.setValueAtTime(0.26, now)
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + dur)
+    src.connect(lp).connect(nGain).connect(ctx.destination)
+    src.start(now)
+    src.stop(now + dur)
+  }
+
   playCrash() {
     const ctx = this.ensure()
     if (!ctx) return
@@ -190,6 +249,69 @@ class SoundFX {
 
 type GamePhase = 'start' | 'countdown' | 'playing' | 'paused' | 'gameover'
 type DifficultyLevel = 'easy' | 'normal' | 'hard'
+type CameraViewMode = 'chase' | 'low' | 'high' | 'cockpit'
+
+const CAMERA_VIEW_ORDER: CameraViewMode[] = ['chase', 'low', 'high', 'cockpit']
+
+const CAMERA_VIEW_CONFIG: Record<
+  CameraViewMode,
+  {
+    labelEn: string
+    labelZh: string
+    posY: number
+    posZ: number
+    xFollow: number
+    lookXFollow: number
+    lookY: number
+    lookZ: number
+    fovOffset: number
+  }
+> = {
+  chase: {
+    labelEn: 'Chase',
+    labelZh: '标准',
+    posY: 4.6,
+    posZ: 8.8,
+    xFollow: 0.55,
+    lookXFollow: 0.35,
+    lookY: 1.2,
+    lookZ: -12,
+    fovOffset: 0,
+  },
+  low: {
+    labelEn: 'Low',
+    labelZh: '贴水',
+    posY: 2.35,
+    posZ: 6.4,
+    xFollow: 0.65,
+    lookXFollow: 0.45,
+    lookY: 1.45,
+    lookZ: -16,
+    fovOffset: 4,
+  },
+  high: {
+    labelEn: 'High',
+    labelZh: '俯视',
+    posY: 8.4,
+    posZ: 12.2,
+    xFollow: 0.45,
+    lookXFollow: 0.3,
+    lookY: 0.6,
+    lookZ: -14,
+    fovOffset: -2,
+  },
+  cockpit: {
+    labelEn: 'Bow',
+    labelZh: '船头',
+    posY: 1.5,
+    posZ: -0.45,
+    xFollow: 1.0,
+    lookXFollow: 1.0,
+    lookY: 1.35,
+    lookZ: -20,
+    fovOffset: 7,
+  },
+}
 
 const DIFFICULTY_CONFIG: Record<
   DifficultyLevel,
@@ -293,6 +415,7 @@ export function GamePage() {
   const startGameRef = useRef<(() => void) | null>(null)
   const togglePauseRef = useRef<(() => void) | null>(null)
   const gearUpRef = useRef<(() => void) | null>(null)
+  const fireMissileRef = useRef<(() => void) | null>(null)
   const gasRef = useRef(false)
   const brakeRef = useRef(false)
   const mutedRef = useRef(false)
@@ -309,6 +432,7 @@ export function GamePage() {
   const [rivalScore, setRivalScore] = useState(0)
   const [rivalWordsDone, setRivalWordsDone] = useState(0)
   const [isBraking, setIsBraking] = useState(false)
+  const [missileReady, setMissileReady] = useState(true)
   const [streak, setStreak] = useState(0)
   const [mph, setMph] = useState(0)
   const [gear, setGear] = useState(1)
@@ -325,9 +449,20 @@ export function GamePage() {
     }
   })
   const [muted, setMuted] = useState(false)
+  const [cameraView, setCameraView] = useState<CameraViewMode>('chase')
+  const cameraViewRef = useRef<CameraViewMode>('chase')
   const [challenge, setChallenge] = useState<WordChallenge | null>(null)
   const [challengeFeedback, setChallengeFeedback] = useState<'none' | 'hit' | 'miss' | 'complete'>('none')
   const [learnedWords, setLearnedWords] = useState<EnglishCard[]>([])
+
+  const cycleCameraView = useCallback(() => {
+    setCameraView((prev) => {
+      const idx = CAMERA_VIEW_ORDER.indexOf(prev)
+      const next = CAMERA_VIEW_ORDER[(idx + 1) % CAMERA_VIEW_ORDER.length]
+      cameraViewRef.current = next
+      return next
+    })
+  }, [])
 
   const toggleMute = useCallback(() => {
     setMuted((prev) => {
@@ -403,14 +538,14 @@ export function GamePage() {
         }
       `,
     })
-    const skyPlane = new THREE.Mesh(new THREE.PlaneGeometry(520, 220), skyMat)
-    skyPlane.position.set(0, 58, -210)
+    const skyPlane = new THREE.Mesh(new THREE.PlaneGeometry(1600, 360), skyMat)
+    skyPlane.position.set(0, 75, -240)
     scene.add(skyPlane)
 
     scene.background = new THREE.Color(0x0369a1)
     scene.fog = new THREE.FogExp2(0xfde68a, 0.0048)
 
-    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 280)
+    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 420)
     camera.position.set(0, 4.6, 8.8)
     camera.lookAt(0, 1.2, -12)
 
@@ -488,31 +623,6 @@ export function GamePage() {
     bannerTex.wrapS = THREE.RepeatWrapping
     bannerTex.repeat.set(3, 1)
     const matBanner = new THREE.MeshStandardMaterial({ map: bannerTex, roughness: 0.6 })
-
-    // High-resolution stadium cheering crowd texture for crisp bleachers
-    const crowdCanvas = document.createElement('canvas')
-    crowdCanvas.width = 512
-    crowdCanvas.height = 256
-    const crowdCtx = crowdCanvas.getContext('2d')
-    if (crowdCtx) {
-      crowdCtx.fillStyle = '#1e293b'
-      crowdCtx.fillRect(0, 0, 512, 256)
-      const shirtColors = ['#fbbf24', '#f97316', '#f8fafc', '#38bdf8', '#fde047', '#94a3b8', '#e2e8f0']
-      for (let row = 4; row < 252; row += 6) {
-        crowdCtx.fillStyle = '#0f172a'
-        crowdCtx.fillRect(0, row + 4, 512, 2)
-        for (let col = 2; col < 510; col += 4) {
-          crowdCtx.fillStyle = shirtColors[(row * 7 + col * 3) % shirtColors.length]
-          crowdCtx.fillRect(col, row, 2, 3)
-        }
-      }
-    }
-    const crowdTex = new THREE.CanvasTexture(crowdCanvas)
-    crowdTex.colorSpace = THREE.SRGBColorSpace
-    crowdTex.wrapS = THREE.RepeatWrapping
-    crowdTex.repeat.set(2, 1)
-    const matCrowd = new THREE.MeshStandardMaterial({ map: crowdTex, roughness: 0.85 })
-    const matGantry = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.5, flatShading: true })
 
     // Cached 3D Letter Cube textures (A-Z, normal & highlighted hint)
     const letterMaterials = new Map<string, THREE.MeshStandardMaterial>()
@@ -873,7 +983,7 @@ export function GamePage() {
     waterNormals.generateMipmaps = true
     waterNormals.needsUpdate = true
 
-    const waterGeo = new THREE.PlaneGeometry(TRACK_WIDTH, 180)
+    const waterGeo = new THREE.PlaneGeometry(TRACK_WIDTH, 220)
     const waterSurface = new Water(waterGeo, {
       textureWidth: 512,
       textureHeight: 512,
@@ -885,8 +995,20 @@ export function GamePage() {
       fog: true,
     })
     waterSurface.rotation.x = -Math.PI / 2
-    waterSurface.position.set(0, 0, -55)
+    waterSurface.position.set(0, 0, -75)
     scene.add(waterSurface)
+
+    // Outer harbor water plane so there is no sky gap under the Toronto skyline
+    const harborWaterGeo = new THREE.PlaneGeometry(900, 320)
+    const harborWaterMat = new THREE.MeshStandardMaterial({
+      color: 0x0b4a5e,
+      roughness: 0.35,
+      metalness: 0.45,
+    })
+    const harborWater = new THREE.Mesh(harborWaterGeo, harborWaterMat)
+    harborWater.rotation.x = -Math.PI / 2
+    harborWater.position.set(0, -0.35, -110)
+    scene.add(harborWater)
 
     const matNeonArch = new THREE.MeshBasicMaterial({ color: 0xfde047 })
     const matTowerGlass = new THREE.MeshStandardMaterial({
@@ -906,24 +1028,11 @@ export function GamePage() {
     const matLampGlow = new THREE.MeshBasicMaterial({ color: 0xfef9c3 })
     const ferrisWheels: THREE.Group[] = []
 
-    function createCanalChunk(zCenter: number, chunkIdx: number) {
+    function createCanalChunk(zCenter: number) {
       const group = new THREE.Group()
       group.position.z = zCenter
-      const zone = chunkIdx % 4
 
-      if (zone === 0 || zone === 3) {
-        const archLeft = new THREE.Mesh(new THREE.BoxGeometry(0.65, 10.5, 0.65), matSkirt)
-        archLeft.position.set(-(TRACK_WIDTH / 2 + 0.7), 5.2, 0)
-        const archRight = new THREE.Mesh(new THREE.BoxGeometry(0.65, 10.5, 0.65), matSkirt)
-        archRight.position.set(TRACK_WIDTH / 2 + 0.7, 5.2, 0)
-        const archSpan = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 2.1, 0.7, 0.7), matSkirt)
-        archSpan.position.set(0, 10.3, 0)
-        const neonStrip = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 0.8, 0.24, 0.76), matNeonArch)
-        neonStrip.position.set(0, 9.95, 0)
-        group.add(archLeft, archRight, archSpan, neonStrip)
-      }
-
-      // Base canal retaining walls & sponsor banners
+      // Clean low canal retaining walls, sponsor banners, and low harbor boardwalk
       ;[-1, 1].forEach((side) => {
         const wall = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.2, CHUNK_LEN), matConcrete)
         wall.position.set(side * (TRACK_WIDTH / 2 + 0.9), 0.9, 0)
@@ -934,196 +1043,32 @@ export function GamePage() {
         banner.position.set(side * (TRACK_WIDTH / 2 - 0.02), 1.25, 0)
         group.add(banner)
 
-        if (zone === 0) {
-          // Zone 0: Stadium Grandstand Bleachers + Roof + Floodlight
-          const stand = new THREE.Mesh(new THREE.BoxGeometry(6.4, 5.8, CHUNK_LEN - 2), matCrowd)
-          stand.position.set(side * (TRACK_WIDTH / 2 + 5.2), 2.9, 0)
-          stand.rotation.z = side * 0.3
-          group.add(stand)
+        const deck = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.45, CHUNK_LEN), matBoardwalk)
+        deck.position.set(side * (TRACK_WIDTH / 2 + 5.2), 1.7, 0)
+        group.add(deck)
 
-          if (side === -1) {
-            const roof = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.55, CHUNK_LEN - 2), matConcrete)
-            roof.position.set(side * (TRACK_WIDTH / 2 + 4.8), 8.5, 0)
-            roof.rotation.z = -0.15
-            const lightBar = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.7, 9), matLampGlow)
-            lightBar.position.set(side * (TRACK_WIDTH / 2 + 1.8), 8.0, 0)
-            const gantry = new THREE.Mesh(new THREE.BoxGeometry(0.45, 4.8, 0.45), matGantry)
-            gantry.position.set(side * (TRACK_WIDTH / 2 + 0.5), 3.4, -6)
-            group.add(roof, lightBar, gantry)
-          }
-        } else if (zone === 1) {
-          // Zone 1: Waterfront Glass Skyscrapers & Neon Penthouses
-          const towerH = side === -1 ? 19 : 15
-          const tower = new THREE.Mesh(new THREE.BoxGeometry(7.2, towerH, CHUNK_LEN - 2.6), matTowerGlass)
-          tower.position.set(side * (TRACK_WIDTH / 2 + 6.2), towerH / 2 + 0.5, 0)
-          const topCrown = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.8, CHUNK_LEN - 5), matTowerAccent)
-          topCrown.position.set(side * (TRACK_WIDTH / 2 + 6.2), towerH + 1.8, 0)
-          const neonBand = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.35, CHUNK_LEN - 2.4), matNeonArch)
-          neonBand.position.set(side * (TRACK_WIDTH / 2 + 6.2), towerH - 0.8, 0)
-          const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.25, 5.5, 6), matTowerAccent)
-          spire.position.set(side * (TRACK_WIDTH / 2 + 6.2), towerH + 5.8, 0)
-          group.add(tower, topCrown, neonBand, spire)
-        } else if (zone === 2) {
-          // Zone 2: Open Harbor Palm Promenade & Glowing Street Lamps
-          const deck = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.6, CHUNK_LEN), matBoardwalk)
-          deck.position.set(side * (TRACK_WIDTH / 2 + 5.2), 1.8, 0)
-          group.add(deck)
-
-          ;[-4, 4].forEach((pz) => {
-            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, 5.6, 6), matPalmTrunk)
-            trunk.position.set(side * (TRACK_WIDTH / 2 + 4.4), 4.6, pz)
-            trunk.rotation.z = -side * 0.14
-            const crown = new THREE.Mesh(new THREE.ConeGeometry(2.2, 1.4, 6), matPalmLeaf)
-            crown.position.set(side * (TRACK_WIDTH / 2 + 4.8), 7.4, pz)
-            const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 4.2, 6), matTowerAccent)
-            lampPost.position.set(side * (TRACK_WIDTH / 2 + 2.4), 3.9, -pz)
-            const lampHead = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 8), matLampGlow)
-            lampHead.position.set(side * (TRACK_WIDTH / 2 + 2.4), 6.1, -pz)
-            group.add(trunk, crown, lampPost, lampHead)
-          })
-        } else {
-          // Zone 3: Harbor Ferris Wheel (left) + Digital Pavilion & Media Tower (right)
-          if (side === -1) {
-            const supportL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 9.5, 0.5), matTowerAccent)
-            supportL.position.set(side * (TRACK_WIDTH / 2 + 6.2), 5.2, -1.6)
-            supportL.rotation.x = 0.22
-            const supportR = new THREE.Mesh(new THREE.BoxGeometry(0.4, 9.5, 0.5), matTowerAccent)
-            supportR.position.set(side * (TRACK_WIDTH / 2 + 6.2), 5.2, 1.6)
-            supportR.rotation.x = -0.22
-
-            const wheel = new THREE.Group()
-            wheel.position.set(side * (TRACK_WIDTH / 2 + 6.2), 9.2, 0)
-            const rim = new THREE.Mesh(new THREE.TorusGeometry(5.2, 0.22, 8, 20), matNeonArch)
-            rim.rotation.y = Math.PI / 2
-            wheel.add(rim)
-            for (let g = 0; g < 8; g++) {
-              const ang = (g / 8) * Math.PI * 2
-              const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.12, 10.4, 0.12), matTowerAccent)
-              spoke.rotation.x = ang
-              const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), matLampGlow)
-              cabin.position.set(0, Math.cos(ang) * 5.2, Math.sin(ang) * 5.2)
-              wheel.add(spoke, cabin)
-            }
-            ferrisWheels.push(wheel)
-            group.add(supportL, supportR, wheel)
-          } else {
-            const pavilion = new THREE.Mesh(new THREE.BoxGeometry(6.8, 4.5, CHUNK_LEN - 2.5), matTowerAccent)
-            pavilion.position.set(side * (TRACK_WIDTH / 2 + 5.8), 3.6, 0)
-            const mediaScreen = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.8, CHUNK_LEN - 4), matNeonArch)
-            mediaScreen.position.set(side * (TRACK_WIDTH / 2 + 2.4), 7.8, 0)
-            group.add(pavilion, mediaScreen)
-          }
-        }
+        const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.4, 6), matTowerAccent)
+        lampPost.position.set(side * (TRACK_WIDTH / 2 + 2.2), 2.9, 0)
+        const lampHead = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), matLampGlow)
+        lampHead.position.set(side * (TRACK_WIDTH / 2 + 2.2), 4.15, 0)
+        group.add(lampPost, lampHead)
       })
 
       return group
     }
 
     for (let i = 0; i < NUM_CHUNKS; i++) {
-      const chunk = createCanalChunk(10 - i * CHUNK_LEN, i)
+      const chunk = createCanalChunk(10 - i * CHUNK_LEN)
       chunks.push(chunk)
       scene.add(chunk)
     }
 
-    // Distant Sunset Skyline (Real-looking glass skyscrapers, floodlight mast & steel bridge)
+    // Downtown Toronto Background (/models/Toronto.glb)
     const backdropGroup = new THREE.Group()
     scene.add(backdropGroup)
 
-    const sun = new THREE.Mesh(
-      new THREE.SphereGeometry(9, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xfef08a, fog: false }),
-    )
-    sun.position.set(-55, 32, -185)
-    backdropGroup.add(sun)
-
-    // Procedural glass-curtain-wall skyscraper facade texture
-    const bldgCanvas = document.createElement('canvas')
-    bldgCanvas.width = 256
-    bldgCanvas.height = 512
-    const bldgCtx = bldgCanvas.getContext('2d')
-    if (bldgCtx) {
-      const facadeGrad = bldgCtx.createLinearGradient(0, 0, 256, 512)
-      facadeGrad.addColorStop(0, '#334155')
-      facadeGrad.addColorStop(0.5, '#1e293b')
-      facadeGrad.addColorStop(1, '#0f172a')
-      bldgCtx.fillStyle = facadeGrad
-      bldgCtx.fillRect(0, 0, 256, 512)
-
-      for (let y = 10; y < 502; y += 16) {
-        bldgCtx.fillStyle = '#475569'
-        bldgCtx.fillRect(0, y + 11, 256, 4)
-
-        for (let x = 8; x < 248; x += 18) {
-          const seed = (y * 13 + x * 7) % 19
-          if (seed < 4) {
-            bldgCtx.fillStyle = '#fde68a'
-          } else if (seed < 8) {
-            bldgCtx.fillStyle = '#fdba74'
-          } else if (seed < 14) {
-            bldgCtx.fillStyle = '#38bdf8'
-          } else {
-            bldgCtx.fillStyle = '#1e3a5f'
-          }
-          bldgCtx.fillRect(x, y, 13, 10)
-        }
-      }
-    }
-    const buildingTex = new THREE.CanvasTexture(bldgCanvas)
-    buildingTex.colorSpace = THREE.SRGBColorSpace
-    buildingTex.wrapS = THREE.RepeatWrapping
-    buildingTex.wrapT = THREE.RepeatWrapping
-
-    const matBuilding = new THREE.MeshStandardMaterial({
-      map: buildingTex,
-      roughness: 0.35,
-      metalness: 0.45,
-      fog: false,
-    })
-    const matRoofTrim = new THREE.MeshStandardMaterial({
-      color: 0x334155,
-      roughness: 0.7,
-      metalness: 0.3,
-      fog: false,
-    })
-
-    const skyscrapers = [
-      { x: -78, z: -158, w: 20, h: 46, d: 18 },
-      { x: -50, z: -146, w: 18, h: 64, d: 16 },
-      { x: -26, z: -162, w: 22, h: 52, d: 18 },
-      { x: 24, z: -166, w: 24, h: 48, d: 18 },
-      { x: 54, z: -150, w: 19, h: 68, d: 18 },
-      { x: 82, z: -160, w: 22, h: 44, d: 18 },
-    ]
-    const proceduralSkyline = new THREE.Group()
-    backdropGroup.add(proceduralSkyline)
-
-    skyscrapers.forEach((b, idx) => {
-      const tower = new THREE.Group()
-      const mainBody = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), matBuilding)
-      mainBody.position.y = b.h / 2
-      tower.add(mainBody)
-
-      const crown = new THREE.Mesh(new THREE.BoxGeometry(b.w * 0.72, b.h * 0.14, b.d * 0.72), matRoofTrim)
-      crown.position.y = b.h + (b.h * 0.14) / 2
-      tower.add(crown)
-
-      const roofBeacon = new THREE.Mesh(new THREE.BoxGeometry(b.w * 0.74, 0.8, b.d * 0.74), matNeonArch)
-      roofBeacon.position.y = b.h + 0.4
-      tower.add(roofBeacon)
-
-      if (idx % 2 === 1) {
-        const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.5, 14, 6), matRoofTrim)
-        spire.position.y = b.h + b.h * 0.14 + 7
-        tower.add(spire)
-      }
-
-      tower.position.set(b.x, -4, b.z)
-      proceduralSkyline.add(tower)
-    })
-
-    // Load Downtown Toronto Yonge-Dundas Square backdrop (/models/downtown_toronto_yonge_and_dundas.glb)
     gltfLoader.load(
-      '/models/downtown_toronto_yonge_and_dundas.glb',
+      '/models/Toronto.glb',
       (gltf) => {
         if (disposed) return
         const city = gltf.scene
@@ -1132,7 +1077,7 @@ export function GamePage() {
         const size = new THREE.Vector3()
         box.getSize(size)
         const maxSpan = Math.max(size.x, size.z, 0.001)
-        const scaleFactor = 200 / maxSpan
+        const scaleFactor = 165 / maxSpan
         city.scale.multiplyScalar(scaleFactor)
 
         // Orient wider side facing the player camera
@@ -1140,10 +1085,11 @@ export function GamePage() {
           city.rotation.y = Math.PI / 2
         }
 
+        city.updateMatrixWorld(true)
         const scaledBox = new THREE.Box3().setFromObject(city)
         const center = new THREE.Vector3()
         scaledBox.getCenter(center)
-        city.position.set(-center.x, -scaledBox.min.y - 3, -155 - center.z)
+        city.position.set(-center.x, -scaledBox.min.y - 6.5, -142 - center.z)
 
         city.traverse((obj) => {
           const mesh = obj as THREE.Mesh
@@ -1156,95 +1102,13 @@ export function GamePage() {
           }
         })
 
-        proceduralSkyline.visible = false
         backdropGroup.add(city)
       },
       undefined,
       () => {
-        // Keep procedural skyline if backdrop model is unavailable
+        // Keep sky gradient if Toronto model is unavailable
       },
     )
-
-    // Iconic Skyline Needle Observation Tower (CN-Tower inspired silhouette)
-    const needleTower = new THREE.Group()
-    const needleShaft = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 3.2, 72, 8), matRoofTrim)
-    needleShaft.position.y = 34
-    const needlePod = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 5.2, 4.5, 12), matTowerGlass)
-    needlePod.position.y = 56
-    const needleRing = new THREE.Mesh(new THREE.TorusGeometry(6.6, 0.45, 8, 24), matNeonArch)
-    needleRing.rotation.x = Math.PI / 2
-    needleRing.position.y = 56
-    const needleSpire = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.8, 22, 6), matRoofTrim)
-    needleSpire.position.y = 78
-    needleTower.add(needleShaft, needlePod, needleRing, needleSpire)
-    needleTower.position.set(4, -4, -172)
-    backdropGroup.add(needleTower)
-
-    const floodMast = new THREE.Mesh(
-      new THREE.BoxGeometry(1.8, 56, 1.8),
-      new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8, fog: false }),
-    )
-    floodMast.position.set(-34, 28, -135)
-    backdropGroup.add(floodMast)
-
-    const floodHead = new THREE.Mesh(
-      new THREE.BoxGeometry(10, 5, 1.6),
-      new THREE.MeshBasicMaterial({ color: 0xfef9c3, fog: false }),
-    )
-    floodHead.position.set(-34, 54, -135)
-    backdropGroup.add(floodHead)
-
-    const matBridgeSteel = new THREE.MeshStandardMaterial({
-      color: 0x475569,
-      roughness: 0.6,
-      metalness: 0.4,
-      fog: false,
-    })
-    const bridgeDeck = new THREE.Mesh(new THREE.BoxGeometry(240, 2.4, 5), matBridgeSteel)
-    bridgeDeck.position.set(10, 20, -138)
-    bridgeDeck.rotation.z = 0.03
-    backdropGroup.add(bridgeDeck)
-
-    ;[32, -40].forEach((px) => {
-      const pylonL = new THREE.Mesh(new THREE.BoxGeometry(2.4, 42, 2.4), matBridgeSteel)
-      pylonL.position.set(px - 3, 21, -138)
-      const pylonR = new THREE.Mesh(new THREE.BoxGeometry(2.4, 42, 2.4), matBridgeSteel)
-      pylonR.position.set(px + 3, 21, -138)
-      const cross = new THREE.Mesh(new THREE.BoxGeometry(8.5, 2.2, 2.6), matBridgeSteel)
-      cross.position.set(px, 34, -138)
-      backdropGroup.add(pylonL, pylonR, cross)
-    })
-
-    // Cruising LinguaDesk Sky Blimp & sweeping stadium searchlights
-    const blimpGroup = new THREE.Group()
-    const blimpBody = new THREE.Mesh(
-      new THREE.SphereGeometry(2.8, 16, 12),
-      new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.4, metalness: 0.25, fog: false }),
-    )
-    blimpBody.scale.set(2.4, 0.9, 0.9)
-    const blimpStripe = new THREE.Mesh(
-      new THREE.BoxGeometry(8.5, 0.7, 3.8),
-      matNeonArch,
-    )
-    blimpGroup.add(blimpBody, blimpStripe)
-    blimpGroup.position.set(-28, 44, -125)
-    backdropGroup.add(blimpGroup)
-
-    const beamMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.14,
-      depthWrite: false,
-      fog: false,
-    })
-    const beamGeo = new THREE.ConeGeometry(11, 85, 12, 1, true)
-    const beamLeft = new THREE.Mesh(beamGeo, beamMat)
-    beamLeft.position.set(-28, 38, -128)
-    beamLeft.rotation.z = -0.35
-    const beamRight = new THREE.Mesh(beamGeo, beamMat)
-    beamRight.position.set(30, 38, -132)
-    beamRight.rotation.z = 0.35
-    backdropGroup.add(beamLeft, beamRight)
 
     const BIOMES = [
       {
@@ -1397,6 +1261,95 @@ export function GamePage() {
     let rivalLetterHits = 0
     let rivalBoostTimer = 0
     let lastReportedRivalScore = -1
+    let rivalAlive = true
+    let rivalRespawnTimer = 0
+    let rivalIsDiscovery = false
+
+    // Player missile arsenal
+    let missiles: THREE.Group[] = []
+    let missileCooldown = 0
+    const matMissileBody = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3, metalness: 0.5 })
+    const matMissileNose = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.3, metalness: 0.3 })
+    const matMissileFlame = new THREE.MeshBasicMaterial({ color: 0xf97316 })
+    const matDiscoveryHull = new THREE.MeshStandardMaterial({ color: 0x14b8a6, roughness: 0.35, metalness: 0.35 })
+
+    // Expanding fireball shockwaves on missile impact
+    const explosionFlashes: { mesh: THREE.Mesh; life: number }[] = []
+
+    function spawnExplosion(x: number, y: number, z: number) {
+      emitBurst(x, y, z, 36)
+      const flashMat = new THREE.MeshBasicMaterial({
+        color: 0xfb923c,
+        transparent: true,
+        opacity: 0.9,
+      })
+      const flash = new THREE.Mesh(new THREE.SphereGeometry(0.9, 14, 14), flashMat)
+      flash.position.set(x, y, z)
+      scene.add(flash)
+      explosionFlashes.push({ mesh: flash, life: 0.42 })
+    }
+
+    function createMissileMesh() {
+      // Built facing +Z so m.lookAt(nextPos) aligns the nose with the 3D velocity vector
+      const m = new THREE.Group()
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.14, 1.25, 10), matMissileBody)
+      body.rotation.x = Math.PI / 2
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.46, 10), matMissileNose)
+      nose.rotation.x = Math.PI / 2
+      nose.position.z = 0.85
+
+      // 4 swept tail fins
+      for (let i = 0; i < 4; i++) {
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.34, 0.28), matMissileNose)
+        const ang = (i * Math.PI) / 2
+        fin.position.set(Math.sin(ang) * 0.16, Math.cos(ang) * 0.16, -0.46)
+        fin.rotation.z = -ang
+        m.add(fin)
+      }
+
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.65, 10), matMissileFlame)
+      flame.rotation.x = -Math.PI / 2
+      flame.position.z = -0.92
+      flame.name = 'flame'
+      m.add(body, nose, flame)
+      return m
+    }
+
+    function applyRivalAppearance(asDiscovery: boolean) {
+      rivalIsDiscovery = asDiscovery
+      const existingMast = rivalCraft.getObjectByName('discoveryRadar')
+      if (asDiscovery) {
+        rivalCraft.traverse((obj) => {
+          const mesh = obj as THREE.Mesh
+          if (mesh.isMesh && mesh.material === matHullRival) {
+            mesh.material = matDiscoveryHull
+          }
+        })
+        if (!existingMast) {
+          const mast = new THREE.Group()
+          mast.name = 'discoveryRadar'
+          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.9, 6), matTowerAccent)
+          pole.position.set(0, 0.85, -0.1)
+          const dish = new THREE.Mesh(
+            new THREE.BoxGeometry(0.75, 0.18, 0.22),
+            new THREE.MeshBasicMaterial({ color: 0x22d3ee }),
+          )
+          dish.position.set(0, 1.32, -0.1)
+          mast.add(pole, dish)
+          rivalCraft.add(mast)
+        } else {
+          existingMast.visible = true
+        }
+      } else {
+        rivalCraft.traverse((obj) => {
+          const mesh = obj as THREE.Mesh
+          if (mesh.isMesh && mesh.material === matDiscoveryHull) {
+            mesh.material = matHullRival
+          }
+        })
+        if (existingMast) existingMast.visible = false
+      }
+    }
 
     const LANE_LIMIT = TRACK_WIDTH / 2 - 2.3
     const keys = { left: false, right: false }
@@ -1409,6 +1362,8 @@ export function GamePage() {
     function clearEntities() {
       for (const e of entities) scene.remove(e)
       entities = []
+      for (const m of missiles) scene.remove(m)
+      missiles = []
     }
 
     function nextVocabCard(): EnglishCard {
@@ -1538,6 +1493,12 @@ export function GamePage() {
       rivalLetterHits = 0
       rivalBoostTimer = 0
       lastReportedRivalScore = 0
+      rivalAlive = true
+      rivalRespawnTimer = 0
+      missileCooldown = 0
+      setMissileReady(true)
+      applyRivalAppearance(false)
+      rivalCraft.visible = true
       spawnTimer = 0
       spinTimer = 0
       shakeTimer = 0
@@ -1610,9 +1571,28 @@ export function GamePage() {
       }
     }
 
+    function triggerFireMissile() {
+      if (state !== 'playing' || missileCooldown > 0) return
+      const m = createMissileMesh()
+      const sx = playerCraft.position.x
+      const sy = craftY + 0.9
+      const sz = playerCraft.position.z - 1.4
+      m.position.set(sx, sy, sz)
+      m.userData = { vx: 0, vy: 7.5, vz: -26, age: 0 }
+      m.lookAt(sx, sy + 7.5, sz - 26)
+      scene.add(m)
+      missiles.push(m)
+      emitBurst(sx, sy, sz, 10)
+      shakeTimer = Math.max(shakeTimer, 0.08)
+      missileCooldown = 2.4
+      setMissileReady(false)
+      sfx.playMissileLaunch()
+    }
+
     startGameRef.current = startGame
     togglePauseRef.current = togglePause
     gearUpRef.current = triggerGearUp
+    fireMissileRef.current = triggerFireMissile
 
     function jump(power = 11.5) {
       if (state !== 'playing' || !isGrounded) return
@@ -1639,6 +1619,14 @@ export function GamePage() {
       if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyE' || e.code === 'KeyG') && !e.repeat) {
         e.preventDefault()
         triggerGearUp()
+      }
+      if (e.code === 'KeyF' && !e.repeat) {
+        e.preventDefault()
+        triggerFireMissile()
+      }
+      if (e.code === 'KeyC' && !e.repeat) {
+        e.preventDefault()
+        cycleCameraView()
       }
       if (e.code === 'Space') {
         e.preventDefault()
@@ -1829,16 +1817,121 @@ export function GamePage() {
           setScore(currentScore)
         }
 
+        if (missileCooldown > 0) {
+          missileCooldown = Math.max(0, missileCooldown - dt)
+          if (missileCooldown <= 0) setMissileReady(true)
+        }
+
+        // Update expanding fireball shockwaves
+        for (let fi = explosionFlashes.length - 1; fi >= 0; fi--) {
+          const ef = explosionFlashes[fi]
+          ef.life -= dt
+          const prog = 1 - Math.max(0, ef.life) / 0.42
+          ef.mesh.scale.setScalar(1 + prog * 5.2)
+          ;(ef.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, (1 - prog) * 0.9)
+          if (ef.life <= 0) {
+            scene.remove(ef.mesh)
+            ef.mesh.geometry.dispose()
+            ;(ef.mesh.material as THREE.Material).dispose()
+            explosionFlashes.splice(fi, 1)
+          }
+        }
+
+        // Update player missiles (realistic booster acceleration, homing arc & impact)
+        for (let mi = missiles.length - 1; mi >= 0; mi--) {
+          const m = missiles[mi]
+          const ud = m.userData as { vx: number; vy: number; vz: number; age: number }
+          ud.age += dt
+          // Rocket booster accelerates smoothly from launch up to ~96 u/s
+          ud.vz = THREE.MathUtils.lerp(ud.vz, -96, Math.min(1, dt * 4.5))
+          if (rivalAlive) {
+            const tx = rivalCraft.position.x - m.position.x
+            const ty = rivalY + 0.55 - m.position.y
+            const tz = rivalCraft.position.z - m.position.z
+            const dist = Math.max(0.5, Math.hypot(tx, ty, tz))
+            const leadFactor = ud.age < 0.14 ? 2.5 : 14
+            ud.vx = THREE.MathUtils.lerp(ud.vx, (tx / dist) * 52, Math.min(1, dt * leadFactor))
+            ud.vy = THREE.MathUtils.lerp(ud.vy, (ty / dist) * 38, Math.min(1, dt * 7.5))
+          } else {
+            ud.vy -= 9.8 * dt
+          }
+
+          m.position.x += ud.vx * dt
+          m.position.y = Math.max(0.2, m.position.y + ud.vy * dt)
+          m.position.z += ud.vz * dt
+          m.lookAt(m.position.x + ud.vx, m.position.y + ud.vy, m.position.z + ud.vz)
+
+          const flame = m.getObjectByName('flame')
+          if (flame) {
+            flame.scale.set(1, 0.8 + Math.random() * 0.5, 1)
+          }
+          emitBurst(m.position.x, m.position.y, m.position.z + 0.75, 2)
+
+          if (
+            rivalAlive &&
+            Math.abs(m.position.z - rivalCraft.position.z) < 2.3 &&
+            Math.abs(m.position.x - rivalCraft.position.x) < 1.9 &&
+            Math.abs(m.position.y - (rivalY + 0.6)) < 2.2
+          ) {
+            spawnExplosion(rivalCraft.position.x, rivalCraft.position.y + 0.9, rivalCraft.position.z)
+            shakeTimer = Math.max(shakeTimer, 0.42)
+            sfx.playExplosion()
+            scene.remove(m)
+            missiles.splice(mi, 1)
+            rivalAlive = false
+            rivalCraft.visible = false
+            rivalRespawnTimer = 2.6
+            bonusScore += 150
+            showCallout(
+              zh
+                ? rivalIsDiscovery
+                  ? '导弹命中！发现船已摧毁 +150!'
+                  : '导弹命中！对手船只已摧毁 +150!'
+                : rivalIsDiscovery
+                  ? 'DIRECT HIT! DISCOVERY BOAT SUNK +150!'
+                  : 'DIRECT HIT! RIVAL DESTROYED +150!',
+              'emerald',
+            )
+            continue
+          }
+
+          if (m.position.z < -140) {
+            scene.remove(m)
+            missiles.splice(mi, 1)
+          }
+        }
+
+        // Dispatch a new Discovery Boat after rival is destroyed
+        if (!rivalAlive && rivalRespawnTimer > 0) {
+          rivalRespawnTimer = Math.max(0, rivalRespawnTimer - dt)
+          if (rivalRespawnTimer <= 0) {
+            rivalAlive = true
+            applyRivalAppearance(true)
+            rivalX = craftX > 0 ? -5.2 : 5.2
+            rivalZ = -42
+            rivalY = 0.05
+            rivalVelY = 0
+            rivalGrounded = true
+            rivalSpeed = cfg.maxSpeed * 1.05
+            rivalCraft.position.set(rivalX, rivalY, rivalZ)
+            rivalCraft.visible = true
+            emitBurst(rivalX, 0.9, rivalZ, 18)
+            showCallout(zh ? '发现船已派出！' : 'DISCOVERY BOAT DISPATCHED!', 'sky')
+          }
+        }
+
         // Rival AI speed, distance & score progression
         if (rivalBoostTimer > 0) rivalBoostTimer = Math.max(0, rivalBoostTimer - dt)
         const rivalSkill = difficultyRef.current === 'hard' ? 1.06 : difficultyRef.current === 'easy' ? 0.91 : 0.99
         const rivalTargetMax = (cfg.maxSpeed + 3.2) * rivalSkill + (rivalBoostTimer > 0 ? 7.5 : 0)
-        rivalSpeed = THREE.MathUtils.lerp(rivalSpeed, rivalTargetMax, dt * 1.4)
-        rivalDistance += rivalSpeed * dt * 0.5 * cfg.scoreMult
-        const currentRivalScore = Math.floor(rivalDistance) + rivalBonusScore
-        if (currentRivalScore !== lastReportedRivalScore) {
-          lastReportedRivalScore = currentRivalScore
-          setRivalScore(currentRivalScore)
+        if (rivalAlive) {
+          rivalSpeed = THREE.MathUtils.lerp(rivalSpeed, rivalTargetMax, dt * 1.4)
+          rivalDistance += rivalSpeed * dt * 0.5 * cfg.scoreMult
+          const currentRivalScore = Math.floor(rivalDistance) + rivalBonusScore
+          if (currentRivalScore !== lastReportedRivalScore) {
+            lastReportedRivalScore = currentRivalScore
+            setRivalScore(currentRivalScore)
+          }
         }
 
         hudTick += dt
@@ -1847,7 +1940,7 @@ export function GamePage() {
           setMph(Math.round(speed * 2.8))
           setRpmNeedle(rpm)
           setElapsedSec(raceTime)
-          setPosRank(playerCraft.position.z <= rivalCraft.position.z ? 1 : 2)
+          setPosRank(!rivalAlive || playerCraft.position.z <= rivalCraft.position.z ? 1 : 2)
           setIsTurbo(boostTimer > 0)
           setIsBraking(isBrakeActive)
         }
@@ -1857,83 +1950,87 @@ export function GamePage() {
         playerCraft.position.x = THREE.MathUtils.lerp(playerCraft.position.x, craftX, 0.25)
         playerCraft.rotation.z = THREE.MathUtils.lerp(playerCraft.rotation.z, -steerInput * 0.24, 0.18)
 
-        // Rival AI steering: actively aims for target letter cubes & ramps ahead
         const t = clock.elapsedTime
-        let desiredRivalX = Math.sin(t * 0.7) * 4.2 + (craftX > 0 ? -3.8 : 3.8)
-        let bestTargetZ = -999
-        for (const ent of entities) {
-          if (ent.position.z < rivalZ - 1.5 && ent.position.z > rivalZ - 46) {
-            const isGoal =
-              (ent.userData.type === 'letter' && ent.userData.isTarget) ||
-              ent.userData.type === 'ramp'
-            if (isGoal && ent.position.z > bestTargetZ) {
-              bestTargetZ = ent.position.z
-              desiredRivalX = ent.position.x
+        if (rivalAlive) {
+          // Rival AI steering: actively aims for target letter cubes & ramps ahead
+          let desiredRivalX = Math.sin(t * 0.7) * 4.2 + (craftX > 0 ? -3.8 : 3.8)
+          let bestTargetZ = -999
+          for (const ent of entities) {
+            if (ent.position.z < rivalZ - 1.5 && ent.position.z > rivalZ - 46) {
+              const isGoal =
+                (ent.userData.type === 'letter' && ent.userData.isTarget) ||
+                ent.userData.type === 'ramp'
+              if (isGoal && ent.position.z > bestTargetZ) {
+                bestTargetZ = ent.position.z
+                desiredRivalX = ent.position.x
+              }
             }
           }
-        }
-        desiredRivalX = THREE.MathUtils.clamp(desiredRivalX, -LANE_LIMIT, LANE_LIMIT)
-        const rivalSteerDelta = THREE.MathUtils.clamp(desiredRivalX - rivalX, -1, 1)
-        const rivalAgility = difficultyRef.current === 'hard' ? 12.5 : difficultyRef.current === 'easy' ? 7.5 : 10
-        rivalX = THREE.MathUtils.clamp(rivalX + rivalSteerDelta * rivalAgility * dt, -LANE_LIMIT, LANE_LIMIT)
-        rivalZ = THREE.MathUtils.clamp(rivalZ + (speed - rivalSpeed) * dt * 0.55, -24, 9)
+          desiredRivalX = THREE.MathUtils.clamp(desiredRivalX, -LANE_LIMIT, LANE_LIMIT)
+          const rivalSteerDelta = THREE.MathUtils.clamp(desiredRivalX - rivalX, -1, 1)
+          const rivalAgility = difficultyRef.current === 'hard' ? 12.5 : difficultyRef.current === 'easy' ? 7.5 : 10
+          rivalX = THREE.MathUtils.clamp(rivalX + rivalSteerDelta * rivalAgility * dt, -LANE_LIMIT, LANE_LIMIT)
+          rivalZ = THREE.MathUtils.clamp(rivalZ + (speed - rivalSpeed) * dt * 0.55, -24, 9)
 
-        // Solid boat-to-boat collision resolution (prevents clipping/ghosting)
-        const hullDx = craftX - rivalX
-        const hullDz = playerCraft.position.z - rivalZ
-        const hullDy = Math.abs(craftY - rivalY)
-        const minGapX = 2.25
-        const minGapZ = 3.45
-        if (Math.abs(hullDx) < minGapX && Math.abs(hullDz) < minGapZ && hullDy < 1.35) {
-          const overlapX = minGapX - Math.abs(hullDx)
-          const overlapZ = minGapZ - Math.abs(hullDz)
-          const midX = (craftX + rivalX) * 0.5
-          const midZ = (playerCraft.position.z + rivalZ) * 0.5
-          if (overlapX <= overlapZ) {
-            const signX = hullDx >= 0 ? 1 : -1
-            craftX = THREE.MathUtils.clamp(craftX + signX * overlapX * 0.58, -LANE_LIMIT, LANE_LIMIT)
-            rivalX = THREE.MathUtils.clamp(rivalX - signX * overlapX * 0.58, -LANE_LIMIT, LANE_LIMIT)
-          } else {
-            const signZ = hullDz >= 0 ? 1 : -1
-            rivalZ = THREE.MathUtils.clamp(rivalZ - signZ * overlapZ * 0.9, -24, 9)
-            const avgSpd = (speed + rivalSpeed) * 0.5
-            if (signZ > 0) {
-              speed = Math.min(targetMax, avgSpd + 2.5)
-              rivalSpeed = Math.max(cfg.startSpeed * 0.8, avgSpd - 2)
+          // Solid boat-to-boat collision resolution (prevents clipping/ghosting)
+          const hullDx = craftX - rivalX
+          const hullDz = playerCraft.position.z - rivalZ
+          const hullDy = Math.abs(craftY - rivalY)
+          const minGapX = 2.25
+          const minGapZ = 3.45
+          if (Math.abs(hullDx) < minGapX && Math.abs(hullDz) < minGapZ && hullDy < 1.35) {
+            const overlapX = minGapX - Math.abs(hullDx)
+            const overlapZ = minGapZ - Math.abs(hullDz)
+            const midX = (craftX + rivalX) * 0.5
+            const midZ = (playerCraft.position.z + rivalZ) * 0.5
+            if (overlapX <= overlapZ) {
+              const signX = hullDx >= 0 ? 1 : -1
+              craftX = THREE.MathUtils.clamp(craftX + signX * overlapX * 0.58, -LANE_LIMIT, LANE_LIMIT)
+              rivalX = THREE.MathUtils.clamp(rivalX - signX * overlapX * 0.58, -LANE_LIMIT, LANE_LIMIT)
             } else {
-              rivalSpeed = Math.min(rivalTargetMax, avgSpd + 2.5)
-              speed = Math.max(minCruiseSpeed, avgSpd - 2)
+              const signZ = hullDz >= 0 ? 1 : -1
+              rivalZ = THREE.MathUtils.clamp(rivalZ - signZ * overlapZ * 0.9, -24, 9)
+              const avgSpd = (speed + rivalSpeed) * 0.5
+              if (signZ > 0) {
+                speed = Math.min(targetMax, avgSpd + 2.5)
+                rivalSpeed = Math.max(cfg.startSpeed * 0.8, avgSpd - 2)
+              } else {
+                rivalSpeed = Math.min(rivalTargetMax, avgSpd + 2.5)
+                speed = Math.max(minCruiseSpeed, avgSpd - 2)
+              }
             }
+            emitBurst(midX, 0.7, midZ, 8)
+            shakeTimer = Math.max(shakeTimer, 0.12)
           }
-          emitBurst(midX, 0.7, midZ, 8)
-          shakeTimer = Math.max(shakeTimer, 0.12)
-        }
 
-        rivalCraft.position.x = THREE.MathUtils.lerp(rivalCraft.position.x, rivalX, 0.22)
-        rivalCraft.position.z = THREE.MathUtils.lerp(rivalCraft.position.z, rivalZ, 0.2)
-        rivalCraft.rotation.z = THREE.MathUtils.lerp(rivalCraft.rotation.z, -rivalSteerDelta * 0.22, 0.15)
+          rivalCraft.position.x = THREE.MathUtils.lerp(rivalCraft.position.x, rivalX, 0.22)
+          rivalCraft.position.z = THREE.MathUtils.lerp(rivalCraft.position.z, rivalZ, 0.2)
+          rivalCraft.rotation.z = THREE.MathUtils.lerp(rivalCraft.rotation.z, -rivalSteerDelta * 0.22, 0.15)
 
-        if (!rivalGrounded) {
-          rivalVelY -= 28 * dt
-          rivalY += rivalVelY * dt
-          rivalCraft.rotation.x = THREE.MathUtils.clamp(rivalVelY * 0.035, -0.35, 0.45)
-          if (rivalY <= 0) {
-            rivalY = 0
-            rivalVelY = 0
-            rivalGrounded = true
-            rivalCraft.rotation.x = 0
+          if (!rivalGrounded) {
+            rivalVelY -= 28 * dt
+            rivalY += rivalVelY * dt
+            rivalCraft.rotation.x = THREE.MathUtils.clamp(rivalVelY * 0.035, -0.35, 0.45)
+            if (rivalY <= 0) {
+              rivalY = 0
+              rivalVelY = 0
+              rivalGrounded = true
+              rivalCraft.rotation.x = 0
+            }
+          } else {
+            rivalY = 0.06 + Math.sin(t * 7.5) * 0.05
+            rivalCraft.rotation.x = THREE.MathUtils.lerp(rivalCraft.rotation.x, 0, 0.2)
+            emitWake(rivalCraft)
           }
-        } else {
-          rivalY = 0.06 + Math.sin(t * 7.5) * 0.05
-          rivalCraft.rotation.x = THREE.MathUtils.lerp(rivalCraft.rotation.x, 0, 0.2)
-          emitWake(rivalCraft)
-        }
-        rivalCraft.position.y = rivalY
-        if (rivalSpinTimer > 0) {
-          rivalSpinTimer = Math.max(0, rivalSpinTimer - dt)
-          rivalCraft.rotation.y = (rivalSpinTimer / 0.6) * Math.PI * 2
-        } else {
-          rivalCraft.rotation.y = THREE.MathUtils.lerp(rivalCraft.rotation.y, 0, 0.22)
+          rivalCraft.position.y = rivalY
+          if (rivalSpinTimer > 0) {
+            rivalSpinTimer = Math.max(0, rivalSpinTimer - dt)
+            rivalCraft.rotation.y = (rivalSpinTimer / 0.6) * Math.PI * 2
+          } else {
+            rivalCraft.rotation.y = THREE.MathUtils.lerp(rivalCraft.rotation.y, 0, 0.22)
+          }
+          const radar = rivalCraft.getObjectByName('discoveryRadar')
+          if (radar && radar.visible) radar.rotation.y += dt * 4.2
         }
 
         if (!isGrounded) {
@@ -1966,15 +2063,25 @@ export function GamePage() {
         }
         sfx.updateEngine(true, speed, currentGear, boostTimer > 0)
 
-        const targetFov = 60 + ((speed - 18) / 36) * 9 + (boostTimer > 0 ? 4 : 0)
+        const viewCfg = CAMERA_VIEW_CONFIG[cameraViewRef.current]
+        const targetFov = 60 + viewCfg.fovOffset + ((speed - 18) / 36) * 9 + (boostTimer > 0 ? 4 : 0)
         if (Math.abs(camera.fov - targetFov) > 0.05) {
           camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.1)
           camera.updateProjectionMatrix()
         }
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, playerCraft.position.x * 0.55, 0.1)
-        camera.position.y = THREE.MathUtils.lerp(camera.position.y, 4.6 + craftY * 0.5, 0.1)
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, playerCraft.position.x * viewCfg.xFollow, 0.12)
+        camera.position.y = THREE.MathUtils.lerp(
+          camera.position.y,
+          viewCfg.posY + craftY * (cameraViewRef.current === 'cockpit' ? 0.9 : 0.5),
+          0.1,
+        )
+        camera.position.z = THREE.MathUtils.lerp(camera.position.z, viewCfg.posZ, 0.1)
         camera.rotation.z = THREE.MathUtils.lerp(camera.rotation.z, -steerInput * 0.045, 0.1)
-        camera.lookAt(playerCraft.position.x * 0.35, 1.2 + craftY * 0.4, -12)
+        camera.lookAt(
+          playerCraft.position.x * viewCfg.lookXFollow,
+          viewCfg.lookY + craftY * (cameraViewRef.current === 'cockpit' ? 0.85 : 0.4),
+          viewCfg.lookZ,
+        )
 
         spawnTimer += speed * dt
         if (spawnTimer >= 11) {
@@ -2097,36 +2204,38 @@ export function GamePage() {
           }
 
           // Rival entity interaction (competes for letter cubes & jumps off ramps)
-          const rdz = Math.abs(e.position.z - rivalCraft.position.z)
-          const rdx = Math.abs(e.position.x - rivalCraft.position.x)
-          if (rdz < 1.35 && rdx < (e.userData.radius as number) + 0.65) {
-            if (e.userData.type === 'letter') {
-              const gateZ = e.position.z
-              const wasTarget = Boolean(e.userData.isTarget)
-              for (let k = entities.length - 1; k >= 0; k--) {
-                if (entities[k].userData.type === 'letter' && Math.abs(entities[k].position.z - gateZ) < 2) {
-                  scene.remove(entities[k])
-                  entities.splice(k, 1)
+          if (rivalAlive) {
+            const rdz = Math.abs(e.position.z - rivalCraft.position.z)
+            const rdx = Math.abs(e.position.x - rivalCraft.position.x)
+            if (rdz < 1.35 && rdx < (e.userData.radius as number) + 0.65) {
+              if (e.userData.type === 'letter') {
+                const gateZ = e.position.z
+                const wasTarget = Boolean(e.userData.isTarget)
+                for (let k = entities.length - 1; k >= 0; k--) {
+                  if (entities[k].userData.type === 'letter' && Math.abs(entities[k].position.z - gateZ) < 2) {
+                    scene.remove(entities[k])
+                    entities.splice(k, 1)
+                  }
                 }
-              }
-              emitBurst(rivalCraft.position.x, 1.0, rivalCraft.position.z, 10)
-              rivalBonusScore += wasTarget ? 25 : 10
-              if (wasTarget) {
-                rivalBoostTimer = 0.75
-                rivalLetterHits += 1
-                if (rivalLetterHits % 2 === 0) {
-                  rivalWordsCount += 1
-                  rivalBonusScore += 30
-                  setRivalWordsDone(rivalWordsCount)
+                emitBurst(rivalCraft.position.x, 1.0, rivalCraft.position.z, 10)
+                rivalBonusScore += wasTarget ? 25 : 10
+                if (wasTarget) {
+                  rivalBoostTimer = 0.75
+                  rivalLetterHits += 1
+                  if (rivalLetterHits % 2 === 0) {
+                    rivalWordsCount += 1
+                    rivalBonusScore += 30
+                    setRivalWordsDone(rivalWordsCount)
+                  }
                 }
+                break
+              } else if (e.userData.type === 'ramp' && rivalY < 0.8) {
+                rivalVelY = 13.5
+                rivalGrounded = false
+                rivalSpinTimer = 0.6
+                rivalBonusScore += 10
+                emitBurst(rivalCraft.position.x, 0.6, rivalCraft.position.z, 10)
               }
-              break
-            } else if (e.userData.type === 'ramp' && rivalY < 0.8) {
-              rivalVelY = 13.5
-              rivalGrounded = false
-              rivalSpinTimer = 0.6
-              rivalBonusScore += 10
-              emitBurst(rivalCraft.position.x, 0.6, rivalCraft.position.z, 10)
             }
           }
 
@@ -2168,29 +2277,19 @@ export function GamePage() {
         hemiLight.groundColor.lerp(targetBiome.hemiGround, lerpRate)
         dirLight.color.lerp(targetBiome.dir, lerpRate)
         matNeonArch.color.lerp(targetBiome.neon, lerpRate)
-        beamMat.color.copy(matNeonArch.color)
 
         const wSunColor = waterUniforms.sunColor as { value: THREE.Color } | undefined
         const wWaterColor = waterUniforms.waterColor as { value: THREE.Color } | undefined
         if (wSunColor) wSunColor.value.copy(skyUniforms.uSunColor.value)
         if (wWaterColor) wWaterColor.value.lerp(targetBiome.water, lerpRate)
+        harborWaterMat.color.lerp(targetBiome.water, lerpRate)
 
-        const sunY = THREE.MathUtils.lerp(sun.position.y, targetBiome.sunY, lerpRate)
-        sun.position.y = sunY
-        ;(sun.material as THREE.MeshBasicMaterial).color.copy(skyUniforms.uSunColor.value)
+        const sunY = targetBiome.sunY
         skyUniforms.uSunPos.value.set(
           0.18 + Math.sin(clock.elapsedTime * 0.08) * 0.04,
           THREE.MathUtils.clamp((sunY + 10) / 110, 0.15, 0.72),
         )
         bloomPass.strength = THREE.MathUtils.lerp(bloomPass.strength, targetBiome.bloom, lerpRate)
-
-        // Cruise blimp & sweep searchlights across the city skyline
-        const skyT = clock.elapsedTime
-        blimpGroup.position.x = Math.sin(skyT * 0.14) * 52
-        blimpGroup.position.y = 43 + Math.sin(skyT * 0.8) * 1.4
-        blimpGroup.rotation.y = Math.cos(skyT * 0.14) > 0 ? 0 : Math.PI
-        beamLeft.rotation.z = -0.3 + Math.sin(skyT * 0.9) * 0.28
-        beamRight.rotation.z = 0.3 + Math.cos(skyT * 0.85) * 0.28
       }
 
       composer.render()
@@ -2210,8 +2309,6 @@ export function GamePage() {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
       skyMat.dispose()
-      beamGeo.dispose()
-      beamMat.dispose()
       matNeonArch.dispose()
       matTowerGlass.dispose()
       matTowerAccent.dispose()
@@ -2219,11 +2316,15 @@ export function GamePage() {
       matPalmTrunk.dispose()
       matPalmLeaf.dispose()
       matLampGlow.dispose()
+      matMissileBody.dispose()
+      matMissileNose.dispose()
+      matMissileFlame.dispose()
+      matDiscoveryHull.dispose()
       bannerTex.dispose()
-      crowdTex.dispose()
-      buildingTex.dispose()
       waterNormals.dispose()
       waterGeo.dispose()
+      harborWaterGeo.dispose()
+      harborWaterMat.dispose()
       envRT.dispose()
       pmremGenerator.dispose()
       composer.dispose()
@@ -2247,70 +2348,155 @@ export function GamePage() {
         <div className="pointer-events-none absolute inset-0 z-10 shadow-[inset_0_0_90px_rgba(34,211,238,0.45)] transition-opacity" />
       )}
 
-      {/* Top HUD */}
-      <div className="pointer-events-none absolute inset-x-4 top-3 z-10 flex items-start justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="rounded-lg border border-amber-400/50 bg-gradient-to-b from-slate-800/90 to-slate-950/90 px-3 py-1 text-xs font-black tracking-wider text-amber-300 shadow-lg backdrop-blur-md">
-            POS <span className="ml-1 font-mono text-sm text-white">{posRank}/2</span>
-          </div>
-          <div className="rounded-lg border border-emerald-400/45 bg-gradient-to-b from-emerald-950/85 to-slate-950/90 px-3 py-1 text-xs font-black tracking-wider text-emerald-300 shadow-lg backdrop-blur-md">
-            {zh ? '关卡' : 'STAGE'}{' '}
-            <span className="ml-1 font-mono text-sm text-white">{stage}</span>
-            <span className="ml-1.5 font-mono text-[11px] font-bold text-emerald-300/80">
-              ({wordsDone % 3}/3)
-            </span>
-          </div>
-          <div className="rounded-lg border border-white/20 bg-gradient-to-b from-slate-800/85 to-slate-950/90 px-3 py-1 text-xs font-bold text-slate-200 shadow-lg backdrop-blur-md">
-            {zh ? '得分' : 'SCORE'}{' '}
-            <span className="ml-1 font-mono text-sm font-black text-cyan-300">{score}</span>
-          </div>
-          <div className="rounded-lg border border-white/20 bg-gradient-to-b from-slate-800/85 to-slate-950/90 px-3 py-1 text-xs font-bold text-slate-200 shadow-lg backdrop-blur-md">
-            {zh ? '单词' : 'WORDS'}{' '}
-            <span className="ml-1 font-mono text-sm font-black text-amber-400">{wordsDone}</span>
-          </div>
-          <div className="rounded-lg border border-white/20 bg-gradient-to-b from-slate-800/85 to-slate-950/90 px-3 py-1 text-xs font-bold text-slate-200 shadow-lg backdrop-blur-md">
-            {zh ? '最高' : 'BEST'}{' '}
-            <span className="ml-1 font-mono text-sm font-black text-cyan-300">{bestScore}</span>
-          </div>
-          <div className="rounded-lg border border-white/15 bg-slate-900/75 px-2.5 py-1 text-[11px] font-bold tracking-wide text-slate-300 uppercase backdrop-blur-md">
-            {zh ? DIFFICULTY_CONFIG[difficulty].labelZh : DIFFICULTY_CONFIG[difficulty].labelEn}
-          </div>
-          {phase === 'playing' && (
-            <div className="rounded-lg border border-rose-400/40 bg-gradient-to-b from-rose-950/85 to-slate-950/90 px-3 py-1 text-xs font-bold text-rose-200 shadow-lg backdrop-blur-md">
-              {zh ? '对手' : 'RIVAL'}{' '}
-              <span className="ml-1 font-mono text-sm font-black text-rose-300">{rivalScore}</span>
-              <span className="mx-1.5 text-rose-500/70">·</span>
-              <span className="text-[11px] text-rose-200/80">{zh ? '词' : 'W'}</span>{' '}
-              <span className="font-mono text-sm font-black text-amber-300">{rivalWordsDone}</span>
+      {/* Top HUD + Word Challenge + Callout Stack (never overlaps boat or each other) */}
+      <div className="pointer-events-none absolute inset-x-3 top-2.5 z-20 flex flex-col items-center gap-2 sm:inset-x-4 sm:top-3">
+        <div className="flex w-full items-start justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <div className="rounded-lg border border-amber-400/50 bg-gradient-to-b from-slate-800/90 to-slate-950/90 px-2 py-0.5 text-[11px] font-black tracking-wider text-amber-300 shadow-lg backdrop-blur-md sm:px-3 sm:py-1 sm:text-xs">
+              POS <span className="ml-1 font-mono text-xs text-white sm:text-sm">{posRank}/2</span>
             </div>
-          )}
-          {streak > 1 && (
-            <div className="animate-bounce rounded-lg border border-amber-300 bg-gradient-to-r from-amber-400 to-orange-500 px-3 py-1 text-xs font-black text-slate-950 shadow-lg">
-              🔥 x{Math.min(4, streak)}
+            <div className="rounded-lg border border-emerald-400/45 bg-gradient-to-b from-emerald-950/85 to-slate-950/90 px-2 py-0.5 text-[11px] font-black tracking-wider text-emerald-300 shadow-lg backdrop-blur-md sm:px-3 sm:py-1 sm:text-xs">
+              {zh ? '关卡' : 'STAGE'}{' '}
+              <span className="ml-1 font-mono text-xs text-white sm:text-sm">{stage}</span>
+              <span className="ml-1 font-mono text-[10px] font-bold text-emerald-300/80 sm:ml-1.5 sm:text-[11px]">
+                ({wordsDone % 3}/3)
+              </span>
             </div>
-          )}
-        </div>
+            <div className="rounded-lg border border-white/20 bg-gradient-to-b from-slate-800/85 to-slate-950/90 px-2 py-0.5 text-[11px] font-bold text-slate-200 shadow-lg backdrop-blur-md sm:px-3 sm:py-1 sm:text-xs">
+              {zh ? '得分' : 'SCORE'}{' '}
+              <span className="ml-1 font-mono text-xs font-black text-cyan-300 sm:text-sm">{score}</span>
+            </div>
+            <div className="rounded-lg border border-white/20 bg-gradient-to-b from-slate-800/85 to-slate-950/90 px-2 py-0.5 text-[11px] font-bold text-slate-200 shadow-lg backdrop-blur-md sm:px-3 sm:py-1 sm:text-xs">
+              {zh ? '单词' : 'WORDS'}{' '}
+              <span className="ml-1 font-mono text-xs font-black text-amber-400 sm:text-sm">{wordsDone}</span>
+            </div>
+            <div className="hidden rounded-lg border border-white/20 bg-gradient-to-b from-slate-800/85 to-slate-950/90 px-3 py-1 text-xs font-bold text-slate-200 shadow-lg backdrop-blur-md sm:block">
+              {zh ? '最高' : 'BEST'}{' '}
+              <span className="ml-1 font-mono text-sm font-black text-cyan-300">{bestScore}</span>
+            </div>
+            <div className="hidden rounded-lg border border-white/15 bg-slate-900/75 px-2.5 py-1 text-[11px] font-bold tracking-wide text-slate-300 uppercase backdrop-blur-md sm:block">
+              {zh ? DIFFICULTY_CONFIG[difficulty].labelZh : DIFFICULTY_CONFIG[difficulty].labelEn}
+            </div>
+            {phase === 'playing' && (
+              <div className="rounded-lg border border-rose-400/40 bg-gradient-to-b from-rose-950/85 to-slate-950/90 px-2 py-0.5 text-[11px] font-bold text-rose-200 shadow-lg backdrop-blur-md sm:px-3 sm:py-1 sm:text-xs">
+                {zh ? '对手' : 'RIVAL'}{' '}
+                <span className="ml-1 font-mono text-xs font-black text-rose-300 sm:text-sm">{rivalScore}</span>
+                <span className="mx-1 text-rose-500/70 sm:mx-1.5">·</span>
+                <span className="text-[10px] text-rose-200/80 sm:text-[11px]">{zh ? '词' : 'W'}</span>{' '}
+                <span className="font-mono text-xs font-black text-amber-300 sm:text-sm">{rivalWordsDone}</span>
+              </div>
+            )}
+            {streak > 1 && (
+              <div className="animate-bounce rounded-lg border border-amber-300 bg-gradient-to-r from-amber-400 to-orange-500 px-2.5 py-0.5 text-[11px] font-black text-slate-950 shadow-lg sm:px-3 sm:py-1 sm:text-xs">
+                🔥 x{Math.min(4, streak)}
+              </div>
+            )}
+          </div>
 
-        <div className="flex items-center gap-2">
-          {(phase === 'playing' || phase === 'paused') && (
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <button
               type="button"
-              onClick={() => togglePauseRef.current?.()}
-              className="pointer-events-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/25 bg-gradient-to-b from-slate-700/85 to-slate-900/90 px-3 py-1.5 text-xs font-bold text-white shadow-md backdrop-blur-md transition hover:brightness-110"
+              onClick={cycleCameraView}
+              title={zh ? '切换视角 (快捷键: C)' : 'Switch Camera Angle (Shortcut: C)'}
+              className="pointer-events-auto inline-flex cursor-pointer items-center gap-1 rounded-lg border border-cyan-400/35 bg-gradient-to-b from-slate-700/85 to-slate-900/90 px-2.5 py-1 text-[11px] font-bold text-cyan-200 shadow-md backdrop-blur-md transition hover:brightness-110 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs"
             >
-              {phase === 'paused' ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
-              <span>{phase === 'paused' ? (zh ? '继续' : 'Resume') : (zh ? '暂停' : 'Pause')}</span>
+              <Eye className="size-3.5" />
+              <span className="hidden sm:inline">
+                {zh
+                  ? `视角·${CAMERA_VIEW_CONFIG[cameraView].labelZh}`
+                  : `View: ${CAMERA_VIEW_CONFIG[cameraView].labelEn}`}
+              </span>
             </button>
-          )}
-          <button
-            type="button"
-            onClick={toggleMute}
-            className="pointer-events-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/25 bg-gradient-to-b from-slate-700/85 to-slate-900/90 px-3 py-1.5 text-xs font-bold text-white shadow-md backdrop-blur-md transition hover:brightness-110"
-          >
-            {muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
-            <span>{muted ? (zh ? '静音' : 'Muted') : (zh ? '音效' : 'Sound')}</span>
-          </button>
+            {(phase === 'playing' || phase === 'paused') && (
+              <button
+                type="button"
+                onClick={() => togglePauseRef.current?.()}
+                className="pointer-events-auto inline-flex cursor-pointer items-center gap-1 rounded-lg border border-white/25 bg-gradient-to-b from-slate-700/85 to-slate-900/90 px-2.5 py-1 text-[11px] font-bold text-white shadow-md backdrop-blur-md transition hover:brightness-110 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs"
+              >
+                {phase === 'paused' ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+                <span className="hidden sm:inline">{phase === 'paused' ? (zh ? '继续' : 'Resume') : (zh ? '暂停' : 'Pause')}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={toggleMute}
+              className="pointer-events-auto inline-flex cursor-pointer items-center gap-1 rounded-lg border border-white/25 bg-gradient-to-b from-slate-700/85 to-slate-900/90 px-2.5 py-1 text-[11px] font-bold text-white shadow-md backdrop-blur-md transition hover:brightness-110 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs"
+            >
+              {muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
+              <span className="hidden sm:inline">{muted ? (zh ? '静音' : 'Muted') : (zh ? '音效' : 'Sound')}</span>
+            </button>
+          </div>
         </div>
+
+        {/* Active Word Challenge (aligned to the left-most edge, clear of CN Tower & boat) */}
+        {phase === 'playing' && challenge && (
+          <div className="pointer-events-auto flex w-full justify-start">
+            <div
+              className={`flex max-w-lg items-center gap-2.5 rounded-2xl border px-3 py-1.5 text-white shadow-xl backdrop-blur-md transition-colors sm:gap-3 sm:px-4 sm:py-2 ${
+                challengeFeedback === 'complete'
+                  ? 'border-emerald-400 bg-emerald-900/85'
+                  : challengeFeedback === 'hit'
+                    ? 'border-sky-400 bg-sky-900/85'
+                    : challengeFeedback === 'miss'
+                      ? 'border-red-400 bg-red-900/85'
+                      : 'border-sky-400/40 bg-slate-900/80'
+              }`}
+            >
+              <BookOpen className="size-4 shrink-0 text-amber-400" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-1 font-mono text-sm font-black tracking-wider sm:text-base">
+                  {challenge.letters.map((ch, idx) => {
+                    const isMissing = challenge.missingIndices.includes(idx)
+                    const isFilled = isMissing && challenge.filledIndices.includes(idx)
+                    if (isMissing && !isFilled) {
+                      return (
+                        <span
+                          key={idx}
+                          className="inline-flex h-5 min-w-4 animate-pulse items-center justify-center rounded-md border border-amber-400 bg-amber-400/20 px-1 text-xs text-amber-300 sm:h-6 sm:min-w-5"
+                        >
+                          _
+                        </span>
+                      )
+                    }
+                    return (
+                      <span key={idx} className={isFilled ? 'text-emerald-300' : 'text-white'}>
+                        {ch}
+                      </span>
+                    )
+                  })}
+                </div>
+                <p className="mt-0.5 truncate text-[11px] text-slate-200">{challenge.card.meaning}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => pronounceCard(challenge.card)}
+                aria-label={zh ? '朗读单词' : 'Pronounce word'}
+                className="ml-1 shrink-0 rounded-lg bg-white/10 p-1.5 text-sky-300 transition hover:bg-white/20"
+              >
+                <Volume2 className="size-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Floating Arcade Callout */}
+        {phase === 'playing' && callout && (
+          <div className="pointer-events-none flex justify-center">
+            <div
+              className={`animate-bounce rounded-full px-4 py-1 text-xs font-black tracking-wide text-white shadow-lg sm:py-1.5 sm:text-sm ${
+                callout.tone === 'emerald'
+                  ? 'bg-emerald-500'
+                  : callout.tone === 'amber'
+                    ? 'bg-amber-500 text-slate-950'
+                    : callout.tone === 'rose'
+                      ? 'bg-rose-500'
+                      : 'bg-sky-500'
+              }`}
+            >
+              {callout.text}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 3-2-1-GO! Studio Race Countdown */}
@@ -2321,76 +2507,6 @@ export function GamePage() {
             style={{ animationDuration: '0.7s' }}
           >
             {countdownLabel}
-          </div>
-        </div>
-      )}
-
-      {/* Floating Arcade Callout */}
-      {phase === 'playing' && callout && (
-        <div className="pointer-events-none absolute inset-x-0 top-16 z-20 flex justify-center">
-          <div
-            className={`animate-bounce rounded-full px-4 py-1.5 text-sm font-black tracking-wide text-white shadow-lg ${
-              callout.tone === 'emerald'
-                ? 'bg-emerald-500'
-                : callout.tone === 'amber'
-                  ? 'bg-amber-500 text-slate-950'
-                  : callout.tone === 'rose'
-                    ? 'bg-rose-500'
-                    : 'bg-sky-500'
-            }`}
-          >
-            {callout.text}
-          </div>
-        </div>
-      )}
-
-      {/* Active Word Challenge (positioned neatly above racing dashboard) */}
-      {phase === 'playing' && challenge && (
-        <div className="pointer-events-auto absolute inset-x-4 bottom-24 z-10 flex justify-center">
-          <div
-            className={`flex max-w-lg items-center gap-3 rounded-2xl border px-4 py-2 text-white shadow-xl backdrop-blur-md transition-colors ${
-              challengeFeedback === 'complete'
-                ? 'border-emerald-400 bg-emerald-900/85'
-                : challengeFeedback === 'hit'
-                  ? 'border-sky-400 bg-sky-900/85'
-                  : challengeFeedback === 'miss'
-                    ? 'border-red-400 bg-red-900/85'
-                    : 'border-sky-400/40 bg-slate-900/80'
-            }`}
-          >
-            <BookOpen className="size-4 shrink-0 text-amber-400" />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-1 font-mono text-base font-black tracking-wider">
-                {challenge.letters.map((ch, idx) => {
-                  const isMissing = challenge.missingIndices.includes(idx)
-                  const isFilled = isMissing && challenge.filledIndices.includes(idx)
-                  if (isMissing && !isFilled) {
-                    return (
-                      <span
-                        key={idx}
-                        className="inline-flex h-6 min-w-5 animate-pulse items-center justify-center rounded-md border border-amber-400 bg-amber-400/20 px-1 text-xs text-amber-300"
-                      >
-                        _
-                      </span>
-                    )
-                  }
-                  return (
-                    <span key={idx} className={isFilled ? 'text-emerald-300' : 'text-white'}>
-                      {ch}
-                    </span>
-                  )
-                })}
-              </div>
-              <p className="mt-0.5 truncate text-[11px] text-slate-200">{challenge.card.meaning}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => pronounceCard(challenge.card)}
-              aria-label={zh ? '朗读单词' : 'Pronounce word'}
-              className="ml-1 shrink-0 rounded-lg bg-white/10 p-1.5 text-sky-300 transition hover:bg-white/20"
-            >
-              <Volume2 className="size-4" />
-            </button>
           </div>
         </div>
       )}
@@ -2448,6 +2564,27 @@ export function GamePage() {
               <span className="mt-0.5 text-[8px] leading-none font-black tracking-tight">GEAR UP</span>
               <span className="mt-0.5 rounded bg-slate-950/80 px-1 text-[7px] leading-tight font-bold text-cyan-200">
                 SHIFT/E
+              </span>
+            </button>
+
+            {/* Missile Launch Button (Shortcut: F) */}
+            <button
+              type="button"
+              onClick={() => fireMissileRef.current?.()}
+              disabled={!missileReady}
+              title={zh ? '发射导弹 (快捷键: F)' : 'Fire Missile (Shortcut: F)'}
+              className={`relative flex size-13 shrink-0 flex-col items-center justify-center rounded-full border-2 transition ${
+                missileReady
+                  ? 'cursor-pointer border-rose-200 bg-gradient-to-b from-rose-400 via-red-500 to-rose-700 text-white shadow-[0_0_18px_rgba(244,63,94,0.65)] hover:brightness-110 active:scale-95'
+                  : 'cursor-not-allowed border-slate-500/60 bg-slate-800/80 text-slate-400 opacity-65'
+              }`}
+            >
+              <span className="text-xs leading-none font-black">🚀</span>
+              <span className="mt-0.5 text-[8px] leading-none font-black tracking-tight">
+                {zh ? '导弹' : 'FIRE'}
+              </span>
+              <span className="mt-0.5 rounded bg-slate-950/80 px-1 text-[7px] leading-tight font-bold text-rose-200">
+                F
               </span>
             </button>
           </div>
