@@ -17,6 +17,10 @@ const BEST_KEY = 'hydro_racer_3d_best_v1'
 
 class SoundFX {
   private ctx: AudioContext | null = null
+  private engineOsc: OscillatorNode | null = null
+  private engineSub: OscillatorNode | null = null
+  private engineFilter: BiquadFilterNode | null = null
+  private engineGain: GainNode | null = null
   muted = false
 
   ensure(): AudioContext | null {
@@ -31,6 +35,60 @@ class SoundFX {
       void this.ctx.resume()
     }
     return this.ctx
+  }
+
+  updateEngine(active: boolean, speed: number, gear: number, boost: boolean) {
+    if (this.muted || !active) {
+      if (this.engineGain && this.ctx) {
+        this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.08)
+      }
+      return
+    }
+    const ctx = this.ensure()
+    if (!ctx) return
+    if (!this.engineOsc) {
+      this.engineOsc = ctx.createOscillator()
+      this.engineSub = ctx.createOscillator()
+      this.engineFilter = ctx.createBiquadFilter()
+      this.engineGain = ctx.createGain()
+
+      this.engineOsc.type = 'sawtooth'
+      this.engineSub.type = 'triangle'
+      this.engineFilter.type = 'lowpass'
+      this.engineFilter.frequency.value = 320
+      this.engineGain.gain.value = 0
+
+      this.engineOsc.connect(this.engineFilter)
+      this.engineSub.connect(this.engineFilter)
+      this.engineFilter.connect(this.engineGain).connect(ctx.destination)
+      this.engineOsc.start()
+      this.engineSub.start()
+    }
+    const baseFreq = 52 + speed * 1.45 + (gear - 1) * 9 + (boost ? 24 : 0)
+    this.engineOsc.frequency.setTargetAtTime(baseFreq, ctx.currentTime, 0.06)
+    this.engineSub?.frequency.setTargetAtTime(baseFreq * 0.5, ctx.currentTime, 0.06)
+    this.engineFilter?.frequency.setTargetAtTime(boost ? 780 : 300 + speed * 6, ctx.currentTime, 0.08)
+    this.engineGain?.gain.setTargetAtTime(boost ? 0.055 : 0.032, ctx.currentTime, 0.08)
+  }
+
+  stopEngine() {
+    if (this.engineGain && this.ctx) {
+      this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.04)
+    }
+  }
+
+  playCountdown(go: boolean) {
+    const ctx = this.ensure()
+    if (!ctx) return
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(go ? 880 : 440, ctx.currentTime)
+    gain.gain.setValueAtTime(0.14, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (go ? 0.32 : 0.16))
+    osc.connect(gain).connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + (go ? 0.34 : 0.17))
   }
 
   playJump() {
@@ -128,7 +186,7 @@ class SoundFX {
   }
 }
 
-type GamePhase = 'start' | 'playing' | 'paused' | 'gameover'
+type GamePhase = 'start' | 'countdown' | 'playing' | 'paused' | 'gameover'
 type DifficultyLevel = 'easy' | 'normal' | 'hard'
 
 const DIFFICULTY_CONFIG: Record<
@@ -237,6 +295,7 @@ export function GamePage() {
   const mutedRef = useRef(false)
 
   const [phase, setPhase] = useState<GamePhase>('start')
+  const [countdownLabel, setCountdownLabel] = useState<'3' | '2' | '1' | 'GO!'>('3')
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('normal')
   const difficultyRef = useRef<DifficultyLevel>('normal')
   difficultyRef.current = difficulty
@@ -377,8 +436,6 @@ export function GamePage() {
       metalness: 0.9,
     })
     const matTurbine = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.48, metalness: 0.55 })
-    const matBuoy = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.4, flatShading: true })
-    const matMine = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.5, flatShading: true })
     const matRamp = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.35, flatShading: true })
 
     // Sponsor banner texture along stadium canal walls
@@ -409,21 +466,21 @@ export function GamePage() {
     bannerTex.repeat.set(3, 1)
     const matBanner = new THREE.MeshStandardMaterial({ map: bannerTex, roughness: 0.6 })
 
-    // Stadium cheering crowd texture for bleachers
+    // High-resolution stadium cheering crowd texture for crisp bleachers
     const crowdCanvas = document.createElement('canvas')
-    crowdCanvas.width = 256
-    crowdCanvas.height = 128
+    crowdCanvas.width = 512
+    crowdCanvas.height = 256
     const crowdCtx = crowdCanvas.getContext('2d')
     if (crowdCtx) {
       crowdCtx.fillStyle = '#1e293b'
-      crowdCtx.fillRect(0, 0, 256, 128)
-      const shirtColors = ['#fbbf24', '#f97316', '#f8fafc', '#38bdf8', '#fde047', '#94a3b8']
-      for (let row = 4; row < 124; row += 7) {
+      crowdCtx.fillRect(0, 0, 512, 256)
+      const shirtColors = ['#fbbf24', '#f97316', '#f8fafc', '#38bdf8', '#fde047', '#94a3b8', '#e2e8f0']
+      for (let row = 4; row < 252; row += 6) {
         crowdCtx.fillStyle = '#0f172a'
-        crowdCtx.fillRect(0, row + 4, 256, 2)
-        for (let col = 2; col < 254; col += 5) {
+        crowdCtx.fillRect(0, row + 4, 512, 2)
+        for (let col = 2; col < 510; col += 4) {
           crowdCtx.fillStyle = shirtColors[(row * 7 + col * 3) % shirtColors.length]
-          crowdCtx.fillRect(col, row, 3, 4)
+          crowdCtx.fillRect(col, row, 2, 3)
         }
       }
     }
@@ -546,13 +603,19 @@ export function GamePage() {
       group.add(fanGroup)
       group.userData = { fan: fanGroup }
 
-      // Side thrusters
+      // Side thrusters + glowing exhaust rings
+      const exhaustMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
       ;[-0.82, 0.82].forEach((x) => {
         const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.9, 8), matTurbine)
         pod.rotation.x = Math.PI / 2
         pod.position.set(x, 0.65, 0.85)
         group.add(pod)
+
+        const glowRing = new THREE.Mesh(new THREE.RingGeometry(0.08, 0.17, 12), exhaustMat)
+        glowRing.position.set(x, 0.65, 1.31)
+        group.add(glowRing)
       })
+      group.userData.exhaustMat = exhaustMat
 
       return group
     }
@@ -565,32 +628,7 @@ export function GamePage() {
     rivalCraft.position.set(5.2, 0.05, -6)
     scene.add(rivalCraft)
 
-    // Water Obstacles
-    function createBuoy() {
-      const g = new THREE.Group()
-      const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.75, 1), matBuoy)
-      ball.position.y = 0.62
-      ball.castShadow = true
-      g.add(ball)
-      g.userData = { type: 'obstacle', radius: 0.78, height: 1.5 }
-      return g
-    }
-
-    function createFloatingBarrier() {
-      const g = new THREE.Group()
-      const base = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.85, 0.9), matMine)
-      base.position.y = 0.45
-      base.castShadow = true
-      g.add(base)
-
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.44, 0.22, 0.94), matTurbine)
-      stripe.position.y = 0.55
-      g.add(stripe)
-
-      g.userData = { type: 'obstacle', radius: 1.15, height: 1.3 }
-      return g
-    }
-
+    // Water Ramps
     function createWaterRamp() {
       const g = new THREE.Group()
       const shape = new THREE.Shape()
@@ -717,59 +755,128 @@ export function GamePage() {
       scene.add(chunk)
     }
 
-    // Distant Sunset Stadium Horizon (Bridge + Towers + Floodlight Mast + Sun)
+    // Distant Sunset Skyline (Real-looking glass skyscrapers, floodlight mast & steel bridge)
     const backdropGroup = new THREE.Group()
     scene.add(backdropGroup)
 
     const sun = new THREE.Mesh(
-      new THREE.SphereGeometry(10, 16, 16),
+      new THREE.SphereGeometry(9, 16, 16),
       new THREE.MeshBasicMaterial({ color: 0xfef08a, fog: false }),
     )
-    sun.position.set(-55, 30, -185)
+    sun.position.set(-55, 32, -185)
     backdropGroup.add(sun)
 
-    // Left sunset-lit stadium tower & tall floodlight mast
-    const matHorizonTower = new THREE.MeshStandardMaterial({
-      color: 0x92400e,
-      roughness: 0.7,
+    // Procedural glass-curtain-wall skyscraper facade texture
+    const bldgCanvas = document.createElement('canvas')
+    bldgCanvas.width = 256
+    bldgCanvas.height = 512
+    const bldgCtx = bldgCanvas.getContext('2d')
+    if (bldgCtx) {
+      const facadeGrad = bldgCtx.createLinearGradient(0, 0, 256, 512)
+      facadeGrad.addColorStop(0, '#334155')
+      facadeGrad.addColorStop(0.5, '#1e293b')
+      facadeGrad.addColorStop(1, '#0f172a')
+      bldgCtx.fillStyle = facadeGrad
+      bldgCtx.fillRect(0, 0, 256, 512)
+
+      for (let y = 10; y < 502; y += 16) {
+        bldgCtx.fillStyle = '#475569'
+        bldgCtx.fillRect(0, y + 11, 256, 4)
+
+        for (let x = 8; x < 248; x += 18) {
+          const seed = (y * 13 + x * 7) % 19
+          if (seed < 4) {
+            bldgCtx.fillStyle = '#fde68a'
+          } else if (seed < 8) {
+            bldgCtx.fillStyle = '#fdba74'
+          } else if (seed < 14) {
+            bldgCtx.fillStyle = '#38bdf8'
+          } else {
+            bldgCtx.fillStyle = '#1e3a5f'
+          }
+          bldgCtx.fillRect(x, y, 13, 10)
+        }
+      }
+    }
+    const buildingTex = new THREE.CanvasTexture(bldgCanvas)
+    buildingTex.colorSpace = THREE.SRGBColorSpace
+    buildingTex.wrapS = THREE.RepeatWrapping
+    buildingTex.wrapT = THREE.RepeatWrapping
+
+    const matBuilding = new THREE.MeshStandardMaterial({
+      map: buildingTex,
+      roughness: 0.35,
+      metalness: 0.45,
       fog: false,
     })
-    const leftTower = new THREE.Mesh(new THREE.BoxGeometry(16, 48, 14), matHorizonTower)
-    leftTower.position.set(-46, 22, -145)
-    backdropGroup.add(leftTower)
+    const matRoofTrim = new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      roughness: 0.7,
+      metalness: 0.3,
+      fog: false,
+    })
+
+    const skyscrapers = [
+      { x: -78, z: -158, w: 20, h: 46, d: 18 },
+      { x: -50, z: -146, w: 18, h: 64, d: 16 },
+      { x: -26, z: -162, w: 22, h: 52, d: 18 },
+      { x: 24, z: -166, w: 24, h: 48, d: 18 },
+      { x: 54, z: -150, w: 19, h: 68, d: 18 },
+      { x: 82, z: -160, w: 22, h: 44, d: 18 },
+    ]
+    skyscrapers.forEach((b, idx) => {
+      const tower = new THREE.Group()
+      const mainBody = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), matBuilding)
+      mainBody.position.y = b.h / 2
+      tower.add(mainBody)
+
+      const crown = new THREE.Mesh(new THREE.BoxGeometry(b.w * 0.72, b.h * 0.14, b.d * 0.72), matRoofTrim)
+      crown.position.y = b.h + (b.h * 0.14) / 2
+      tower.add(crown)
+
+      if (idx % 2 === 1) {
+        const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.5, 14, 6), matRoofTrim)
+        spire.position.y = b.h + b.h * 0.14 + 7
+        tower.add(spire)
+      }
+
+      tower.position.set(b.x, -4, b.z)
+      backdropGroup.add(tower)
+    })
 
     const floodMast = new THREE.Mesh(
-      new THREE.BoxGeometry(2.2, 56, 2.2),
-      new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8, fog: false }),
+      new THREE.BoxGeometry(1.8, 56, 1.8),
+      new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8, fog: false }),
     )
     floodMast.position.set(-34, 28, -135)
     backdropGroup.add(floodMast)
 
     const floodHead = new THREE.Mesh(
-      new THREE.BoxGeometry(10, 5.5, 2),
+      new THREE.BoxGeometry(10, 5, 1.6),
       new THREE.MeshBasicMaterial({ color: 0xfef9c3, fog: false }),
     )
     floodHead.position.set(-34, 54, -135)
     backdropGroup.add(floodHead)
 
-    // Distant sweeping highway/monorail overpass & right bridge tower
-    const matBridge = new THREE.MeshStandardMaterial({ color: 0xc29b6c, roughness: 0.75, fog: false })
-    const bridgeBeam = new THREE.Mesh(new THREE.BoxGeometry(240, 3.6, 5), matBridge)
-    bridgeBeam.position.set(15, 28, -155)
-    bridgeBeam.rotation.z = 0.08
-    backdropGroup.add(bridgeBeam)
+    const matBridgeSteel = new THREE.MeshStandardMaterial({
+      color: 0x475569,
+      roughness: 0.6,
+      metalness: 0.4,
+      fog: false,
+    })
+    const bridgeDeck = new THREE.Mesh(new THREE.BoxGeometry(240, 2.4, 5), matBridgeSteel)
+    bridgeDeck.position.set(10, 20, -138)
+    bridgeDeck.rotation.z = 0.03
+    backdropGroup.add(bridgeDeck)
 
-    const lowerBeam = new THREE.Mesh(new THREE.BoxGeometry(240, 2.6, 4), matBridge)
-    lowerBeam.position.set(20, 18, -162)
-    lowerBeam.rotation.z = -0.03
-    backdropGroup.add(lowerBeam)
-    ;[-55, -10, 32, 72].forEach((px, idx) => {
-      const pillar = new THREE.Mesh(
-        new THREE.BoxGeometry(idx === 2 ? 7 : 4, idx === 2 ? 46 : 34, idx === 2 ? 7 : 4),
-        matBridge,
-      )
-      pillar.position.set(px, idx === 2 ? 19 : 11, -155)
-      backdropGroup.add(pillar)
+    ;[32, -40].forEach((px) => {
+      const pylonL = new THREE.Mesh(new THREE.BoxGeometry(2.4, 42, 2.4), matBridgeSteel)
+      pylonL.position.set(px - 3, 21, -138)
+      const pylonR = new THREE.Mesh(new THREE.BoxGeometry(2.4, 42, 2.4), matBridgeSteel)
+      pylonR.position.set(px + 3, 21, -138)
+      const cross = new THREE.Mesh(new THREE.BoxGeometry(8.5, 2.2, 2.6), matBridgeSteel)
+      cross.position.set(px, 34, -138)
+      backdropGroup.add(pylonL, pylonR, cross)
     })
 
     // Water spray wake particles
@@ -837,6 +944,8 @@ export function GamePage() {
     let spinTimer = 0
     let shakeTimer = 0
     let calloutTimer = 0
+    let countdownTimer = 0
+    let lastCountdownBeep = 0
     let hudTick = 0
 
     const LANE_LIMIT = TRACK_WIDTH / 2 - 2.3
@@ -897,25 +1006,9 @@ export function GamePage() {
         return
       }
 
-      const cfg = DIFFICULTY_CONFIG[difficultyRef.current]
-      const slots = cfg.minSlots + (Math.random() < cfg.extraSlotChance ? 1 : 0)
-      const usedX: number[] = []
-      for (let i = 0; i < slots; i++) {
-        let x = 0
-        let tries = 0
-        do {
-          x = (Math.random() - 0.5) * (LANE_LIMIT * 2)
-          tries++
-        } while (usedX.some((ux) => Math.abs(ux - x) < 2.8) && tries < 8)
-        usedX.push(x)
-
-        const r = Math.random()
-        let obj: THREE.Group
-        if (r < 0.52) obj = createBuoy()
-        else if (r < 0.84) obj = createFloatingBarrier()
-        else obj = createWaterRamp()
-
-        obj.position.x = x
+      if (Math.random() < 0.65) {
+        const obj = createWaterRamp()
+        obj.position.x = (Math.random() - 0.5) * (LANE_LIMIT * 1.6)
         obj.position.z = zPos + (Math.random() - 0.5) * 3
         scene.add(obj)
         entities.push(obj)
@@ -1000,12 +1093,16 @@ export function GamePage() {
       setChallengeFeedback('none')
       startNewChallenge(false)
       populateInitialProps()
-      state = 'playing'
-      setPhase('playing')
+      countdownTimer = 2.1
+      lastCountdownBeep = 4
+      setCountdownLabel('3')
+      state = 'countdown'
+      setPhase('countdown')
     }
 
     function finalizeGameOver() {
       state = 'gameover'
+      sfx.stopEngine()
       playerCraft.visible = true
       const total = Math.floor(distance) + bonusScore
       setScore(total)
@@ -1191,6 +1288,27 @@ export function GamePage() {
         }
       }
 
+      if (state === 'countdown') {
+        countdownTimer -= dt
+        const step = Math.ceil(countdownTimer / 0.7)
+        if (step !== lastCountdownBeep && step >= 1 && step <= 3) {
+          lastCountdownBeep = step
+          setCountdownLabel(String(step) as '3' | '2' | '1')
+          sfx.playCountdown(false)
+        }
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0, 0.12)
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, 4.6, 0.12)
+        camera.lookAt(0, 1.2, -12)
+        emitWake(playerCraft)
+        emitWake(rivalCraft)
+        if (countdownTimer <= 0) {
+          state = 'playing'
+          setPhase('playing')
+          sfx.playCountdown(true)
+          showCallout('GO!', 'emerald')
+        }
+      }
+
       if (state === 'playing') {
         const cfg = DIFFICULTY_CONFIG[difficultyRef.current]
         raceTime += dt
@@ -1262,6 +1380,12 @@ export function GamePage() {
           playerCraft.rotation.y = THREE.MathUtils.lerp(playerCraft.rotation.y, 0, 0.25)
         }
 
+        const exhaustMat = playerCraft.userData.exhaustMat as THREE.MeshBasicMaterial | undefined
+        if (exhaustMat) {
+          exhaustMat.color.setHex(boostTimer > 0 ? 0xa5f3fc : gasRef.current ? 0x38bdf8 : 0x0284c7)
+        }
+        sfx.updateEngine(true, speed, currentGear, boostTimer > 0)
+
         const targetFov = 60 + ((speed - 18) / 36) * 9 + (boostTimer > 0 ? 4 : 0)
         if (Math.abs(camera.fov - targetFov) > 0.05) {
           camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.1)
@@ -1269,6 +1393,7 @@ export function GamePage() {
         }
         camera.position.x = THREE.MathUtils.lerp(camera.position.x, playerCraft.position.x * 0.55, 0.1)
         camera.position.y = THREE.MathUtils.lerp(camera.position.y, 4.6 + craftY * 0.5, 0.1)
+        camera.rotation.z = THREE.MathUtils.lerp(camera.rotation.z, -steerInput * 0.045, 0.1)
         camera.lookAt(playerCraft.position.x * 0.35, 1.2 + craftY * 0.4, -12)
 
         spawnTimer += speed * dt
@@ -1386,6 +1511,10 @@ export function GamePage() {
         }
       }
 
+      if (state === 'paused') {
+        sfx.stopEngine()
+      }
+
       // Animate realistic Water shader ripples
       if (state !== 'paused') {
         const waterUniforms = waterSurface.material.uniforms as Record<string, { value: number }>
@@ -1400,6 +1529,7 @@ export function GamePage() {
     animate()
 
     return () => {
+      sfx.stopEngine()
       cancelAnimationFrame(rafId)
       resizeObserver.disconnect()
       window.removeEventListener('keydown', onKeyDown)
@@ -1410,6 +1540,7 @@ export function GamePage() {
       skyTexture.dispose()
       bannerTex.dispose()
       crowdTex.dispose()
+      buildingTex.dispose()
       waterNormals.dispose()
       waterGeo.dispose()
       envRT.dispose()
@@ -1484,6 +1615,18 @@ export function GamePage() {
           </button>
         </div>
       </div>
+
+      {/* 3-2-1-GO! Studio Race Countdown */}
+      {phase === 'countdown' && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+          <div
+            className="-skew-x-12 animate-ping text-7xl font-black tracking-widest text-amber-300 drop-shadow-[0_6px_24px_rgba(0,0,0,0.7)] sm:text-8xl"
+            style={{ animationDuration: '0.7s' }}
+          >
+            {countdownLabel}
+          </div>
+        </div>
+      )}
 
       {/* Floating Arcade Callout */}
       {phase === 'playing' && callout && (
