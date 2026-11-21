@@ -6,6 +6,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { BookOpen, Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import { useEnglish } from '@/hooks/use-english'
 import { useI18n } from '@/i18n'
@@ -292,6 +294,7 @@ export function GamePage() {
   const togglePauseRef = useRef<(() => void) | null>(null)
   const gearUpRef = useRef<(() => void) | null>(null)
   const gasRef = useRef(false)
+  const brakeRef = useRef(false)
   const mutedRef = useRef(false)
 
   const [phase, setPhase] = useState<GamePhase>('start')
@@ -302,6 +305,10 @@ export function GamePage() {
 
   const [score, setScore] = useState(0)
   const [wordsDone, setWordsDone] = useState(0)
+  const [stage, setStage] = useState(1)
+  const [rivalScore, setRivalScore] = useState(0)
+  const [rivalWordsDone, setRivalWordsDone] = useState(0)
+  const [isBraking, setIsBraking] = useState(false)
   const [streak, setStreak] = useState(0)
   const [mph, setMph] = useState(0)
   const [gear, setGear] = useState(1)
@@ -359,33 +366,49 @@ export function GamePage() {
     scene.environment = envRT.texture
     scene.environmentIntensity = 0.35
 
-    // Golden-amber left sunset blending into teal-cyan right sky (matching stadium horizon)
-    const skyCanvas = document.createElement('canvas')
-    skyCanvas.width = 256
-    skyCanvas.height = 256
-    const skyCtx = skyCanvas.getContext('2d')
-    if (skyCtx) {
-      const baseGrad = skyCtx.createLinearGradient(0, 0, 256, 200)
-      baseGrad.addColorStop(0, '#0369a1')
-      baseGrad.addColorStop(0.45, '#0ea5e9')
-      baseGrad.addColorStop(0.75, '#7dd3fc')
-      baseGrad.addColorStop(1, '#fde68a')
-      skyCtx.fillStyle = baseGrad
-      skyCtx.fillRect(0, 0, 256, 256)
-
-      // Warm golden sunset glow on the left horizon
-      const sunGlow = skyCtx.createRadialGradient(38, 175, 10, 48, 175, 165)
-      sunGlow.addColorStop(0, 'rgba(254, 240, 138, 0.98)')
-      sunGlow.addColorStop(0.35, 'rgba(251, 146, 60, 0.78)')
-      sunGlow.addColorStop(0.75, 'rgba(245, 158, 11, 0.28)')
-      sunGlow.addColorStop(1, 'rgba(245, 158, 11, 0)')
-      skyCtx.fillStyle = sunGlow
-      skyCtx.fillRect(0, 0, 256, 256)
+    // Dynamic 4-biome sky backdrop (GPU shader for smooth 60fps day/dusk/night/dawn transitions)
+    const skyUniforms = {
+      uTopColor: { value: new THREE.Color(0x0369a1) },
+      uMidColor: { value: new THREE.Color(0x0ea5e9) },
+      uHorizonColor: { value: new THREE.Color(0xfde68a) },
+      uSunColor: { value: new THREE.Color(0xfef08a) },
+      uSunPos: { value: new THREE.Vector2(0.18, 0.34) },
     }
-    const skyTexture = new THREE.CanvasTexture(skyCanvas)
-    skyTexture.colorSpace = THREE.SRGBColorSpace
-    scene.background = skyTexture
-    scene.fog = new THREE.FogExp2(0xfde68a, 0.0052)
+    const skyMat = new THREE.ShaderMaterial({
+      uniforms: skyUniforms,
+      depthWrite: false,
+      fog: false,
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uTopColor;
+        uniform vec3 uMidColor;
+        uniform vec3 uHorizonColor;
+        uniform vec3 uSunColor;
+        uniform vec2 uSunPos;
+        varying vec2 vUv;
+        void main() {
+          float h = clamp(vUv.y, 0.0, 1.0);
+          vec3 sky = mix(uHorizonColor, uMidColor, smoothstep(0.0, 0.45, h));
+          sky = mix(sky, uTopColor, smoothstep(0.45, 0.95, h));
+          float d = distance(vUv, uSunPos);
+          float glow = exp(-d * 4.5) * 0.65;
+          sky += uSunColor * glow;
+          gl_FragColor = vec4(sky, 1.0);
+        }
+      `,
+    })
+    const skyPlane = new THREE.Mesh(new THREE.PlaneGeometry(520, 220), skyMat)
+    skyPlane.position.set(0, 58, -210)
+    scene.add(skyPlane)
+
+    scene.background = new THREE.Color(0x0369a1)
+    scene.fog = new THREE.FogExp2(0xfde68a, 0.0048)
 
     const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 280)
     camera.position.set(0, 4.6, 8.8)
@@ -623,6 +646,167 @@ export function GamePage() {
     const playerCraft = createHovercraft(matHull)
     scene.add(playerCraft)
 
+    // Load custom Blender boat model (/models/player-boat.glb) with Draco support
+    let disposed = false
+    const dracoLoader = new DRACOLoader()
+    dracoLoader.setDecoderPath('/draco/')
+    const gltfLoader = new GLTFLoader()
+    gltfLoader.setDRACOLoader(dracoLoader)
+
+    gltfLoader.load(
+      '/models/player-boat.glb',
+      (gltf) => {
+        if (disposed) return
+        const model = gltf.scene
+
+        // Auto-align boat's exact longitudinal spine to the -Z axis (handles diagonal Tripo/Blender exports)
+        model.updateMatrixWorld(true)
+        const pts: { x: number; z: number }[] = []
+        const v = new THREE.Vector3()
+        let sumX = 0
+        let sumZ = 0
+        model.traverse((obj) => {
+          const mesh = obj as THREE.Mesh
+          if (!mesh.isMesh || !mesh.geometry) return
+          const pos = mesh.geometry.attributes.position
+          if (!pos) return
+          const step = Math.max(1, Math.floor(pos.count / 1500))
+          for (let i = 0; i < pos.count; i += step) {
+            v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld)
+            pts.push({ x: v.x, z: v.z })
+            sumX += v.x
+            sumZ += v.z
+          }
+        })
+
+        if (pts.length > 10) {
+          const meanX = sumX / pts.length
+          const meanZ = sumZ / pts.length
+          let cxx = 0
+          let czz = 0
+          let cxz = 0
+          for (const p of pts) {
+            const dx = p.x - meanX
+            const dz = p.z - meanZ
+            cxx += dx * dx
+            czz += dz * dz
+            cxz += dx * dz
+          }
+          // Principal axis angle relative to +Z
+          const yawToZ = 0.5 * Math.atan2(2 * cxz, czz - cxx)
+          model.rotation.y = -yawToZ
+          model.updateMatrixWorld(true)
+
+          // Verify whether the narrower bow is at -Z or +Z; flip 180 deg if bow is at +Z
+          let minZ = Infinity
+          let maxZ = -Infinity
+          const alignedPts: { x: number; z: number }[] = []
+          for (const p of pts) {
+            const cos = Math.cos(-yawToZ)
+            const sin = Math.sin(-yawToZ)
+            const rx = (p.x - meanX) * cos + (p.z - meanZ) * sin
+            const rz = -(p.x - meanX) * sin + (p.z - meanZ) * cos
+            if (rz < minZ) minZ = rz
+            if (rz > maxZ) maxZ = rz
+            alignedPts.push({ x: rx, z: rz })
+          }
+          const spanZ = maxZ - minZ
+          let negWidth = 0
+          let negCount = 0
+          let posWidth = 0
+          let posCount = 0
+          for (const ap of alignedPts) {
+            if (ap.z < minZ + spanZ * 0.28) {
+              negWidth += Math.abs(ap.x)
+              negCount += 1
+            } else if (ap.z > maxZ - spanZ * 0.28) {
+              posWidth += Math.abs(ap.x)
+              posCount += 1
+            }
+          }
+          const avgNegW = negCount > 0 ? negWidth / negCount : 0
+          const avgPosW = posCount > 0 ? posWidth / posCount : 0
+          if (avgPosW < avgNegW) {
+            model.rotation.y += Math.PI
+          }
+        }
+
+        // Normalize bounding box to match ~3.4m hull length
+        const box = new THREE.Box3().setFromObject(model)
+        const size = new THREE.Vector3()
+        box.getSize(size)
+        const scaleFactor = 3.4 / Math.max(size.z, size.x, 0.001)
+        model.scale.multiplyScalar(scaleFactor)
+
+        // Auto-level any built-in roll tilt (common in AI-generated 3D meshes)
+        const rollPivot = new THREE.Group()
+        rollPivot.add(model)
+        rollPivot.updateMatrixWorld(true)
+
+        let sumRX = 0
+        let sumRY = 0
+        const rollPts: { x: number; y: number }[] = []
+        rollPivot.traverse((obj) => {
+          const mesh = obj as THREE.Mesh
+          if (!mesh.isMesh || !mesh.geometry) return
+          const pos = mesh.geometry.attributes.position
+          if (!pos) return
+          const step = Math.max(1, Math.floor(pos.count / 1500))
+          for (let i = 0; i < pos.count; i += step) {
+            v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld)
+            rollPts.push({ x: v.x, y: v.y })
+            sumRX += v.x
+            sumRY += v.y
+          }
+        })
+        if (rollPts.length > 10) {
+          const mx = sumRX / rollPts.length
+          const my = sumRY / rollPts.length
+          let cxx = 0
+          let cxy = 0
+          for (const p of rollPts) {
+            const dx = p.x - mx
+            const dy = p.y - my
+            cxx += dx * dx
+            cxy += dx * dy
+          }
+          if (cxx > 0.0001) {
+            const rollAngle = Math.atan2(cxy, cxx)
+            rollPivot.rotation.z = -rollAngle
+          }
+        }
+
+        const scaledBox = new THREE.Box3().setFromObject(rollPivot)
+        const center = new THREE.Vector3()
+        scaledBox.getCenter(center)
+        rollPivot.position.set(-center.x, -scaledBox.min.y - 0.04, -center.z)
+
+        let customFan: THREE.Object3D | undefined
+        model.traverse((obj) => {
+          if ((obj as THREE.Mesh).isMesh) {
+            obj.castShadow = true
+            obj.receiveShadow = true
+          }
+          if (obj.name.toLowerCase().includes('fan') || obj.name.toLowerCase().includes('prop')) {
+            customFan = obj
+          }
+        })
+
+        // Replace procedural fallback children with the custom Blender boat
+        while (playerCraft.children.length > 0) {
+          const child = playerCraft.children[0]
+          playerCraft.remove(child)
+        }
+        playerCraft.add(rollPivot)
+        playerCraft.userData.fan = customFan
+        playerCraft.userData.exhaustMat = undefined
+      },
+      undefined,
+      () => {
+        // Keep procedural fallback hovercraft if model fails to load
+      },
+    )
+
     // Rival hovercraft racing alongside you!
     const rivalCraft = createHovercraft(matHullRival)
     rivalCraft.position.set(5.2, 0.05, -6)
@@ -704,11 +888,42 @@ export function GamePage() {
     waterSurface.position.set(0, 0, -55)
     scene.add(waterSurface)
 
-    function createCanalChunk(zCenter: number) {
+    const matNeonArch = new THREE.MeshBasicMaterial({ color: 0xfde047 })
+    const matTowerGlass = new THREE.MeshStandardMaterial({
+      color: 0x1e3a5f,
+      roughness: 0.2,
+      metalness: 0.65,
+      flatShading: true,
+    })
+    const matTowerAccent = new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      roughness: 0.65,
+      metalness: 0.35,
+    })
+    const matBoardwalk = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 })
+    const matPalmTrunk = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.9, flatShading: true })
+    const matPalmLeaf = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.7, flatShading: true })
+    const matLampGlow = new THREE.MeshBasicMaterial({ color: 0xfef9c3 })
+    const ferrisWheels: THREE.Group[] = []
+
+    function createCanalChunk(zCenter: number, chunkIdx: number) {
       const group = new THREE.Group()
       group.position.z = zCenter
+      const zone = chunkIdx % 4
 
-      // Left & right stadium canal walls + sponsor banners + grandstands
+      if (zone === 0 || zone === 3) {
+        const archLeft = new THREE.Mesh(new THREE.BoxGeometry(0.65, 10.5, 0.65), matSkirt)
+        archLeft.position.set(-(TRACK_WIDTH / 2 + 0.7), 5.2, 0)
+        const archRight = new THREE.Mesh(new THREE.BoxGeometry(0.65, 10.5, 0.65), matSkirt)
+        archRight.position.set(TRACK_WIDTH / 2 + 0.7, 5.2, 0)
+        const archSpan = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 2.1, 0.7, 0.7), matSkirt)
+        archSpan.position.set(0, 10.3, 0)
+        const neonStrip = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 0.8, 0.24, 0.76), matNeonArch)
+        neonStrip.position.set(0, 9.95, 0)
+        group.add(archLeft, archRight, archSpan, neonStrip)
+      }
+
+      // Base canal retaining walls & sponsor banners
       ;[-1, 1].forEach((side) => {
         const wall = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.2, CHUNK_LEN), matConcrete)
         wall.position.set(side * (TRACK_WIDTH / 2 + 0.9), 0.9, 0)
@@ -719,30 +934,85 @@ export function GamePage() {
         banner.position.set(side * (TRACK_WIDTH / 2 - 0.02), 1.25, 0)
         group.add(banner)
 
-        // Grandstand bleachers with cheering crowd
-        const stand = new THREE.Mesh(new THREE.BoxGeometry(6.4, 5.8, CHUNK_LEN - 2), matCrowd)
-        stand.position.set(side * (TRACK_WIDTH / 2 + 5.2), 2.9, 0)
-        stand.rotation.z = side * 0.3
-        group.add(stand)
+        if (zone === 0) {
+          // Zone 0: Stadium Grandstand Bleachers + Roof + Floodlight
+          const stand = new THREE.Mesh(new THREE.BoxGeometry(6.4, 5.8, CHUNK_LEN - 2), matCrowd)
+          stand.position.set(side * (TRACK_WIDTH / 2 + 5.2), 2.9, 0)
+          stand.rotation.z = side * 0.3
+          group.add(stand)
 
-        // Stadium roof, floodlights & yellow starting gantry on left
-        if (side === -1) {
-          const roof = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.55, CHUNK_LEN - 2), matConcrete)
-          roof.position.set(side * (TRACK_WIDTH / 2 + 4.8), 8.5, 0)
-          roof.rotation.z = -0.15
-          group.add(roof)
+          if (side === -1) {
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.55, CHUNK_LEN - 2), matConcrete)
+            roof.position.set(side * (TRACK_WIDTH / 2 + 4.8), 8.5, 0)
+            roof.rotation.z = -0.15
+            const lightBar = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.7, 9), matLampGlow)
+            lightBar.position.set(side * (TRACK_WIDTH / 2 + 1.8), 8.0, 0)
+            const gantry = new THREE.Mesh(new THREE.BoxGeometry(0.45, 4.8, 0.45), matGantry)
+            gantry.position.set(side * (TRACK_WIDTH / 2 + 0.5), 3.4, -6)
+            group.add(roof, lightBar, gantry)
+          }
+        } else if (zone === 1) {
+          // Zone 1: Waterfront Glass Skyscrapers & Neon Penthouses
+          const towerH = side === -1 ? 19 : 15
+          const tower = new THREE.Mesh(new THREE.BoxGeometry(7.2, towerH, CHUNK_LEN - 2.6), matTowerGlass)
+          tower.position.set(side * (TRACK_WIDTH / 2 + 6.2), towerH / 2 + 0.5, 0)
+          const topCrown = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.8, CHUNK_LEN - 5), matTowerAccent)
+          topCrown.position.set(side * (TRACK_WIDTH / 2 + 6.2), towerH + 1.8, 0)
+          const neonBand = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.35, CHUNK_LEN - 2.4), matNeonArch)
+          neonBand.position.set(side * (TRACK_WIDTH / 2 + 6.2), towerH - 0.8, 0)
+          const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.25, 5.5, 6), matTowerAccent)
+          spire.position.set(side * (TRACK_WIDTH / 2 + 6.2), towerH + 5.8, 0)
+          group.add(tower, topCrown, neonBand, spire)
+        } else if (zone === 2) {
+          // Zone 2: Open Harbor Palm Promenade & Glowing Street Lamps
+          const deck = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.6, CHUNK_LEN), matBoardwalk)
+          deck.position.set(side * (TRACK_WIDTH / 2 + 5.2), 1.8, 0)
+          group.add(deck)
 
-          const lightBar = new THREE.Mesh(
-            new THREE.BoxGeometry(0.45, 0.7, 9),
-            new THREE.MeshBasicMaterial({ color: 0xfef9c3 }),
-          )
-          lightBar.position.set(side * (TRACK_WIDTH / 2 + 1.8), 8.0, 0)
-          group.add(lightBar)
+          ;[-4, 4].forEach((pz) => {
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, 5.6, 6), matPalmTrunk)
+            trunk.position.set(side * (TRACK_WIDTH / 2 + 4.4), 4.6, pz)
+            trunk.rotation.z = -side * 0.14
+            const crown = new THREE.Mesh(new THREE.ConeGeometry(2.2, 1.4, 6), matPalmLeaf)
+            crown.position.set(side * (TRACK_WIDTH / 2 + 4.8), 7.4, pz)
+            const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 4.2, 6), matTowerAccent)
+            lampPost.position.set(side * (TRACK_WIDTH / 2 + 2.4), 3.9, -pz)
+            const lampHead = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 8), matLampGlow)
+            lampHead.position.set(side * (TRACK_WIDTH / 2 + 2.4), 6.1, -pz)
+            group.add(trunk, crown, lampPost, lampHead)
+          })
+        } else {
+          // Zone 3: Harbor Ferris Wheel (left) + Digital Pavilion & Media Tower (right)
+          if (side === -1) {
+            const supportL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 9.5, 0.5), matTowerAccent)
+            supportL.position.set(side * (TRACK_WIDTH / 2 + 6.2), 5.2, -1.6)
+            supportL.rotation.x = 0.22
+            const supportR = new THREE.Mesh(new THREE.BoxGeometry(0.4, 9.5, 0.5), matTowerAccent)
+            supportR.position.set(side * (TRACK_WIDTH / 2 + 6.2), 5.2, 1.6)
+            supportR.rotation.x = -0.22
 
-          // Yellow drag-racing gantry tower near canal wall
-          const gantry = new THREE.Mesh(new THREE.BoxGeometry(0.45, 4.8, 0.45), matGantry)
-          gantry.position.set(side * (TRACK_WIDTH / 2 + 0.5), 3.4, -6)
-          group.add(gantry)
+            const wheel = new THREE.Group()
+            wheel.position.set(side * (TRACK_WIDTH / 2 + 6.2), 9.2, 0)
+            const rim = new THREE.Mesh(new THREE.TorusGeometry(5.2, 0.22, 8, 20), matNeonArch)
+            rim.rotation.y = Math.PI / 2
+            wheel.add(rim)
+            for (let g = 0; g < 8; g++) {
+              const ang = (g / 8) * Math.PI * 2
+              const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.12, 10.4, 0.12), matTowerAccent)
+              spoke.rotation.x = ang
+              const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), matLampGlow)
+              cabin.position.set(0, Math.cos(ang) * 5.2, Math.sin(ang) * 5.2)
+              wheel.add(spoke, cabin)
+            }
+            ferrisWheels.push(wheel)
+            group.add(supportL, supportR, wheel)
+          } else {
+            const pavilion = new THREE.Mesh(new THREE.BoxGeometry(6.8, 4.5, CHUNK_LEN - 2.5), matTowerAccent)
+            pavilion.position.set(side * (TRACK_WIDTH / 2 + 5.8), 3.6, 0)
+            const mediaScreen = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.8, CHUNK_LEN - 4), matNeonArch)
+            mediaScreen.position.set(side * (TRACK_WIDTH / 2 + 2.4), 7.8, 0)
+            group.add(pavilion, mediaScreen)
+          }
         }
       })
 
@@ -750,7 +1020,7 @@ export function GamePage() {
     }
 
     for (let i = 0; i < NUM_CHUNKS; i++) {
-      const chunk = createCanalChunk(10 - i * CHUNK_LEN)
+      const chunk = createCanalChunk(10 - i * CHUNK_LEN, i)
       chunks.push(chunk)
       scene.add(chunk)
     }
@@ -824,6 +1094,9 @@ export function GamePage() {
       { x: 54, z: -150, w: 19, h: 68, d: 18 },
       { x: 82, z: -160, w: 22, h: 44, d: 18 },
     ]
+    const proceduralSkyline = new THREE.Group()
+    backdropGroup.add(proceduralSkyline)
+
     skyscrapers.forEach((b, idx) => {
       const tower = new THREE.Group()
       const mainBody = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), matBuilding)
@@ -834,6 +1107,10 @@ export function GamePage() {
       crown.position.y = b.h + (b.h * 0.14) / 2
       tower.add(crown)
 
+      const roofBeacon = new THREE.Mesh(new THREE.BoxGeometry(b.w * 0.74, 0.8, b.d * 0.74), matNeonArch)
+      roofBeacon.position.y = b.h + 0.4
+      tower.add(roofBeacon)
+
       if (idx % 2 === 1) {
         const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.5, 14, 6), matRoofTrim)
         spire.position.y = b.h + b.h * 0.14 + 7
@@ -841,8 +1118,67 @@ export function GamePage() {
       }
 
       tower.position.set(b.x, -4, b.z)
-      backdropGroup.add(tower)
+      proceduralSkyline.add(tower)
     })
+
+    // Load Downtown Toronto Yonge-Dundas Square backdrop (/models/downtown_toronto_yonge_and_dundas.glb)
+    gltfLoader.load(
+      '/models/downtown_toronto_yonge_and_dundas.glb',
+      (gltf) => {
+        if (disposed) return
+        const city = gltf.scene
+
+        const box = new THREE.Box3().setFromObject(city)
+        const size = new THREE.Vector3()
+        box.getSize(size)
+        const maxSpan = Math.max(size.x, size.z, 0.001)
+        const scaleFactor = 200 / maxSpan
+        city.scale.multiplyScalar(scaleFactor)
+
+        // Orient wider side facing the player camera
+        if (size.z > size.x * 1.1) {
+          city.rotation.y = Math.PI / 2
+        }
+
+        const scaledBox = new THREE.Box3().setFromObject(city)
+        const center = new THREE.Vector3()
+        scaledBox.getCenter(center)
+        city.position.set(-center.x, -scaledBox.min.y - 3, -155 - center.z)
+
+        city.traverse((obj) => {
+          const mesh = obj as THREE.Mesh
+          if (!mesh.isMesh) return
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+          for (const m of mats) {
+            if (m && 'fog' in m) {
+              ;(m as THREE.MeshStandardMaterial).fog = false
+            }
+          }
+        })
+
+        proceduralSkyline.visible = false
+        backdropGroup.add(city)
+      },
+      undefined,
+      () => {
+        // Keep procedural skyline if backdrop model is unavailable
+      },
+    )
+
+    // Iconic Skyline Needle Observation Tower (CN-Tower inspired silhouette)
+    const needleTower = new THREE.Group()
+    const needleShaft = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 3.2, 72, 8), matRoofTrim)
+    needleShaft.position.y = 34
+    const needlePod = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 5.2, 4.5, 12), matTowerGlass)
+    needlePod.position.y = 56
+    const needleRing = new THREE.Mesh(new THREE.TorusGeometry(6.6, 0.45, 8, 24), matNeonArch)
+    needleRing.rotation.x = Math.PI / 2
+    needleRing.position.y = 56
+    const needleSpire = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.8, 22, 6), matRoofTrim)
+    needleSpire.position.y = 78
+    needleTower.add(needleShaft, needlePod, needleRing, needleSpire)
+    needleTower.position.set(4, -4, -172)
+    backdropGroup.add(needleTower)
 
     const floodMast = new THREE.Mesh(
       new THREE.BoxGeometry(1.8, 56, 1.8),
@@ -878,6 +1214,104 @@ export function GamePage() {
       cross.position.set(px, 34, -138)
       backdropGroup.add(pylonL, pylonR, cross)
     })
+
+    // Cruising LinguaDesk Sky Blimp & sweeping stadium searchlights
+    const blimpGroup = new THREE.Group()
+    const blimpBody = new THREE.Mesh(
+      new THREE.SphereGeometry(2.8, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.4, metalness: 0.25, fog: false }),
+    )
+    blimpBody.scale.set(2.4, 0.9, 0.9)
+    const blimpStripe = new THREE.Mesh(
+      new THREE.BoxGeometry(8.5, 0.7, 3.8),
+      matNeonArch,
+    )
+    blimpGroup.add(blimpBody, blimpStripe)
+    blimpGroup.position.set(-28, 44, -125)
+    backdropGroup.add(blimpGroup)
+
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.14,
+      depthWrite: false,
+      fog: false,
+    })
+    const beamGeo = new THREE.ConeGeometry(11, 85, 12, 1, true)
+    const beamLeft = new THREE.Mesh(beamGeo, beamMat)
+    beamLeft.position.set(-28, 38, -128)
+    beamLeft.rotation.z = -0.35
+    const beamRight = new THREE.Mesh(beamGeo, beamMat)
+    beamRight.position.set(30, 38, -132)
+    beamRight.rotation.z = 0.35
+    backdropGroup.add(beamLeft, beamRight)
+
+    const BIOMES = [
+      {
+        labelEn: 'GOLDEN HARBOR',
+        labelZh: '🌅 黄金日落港湾',
+        top: new THREE.Color(0x0369a1),
+        mid: new THREE.Color(0x0ea5e9),
+        horizon: new THREE.Color(0xfde68a),
+        sun: new THREE.Color(0xfef08a),
+        fog: new THREE.Color(0xfde68a),
+        water: new THREE.Color(0x064e63),
+        hemiSky: new THREE.Color(0xfef3c7),
+        hemiGround: new THREE.Color(0x0e7490),
+        dir: new THREE.Color(0xffedd5),
+        neon: new THREE.Color(0xfde047),
+        sunY: 32,
+        bloom: 0.14,
+      },
+      {
+        labelEn: 'CRIMSON DUSK',
+        labelZh: '🌆 玫瑰暮色海湾',
+        top: new THREE.Color(0x312e81),
+        mid: new THREE.Color(0x7c3aed),
+        horizon: new THREE.Color(0xfb7185),
+        sun: new THREE.Color(0xfdba74),
+        fog: new THREE.Color(0xfda4af),
+        water: new THREE.Color(0x1e1b4b),
+        hemiSky: new THREE.Color(0xfecdd3),
+        hemiGround: new THREE.Color(0x4c1d95),
+        dir: new THREE.Color(0xfda4af),
+        neon: new THREE.Color(0xf472b6),
+        sunY: 22,
+        bloom: 0.2,
+      },
+      {
+        labelEn: 'NEON NIGHT',
+        labelZh: '🌃 霓虹夜航都市',
+        top: new THREE.Color(0x020617),
+        mid: new THREE.Color(0x0f172a),
+        horizon: new THREE.Color(0x1e1b4b),
+        sun: new THREE.Color(0x38bdf8),
+        fog: new THREE.Color(0x0f172a),
+        water: new THREE.Color(0x082f49),
+        hemiSky: new THREE.Color(0x38bdf8),
+        hemiGround: new THREE.Color(0x312e81),
+        dir: new THREE.Color(0x93c5fd),
+        neon: new THREE.Color(0x22d3ee),
+        sunY: 42,
+        bloom: 0.28,
+      },
+      {
+        labelEn: 'AURORA DAWN',
+        labelZh: '🌌 极光晨曦峡湾',
+        top: new THREE.Color(0x0c4a6e),
+        mid: new THREE.Color(0x0284c7),
+        horizon: new THREE.Color(0x6ee7b7),
+        sun: new THREE.Color(0xa7f3d0),
+        fog: new THREE.Color(0xa7f3d0),
+        water: new THREE.Color(0x064e3b),
+        hemiSky: new THREE.Color(0xd1fae5),
+        hemiGround: new THREE.Color(0x0f766e),
+        dir: new THREE.Color(0xecfdf5),
+        neon: new THREE.Color(0x34d399),
+        sunY: 28,
+        bloom: 0.18,
+      },
+    ]
 
     // Water spray wake particles
     const sprayParticles: THREE.Mesh[] = []
@@ -929,6 +1363,7 @@ export function GamePage() {
     let rpm = 0.2
     let boostTimer = 0
     let completedWordsCount = 0
+    let currentStage = 1
     let bonusScore = 0
     let currentStreak = 0
     let lastReportedScore = -1
@@ -947,6 +1382,21 @@ export function GamePage() {
     let countdownTimer = 0
     let lastCountdownBeep = 0
     let hudTick = 0
+
+    // Rival AI racer state
+    let rivalX = 5.2
+    let rivalZ = -7
+    let rivalY = 0
+    let rivalVelY = 0
+    let rivalGrounded = true
+    let rivalSpinTimer = 0
+    let rivalSpeed = 23
+    let rivalDistance = 0
+    let rivalBonusScore = 0
+    let rivalWordsCount = 0
+    let rivalLetterHits = 0
+    let rivalBoostTimer = 0
+    let lastReportedRivalScore = -1
 
     const LANE_LIMIT = TRACK_WIDTH / 2 - 2.3
     const keys = { left: false, right: false }
@@ -1063,13 +1513,31 @@ export function GamePage() {
       rpm = 0.25
       boostTimer = 0
       completedWordsCount = 0
+      currentStage = 1
       bonusScore = 0
       currentStreak = 0
       lastReportedScore = 0
+      setStage(1)
+      brakeRef.current = false
+      gasRef.current = false
+      setIsBraking(false)
       craftX = 0
       craftY = 0
       craftVelY = 0
       isGrounded = true
+      rivalX = 5.2
+      rivalZ = -7
+      rivalY = 0
+      rivalVelY = 0
+      rivalGrounded = true
+      rivalSpinTimer = 0
+      rivalSpeed = cfg.startSpeed
+      rivalDistance = 0
+      rivalBonusScore = 0
+      rivalWordsCount = 0
+      rivalLetterHits = 0
+      rivalBoostTimer = 0
+      lastReportedRivalScore = 0
       spawnTimer = 0
       spinTimer = 0
       shakeTimer = 0
@@ -1078,10 +1546,13 @@ export function GamePage() {
       playerCraft.position.set(0, 0, 0)
       playerCraft.rotation.set(0, 0, 0)
       rivalCraft.position.set(5.2, 0.05, -7)
+      rivalCraft.rotation.set(0, 0, 0)
       camera.fov = 60
       camera.updateProjectionMatrix()
       setScore(0)
       setWordsDone(0)
+      setRivalScore(0)
+      setRivalWordsDone(0)
       setStreak(0)
       setGear(1)
       setPosRank(1)
@@ -1129,6 +1600,8 @@ export function GamePage() {
         keys.left = false
         keys.right = false
         gasRef.current = false
+        brakeRef.current = false
+        setIsBraking(false)
         state = 'paused'
         setPhase('paused')
       } else if (state === 'paused') {
@@ -1159,7 +1632,12 @@ export function GamePage() {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true
       if (e.code === 'ArrowUp' || e.code === 'KeyW') gasRef.current = true
-      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyE') {
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+        e.preventDefault()
+        brakeRef.current = true
+      }
+      if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyE' || e.code === 'KeyG') && !e.repeat) {
+        e.preventDefault()
         triggerGearUp()
       }
       if (e.code === 'Space') {
@@ -1173,6 +1651,7 @@ export function GamePage() {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false
       if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false
       if (e.code === 'ArrowUp' || e.code === 'KeyW') gasRef.current = false
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') brakeRef.current = false
     }
 
     let pointerActive = false
@@ -1258,6 +1737,11 @@ export function GamePage() {
           chunk.position.z -= NUM_CHUNKS * CHUNK_LEN
         }
       }
+      if (state !== 'paused') {
+        for (const wheel of ferrisWheels) {
+          wheel.rotation.x += dt * 0.45
+        }
+      }
 
       for (let i = sprayParticles.length - 1; i >= 0; i--) {
         const p = sprayParticles[i]
@@ -1314,20 +1798,47 @@ export function GamePage() {
         raceTime += dt
 
         if (boostTimer > 0) boostTimer = Math.max(0, boostTimer - dt)
-        const gasBonus = gasRef.current ? 5.5 : 0
+        const isBrakeActive = brakeRef.current
+        const gasBonus = !isBrakeActive && gasRef.current ? 5.5 : 0
         const gearBonus = (currentGear - 1) * 2.2
+        const stageSpeedBonus = (currentStage - 1) * 2.2
         const boostExtra = boostTimer > 0 ? 11 : 0
-        const targetMax = cfg.maxSpeed + gasBonus + gearBonus + boostExtra
-        speed = Math.min(targetMax, speed + dt * (cfg.accel + (gasRef.current ? 1.8 : 0)))
+        const targetMax = cfg.maxSpeed + gasBonus + gearBonus + stageSpeedBonus + boostExtra
+        const minCruiseSpeed = cfg.startSpeed * 0.62
+
+        if (isBrakeActive) {
+          boostTimer = 0
+          speed = Math.max(minCruiseSpeed, speed - dt * 24)
+          if (currentGear > 1 && speed < cfg.startSpeed + (currentGear - 1) * 2.2) {
+            currentGear -= 1
+            setGear(currentGear)
+          }
+        } else {
+          speed = Math.min(targetMax, speed + dt * (cfg.accel + (gasRef.current ? 1.8 : 0)))
+        }
 
         // Oscillating RPM needle so player can time GEAR UP
-        rpm = (rpm + dt * (0.28 + (gasRef.current ? 0.25 : 0))) % 1.0
+        rpm = isBrakeActive
+          ? Math.max(0.12, rpm - dt * 0.45)
+          : (rpm + dt * (0.28 + (gasRef.current ? 0.25 : 0))) % 1.0
 
         distance += speed * dt * 0.5 * cfg.scoreMult
         const currentScore = Math.floor(distance) + bonusScore
         if (currentScore !== lastReportedScore) {
           lastReportedScore = currentScore
           setScore(currentScore)
+        }
+
+        // Rival AI speed, distance & score progression
+        if (rivalBoostTimer > 0) rivalBoostTimer = Math.max(0, rivalBoostTimer - dt)
+        const rivalSkill = difficultyRef.current === 'hard' ? 1.06 : difficultyRef.current === 'easy' ? 0.91 : 0.99
+        const rivalTargetMax = (cfg.maxSpeed + 3.2) * rivalSkill + (rivalBoostTimer > 0 ? 7.5 : 0)
+        rivalSpeed = THREE.MathUtils.lerp(rivalSpeed, rivalTargetMax, dt * 1.4)
+        rivalDistance += rivalSpeed * dt * 0.5 * cfg.scoreMult
+        const currentRivalScore = Math.floor(rivalDistance) + rivalBonusScore
+        if (currentRivalScore !== lastReportedRivalScore) {
+          lastReportedRivalScore = currentRivalScore
+          setRivalScore(currentRivalScore)
         }
 
         hudTick += dt
@@ -1338,6 +1849,7 @@ export function GamePage() {
           setElapsedSec(raceTime)
           setPosRank(playerCraft.position.z <= rivalCraft.position.z ? 1 : 2)
           setIsTurbo(boostTimer > 0)
+          setIsBraking(isBrakeActive)
         }
 
         const steerInput = (keys.right ? 1 : 0) - (keys.left ? 1 : 0)
@@ -1345,16 +1857,84 @@ export function GamePage() {
         playerCraft.position.x = THREE.MathUtils.lerp(playerCraft.position.x, craftX, 0.25)
         playerCraft.rotation.z = THREE.MathUtils.lerp(playerCraft.rotation.z, -steerInput * 0.24, 0.18)
 
-        // Rival hovercraft rubber-banding on the side
+        // Rival AI steering: actively aims for target letter cubes & ramps ahead
         const t = clock.elapsedTime
-        rivalCraft.position.x = THREE.MathUtils.lerp(
-          rivalCraft.position.x,
-          Math.sin(t * 0.85) * 4.5 + (craftX > 0 ? -4.5 : 4.5),
-          0.02,
-        )
-        rivalCraft.position.z = -8 + Math.sin(t * 0.6) * 5.5
-        rivalCraft.position.y = 0.08 + Math.sin(t * 6) * 0.05
-        emitWake(rivalCraft)
+        let desiredRivalX = Math.sin(t * 0.7) * 4.2 + (craftX > 0 ? -3.8 : 3.8)
+        let bestTargetZ = -999
+        for (const ent of entities) {
+          if (ent.position.z < rivalZ - 1.5 && ent.position.z > rivalZ - 46) {
+            const isGoal =
+              (ent.userData.type === 'letter' && ent.userData.isTarget) ||
+              ent.userData.type === 'ramp'
+            if (isGoal && ent.position.z > bestTargetZ) {
+              bestTargetZ = ent.position.z
+              desiredRivalX = ent.position.x
+            }
+          }
+        }
+        desiredRivalX = THREE.MathUtils.clamp(desiredRivalX, -LANE_LIMIT, LANE_LIMIT)
+        const rivalSteerDelta = THREE.MathUtils.clamp(desiredRivalX - rivalX, -1, 1)
+        const rivalAgility = difficultyRef.current === 'hard' ? 12.5 : difficultyRef.current === 'easy' ? 7.5 : 10
+        rivalX = THREE.MathUtils.clamp(rivalX + rivalSteerDelta * rivalAgility * dt, -LANE_LIMIT, LANE_LIMIT)
+        rivalZ = THREE.MathUtils.clamp(rivalZ + (speed - rivalSpeed) * dt * 0.55, -24, 9)
+
+        // Solid boat-to-boat collision resolution (prevents clipping/ghosting)
+        const hullDx = craftX - rivalX
+        const hullDz = playerCraft.position.z - rivalZ
+        const hullDy = Math.abs(craftY - rivalY)
+        const minGapX = 2.25
+        const minGapZ = 3.45
+        if (Math.abs(hullDx) < minGapX && Math.abs(hullDz) < minGapZ && hullDy < 1.35) {
+          const overlapX = minGapX - Math.abs(hullDx)
+          const overlapZ = minGapZ - Math.abs(hullDz)
+          const midX = (craftX + rivalX) * 0.5
+          const midZ = (playerCraft.position.z + rivalZ) * 0.5
+          if (overlapX <= overlapZ) {
+            const signX = hullDx >= 0 ? 1 : -1
+            craftX = THREE.MathUtils.clamp(craftX + signX * overlapX * 0.58, -LANE_LIMIT, LANE_LIMIT)
+            rivalX = THREE.MathUtils.clamp(rivalX - signX * overlapX * 0.58, -LANE_LIMIT, LANE_LIMIT)
+          } else {
+            const signZ = hullDz >= 0 ? 1 : -1
+            rivalZ = THREE.MathUtils.clamp(rivalZ - signZ * overlapZ * 0.9, -24, 9)
+            const avgSpd = (speed + rivalSpeed) * 0.5
+            if (signZ > 0) {
+              speed = Math.min(targetMax, avgSpd + 2.5)
+              rivalSpeed = Math.max(cfg.startSpeed * 0.8, avgSpd - 2)
+            } else {
+              rivalSpeed = Math.min(rivalTargetMax, avgSpd + 2.5)
+              speed = Math.max(minCruiseSpeed, avgSpd - 2)
+            }
+          }
+          emitBurst(midX, 0.7, midZ, 8)
+          shakeTimer = Math.max(shakeTimer, 0.12)
+        }
+
+        rivalCraft.position.x = THREE.MathUtils.lerp(rivalCraft.position.x, rivalX, 0.22)
+        rivalCraft.position.z = THREE.MathUtils.lerp(rivalCraft.position.z, rivalZ, 0.2)
+        rivalCraft.rotation.z = THREE.MathUtils.lerp(rivalCraft.rotation.z, -rivalSteerDelta * 0.22, 0.15)
+
+        if (!rivalGrounded) {
+          rivalVelY -= 28 * dt
+          rivalY += rivalVelY * dt
+          rivalCraft.rotation.x = THREE.MathUtils.clamp(rivalVelY * 0.035, -0.35, 0.45)
+          if (rivalY <= 0) {
+            rivalY = 0
+            rivalVelY = 0
+            rivalGrounded = true
+            rivalCraft.rotation.x = 0
+          }
+        } else {
+          rivalY = 0.06 + Math.sin(t * 7.5) * 0.05
+          rivalCraft.rotation.x = THREE.MathUtils.lerp(rivalCraft.rotation.x, 0, 0.2)
+          emitWake(rivalCraft)
+        }
+        rivalCraft.position.y = rivalY
+        if (rivalSpinTimer > 0) {
+          rivalSpinTimer = Math.max(0, rivalSpinTimer - dt)
+          rivalCraft.rotation.y = (rivalSpinTimer / 0.6) * Math.PI * 2
+        } else {
+          rivalCraft.rotation.y = THREE.MathUtils.lerp(rivalCraft.rotation.y, 0, 0.22)
+        }
 
         if (!isGrounded) {
           craftVelY -= 28 * dt
@@ -1443,6 +2023,7 @@ export function GamePage() {
                 if (activeChallenge.filledIndices.length >= activeChallenge.missingIndices.length) {
                   const completedCard = activeChallenge.card
                   completedWordsCount += 1
+                  const nextStage = Math.floor(completedWordsCount / 3) + 1
                   const wordPts = 30 * mult
                   bonusScore += wordPts
                   setWordsDone(completedWordsCount)
@@ -1450,10 +2031,21 @@ export function GamePage() {
                     prev.some((w) => w.id === completedCard.id) ? prev : [completedCard, ...prev].slice(0, 12),
                   )
                   emitBurst(playerCraft.position.x, playerCraft.position.y + 1.2, playerCraft.position.z, 26)
-                  showCallout(
-                    zh ? `单词完成 +${letterPts + wordPts}!` : `WORD +${letterPts + wordPts}!`,
-                    'emerald',
-                  )
+                  if (nextStage > currentStage) {
+                    currentStage = nextStage
+                    bonusScore += 50
+                    setStage(currentStage)
+                    const stageBiome = BIOMES[(currentStage - 1) % BIOMES.length]
+                    showCallout(
+                      zh ? `STAGE ${currentStage} · ${stageBiome.labelZh} +50!` : `STAGE ${currentStage} · ${stageBiome.labelEn} +50!`,
+                      'amber',
+                    )
+                  } else {
+                    showCallout(
+                      zh ? `单词完成 +${letterPts + wordPts}!` : `WORD +${letterPts + wordPts}!`,
+                      'emerald',
+                    )
+                  }
                   sfx.playWordComplete()
                   setChallenge({ ...activeChallenge })
                   setChallengeFeedback('complete')
@@ -1504,6 +2096,40 @@ export function GamePage() {
             }
           }
 
+          // Rival entity interaction (competes for letter cubes & jumps off ramps)
+          const rdz = Math.abs(e.position.z - rivalCraft.position.z)
+          const rdx = Math.abs(e.position.x - rivalCraft.position.x)
+          if (rdz < 1.35 && rdx < (e.userData.radius as number) + 0.65) {
+            if (e.userData.type === 'letter') {
+              const gateZ = e.position.z
+              const wasTarget = Boolean(e.userData.isTarget)
+              for (let k = entities.length - 1; k >= 0; k--) {
+                if (entities[k].userData.type === 'letter' && Math.abs(entities[k].position.z - gateZ) < 2) {
+                  scene.remove(entities[k])
+                  entities.splice(k, 1)
+                }
+              }
+              emitBurst(rivalCraft.position.x, 1.0, rivalCraft.position.z, 10)
+              rivalBonusScore += wasTarget ? 25 : 10
+              if (wasTarget) {
+                rivalBoostTimer = 0.75
+                rivalLetterHits += 1
+                if (rivalLetterHits % 2 === 0) {
+                  rivalWordsCount += 1
+                  rivalBonusScore += 30
+                  setRivalWordsDone(rivalWordsCount)
+                }
+              }
+              break
+            } else if (e.userData.type === 'ramp' && rivalY < 0.8) {
+              rivalVelY = 13.5
+              rivalGrounded = false
+              rivalSpinTimer = 0.6
+              rivalBonusScore += 10
+              emitBurst(rivalCraft.position.x, 0.6, rivalCraft.position.z, 10)
+            }
+          }
+
           if (e.position.z > 14) {
             scene.remove(e)
             entities.splice(i, 1)
@@ -1515,12 +2141,56 @@ export function GamePage() {
         sfx.stopEngine()
       }
 
-      // Animate realistic Water shader ripples
+      // Animate realistic Water shader ripples & dynamic scenic biome cycle
       if (state !== 'paused') {
-        const waterUniforms = waterSurface.material.uniforms as Record<string, { value: number }>
-        if (waterUniforms.time) {
-          waterUniforms.time.value += dt * (0.7 + moveSpeed * 0.06)
+        const waterUniforms = waterSurface.material.uniforms as Record<string, { value: unknown }>
+        const waterTime = waterUniforms.time as { value: number } | undefined
+        if (waterTime) {
+          waterTime.value += dt * (0.7 + moveSpeed * 0.06)
         }
+
+        // Change surrounding biome based on current Stage (or slow preview on Start screen)
+        const targetBiome =
+          state === 'start'
+            ? BIOMES[Math.floor((clock.elapsedTime * 0.35) / 14) % BIOMES.length]
+            : BIOMES[(currentStage - 1) % BIOMES.length]
+        const lerpRate = Math.min(1, dt * (state === 'start' ? 0.6 : 1.8))
+
+        skyUniforms.uTopColor.value.lerp(targetBiome.top, lerpRate)
+        skyUniforms.uMidColor.value.lerp(targetBiome.mid, lerpRate)
+        skyUniforms.uHorizonColor.value.lerp(targetBiome.horizon, lerpRate)
+        skyUniforms.uSunColor.value.lerp(targetBiome.sun, lerpRate)
+        ;(scene.background as THREE.Color).copy(skyUniforms.uTopColor.value)
+        if (scene.fog instanceof THREE.FogExp2) {
+          scene.fog.color.lerp(targetBiome.fog, lerpRate)
+        }
+        hemiLight.color.lerp(targetBiome.hemiSky, lerpRate)
+        hemiLight.groundColor.lerp(targetBiome.hemiGround, lerpRate)
+        dirLight.color.lerp(targetBiome.dir, lerpRate)
+        matNeonArch.color.lerp(targetBiome.neon, lerpRate)
+        beamMat.color.copy(matNeonArch.color)
+
+        const wSunColor = waterUniforms.sunColor as { value: THREE.Color } | undefined
+        const wWaterColor = waterUniforms.waterColor as { value: THREE.Color } | undefined
+        if (wSunColor) wSunColor.value.copy(skyUniforms.uSunColor.value)
+        if (wWaterColor) wWaterColor.value.lerp(targetBiome.water, lerpRate)
+
+        const sunY = THREE.MathUtils.lerp(sun.position.y, targetBiome.sunY, lerpRate)
+        sun.position.y = sunY
+        ;(sun.material as THREE.MeshBasicMaterial).color.copy(skyUniforms.uSunColor.value)
+        skyUniforms.uSunPos.value.set(
+          0.18 + Math.sin(clock.elapsedTime * 0.08) * 0.04,
+          THREE.MathUtils.clamp((sunY + 10) / 110, 0.15, 0.72),
+        )
+        bloomPass.strength = THREE.MathUtils.lerp(bloomPass.strength, targetBiome.bloom, lerpRate)
+
+        // Cruise blimp & sweep searchlights across the city skyline
+        const skyT = clock.elapsedTime
+        blimpGroup.position.x = Math.sin(skyT * 0.14) * 52
+        blimpGroup.position.y = 43 + Math.sin(skyT * 0.8) * 1.4
+        blimpGroup.rotation.y = Math.cos(skyT * 0.14) > 0 ? 0 : Math.PI
+        beamLeft.rotation.z = -0.3 + Math.sin(skyT * 0.9) * 0.28
+        beamRight.rotation.z = 0.3 + Math.cos(skyT * 0.85) * 0.28
       }
 
       composer.render()
@@ -1529,6 +2199,8 @@ export function GamePage() {
     animate()
 
     return () => {
+      disposed = true
+      dracoLoader.dispose()
       sfx.stopEngine()
       cancelAnimationFrame(rafId)
       resizeObserver.disconnect()
@@ -1537,7 +2209,16 @@ export function GamePage() {
       canvas.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
-      skyTexture.dispose()
+      skyMat.dispose()
+      beamGeo.dispose()
+      beamMat.dispose()
+      matNeonArch.dispose()
+      matTowerGlass.dispose()
+      matTowerAccent.dispose()
+      matBoardwalk.dispose()
+      matPalmTrunk.dispose()
+      matPalmLeaf.dispose()
+      matLampGlow.dispose()
       bannerTex.dispose()
       crowdTex.dispose()
       buildingTex.dispose()
@@ -1572,6 +2253,13 @@ export function GamePage() {
           <div className="rounded-lg border border-amber-400/50 bg-gradient-to-b from-slate-800/90 to-slate-950/90 px-3 py-1 text-xs font-black tracking-wider text-amber-300 shadow-lg backdrop-blur-md">
             POS <span className="ml-1 font-mono text-sm text-white">{posRank}/2</span>
           </div>
+          <div className="rounded-lg border border-emerald-400/45 bg-gradient-to-b from-emerald-950/85 to-slate-950/90 px-3 py-1 text-xs font-black tracking-wider text-emerald-300 shadow-lg backdrop-blur-md">
+            {zh ? '关卡' : 'STAGE'}{' '}
+            <span className="ml-1 font-mono text-sm text-white">{stage}</span>
+            <span className="ml-1.5 font-mono text-[11px] font-bold text-emerald-300/80">
+              ({wordsDone % 3}/3)
+            </span>
+          </div>
           <div className="rounded-lg border border-white/20 bg-gradient-to-b from-slate-800/85 to-slate-950/90 px-3 py-1 text-xs font-bold text-slate-200 shadow-lg backdrop-blur-md">
             {zh ? '得分' : 'SCORE'}{' '}
             <span className="ml-1 font-mono text-sm font-black text-cyan-300">{score}</span>
@@ -1587,6 +2275,15 @@ export function GamePage() {
           <div className="rounded-lg border border-white/15 bg-slate-900/75 px-2.5 py-1 text-[11px] font-bold tracking-wide text-slate-300 uppercase backdrop-blur-md">
             {zh ? DIFFICULTY_CONFIG[difficulty].labelZh : DIFFICULTY_CONFIG[difficulty].labelEn}
           </div>
+          {phase === 'playing' && (
+            <div className="rounded-lg border border-rose-400/40 bg-gradient-to-b from-rose-950/85 to-slate-950/90 px-3 py-1 text-xs font-bold text-rose-200 shadow-lg backdrop-blur-md">
+              {zh ? '对手' : 'RIVAL'}{' '}
+              <span className="ml-1 font-mono text-sm font-black text-rose-300">{rivalScore}</span>
+              <span className="mx-1.5 text-rose-500/70">·</span>
+              <span className="text-[11px] text-rose-200/80">{zh ? '词' : 'W'}</span>{' '}
+              <span className="font-mono text-sm font-black text-amber-300">{rivalWordsDone}</span>
+            </div>
+          )}
           {streak > 1 && (
             <div className="animate-bounce rounded-lg border border-amber-300 bg-gradient-to-r from-amber-400 to-orange-500 px-3 py-1 text-xs font-black text-slate-950 shadow-lg">
               🔥 x{Math.min(4, streak)}
@@ -1740,36 +2437,81 @@ export function GamePage() {
               </div>
             </div>
 
-            {/* Glossy Circular GEAR UP Button */}
+            {/* Glossy Circular GEAR UP Button with Shortcut Badge */}
             <button
               type="button"
               onClick={() => gearUpRef.current?.()}
-              className="flex size-13 shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border-2 border-cyan-200 bg-gradient-to-b from-cyan-300 via-sky-400 to-cyan-600 text-slate-950 shadow-[0_0_18px_rgba(34,211,238,0.55)] transition hover:brightness-110 active:scale-95"
+              title={zh ? '换挡加速 (快捷键: Shift / E / G)' : 'Gear Up (Shortcut: Shift / E / G)'}
+              className="relative flex size-13 shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border-2 border-cyan-200 bg-gradient-to-b from-cyan-300 via-sky-400 to-cyan-600 text-slate-950 shadow-[0_0_18px_rgba(34,211,238,0.55)] transition hover:brightness-110 active:scale-95"
             >
               <span className="text-xs leading-none font-black">▲</span>
               <span className="mt-0.5 text-[8px] leading-none font-black tracking-tight">GEAR UP</span>
+              <span className="mt-0.5 rounded bg-slate-950/80 px-1 text-[7px] leading-tight font-bold text-cyan-200">
+                SHIFT/E
+              </span>
             </button>
           </div>
 
-          {/* Metallic Ribbed Gas Pedal */}
-          <button
-            type="button"
-            onPointerDown={() => {
-              gasRef.current = true
-            }}
-            onPointerUp={() => {
-              gasRef.current = false
-            }}
-            onPointerLeave={() => {
-              gasRef.current = false
-            }}
-            className="pointer-events-auto flex h-18 w-12 cursor-pointer flex-col justify-between rounded-xl border-2 border-slate-200 bg-gradient-to-b from-slate-100 via-slate-300 to-slate-500 p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.5)] transition active:scale-95 active:border-cyan-300"
-            aria-label="Throttle"
-          >
-            {[0, 1, 2, 3, 4, 5].map((slot) => (
-              <span key={slot} className="h-1.5 w-full rounded-xs bg-slate-800 shadow-inner" />
-            ))}
-          </button>
+          {/* Brake & Gas Pedals */}
+          <div className="pointer-events-auto flex items-end gap-2">
+            {/* Brake Pedal (S / ↓) */}
+            <button
+              type="button"
+              onPointerDown={() => {
+                brakeRef.current = true
+              }}
+              onPointerUp={() => {
+                brakeRef.current = false
+              }}
+              onPointerLeave={() => {
+                brakeRef.current = false
+              }}
+              title={zh ? '刹车减速 (快捷键: S / ↓)' : 'Brake (Shortcut: S / ↓)'}
+              className={`flex h-14 w-11 cursor-pointer flex-col items-center justify-between rounded-xl border-2 p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.5)] transition active:scale-95 ${
+                isBraking
+                  ? 'border-rose-400 bg-gradient-to-b from-rose-200 via-rose-400 to-rose-600'
+                  : 'border-slate-300 bg-gradient-to-b from-slate-200 via-slate-400 to-slate-600'
+              }`}
+              aria-label="Brake"
+            >
+              <span className="text-[8px] leading-none font-black text-slate-900">BRK</span>
+              <div className="flex w-full flex-col gap-1">
+                {[0, 1, 2].map((slot) => (
+                  <span key={slot} className="h-1 w-full rounded-xs bg-slate-800 shadow-inner" />
+                ))}
+              </div>
+              <span className="rounded bg-slate-950/80 px-1 text-[7px] leading-tight font-bold text-rose-200">
+                S / ↓
+              </span>
+            </button>
+
+            {/* Metallic Ribbed Gas Pedal (W / ↑) */}
+            <button
+              type="button"
+              onPointerDown={() => {
+                gasRef.current = true
+              }}
+              onPointerUp={() => {
+                gasRef.current = false
+              }}
+              onPointerLeave={() => {
+                gasRef.current = false
+              }}
+              title={zh ? '油门加速 (快捷键: W / ↑)' : 'Throttle (Shortcut: W / ↑)'}
+              className="flex h-18 w-12 cursor-pointer flex-col items-center justify-between rounded-xl border-2 border-slate-200 bg-gradient-to-b from-slate-100 via-slate-300 to-slate-500 p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.5)] transition active:scale-95 active:border-cyan-300"
+              aria-label="Throttle"
+            >
+              <span className="text-[8px] leading-none font-black text-slate-800">GAS</span>
+              <div className="flex w-full flex-col gap-1">
+                {[0, 1, 2, 3].map((slot) => (
+                  <span key={slot} className="h-1.5 w-full rounded-xs bg-slate-800 shadow-inner" />
+                ))}
+              </div>
+              <span className="rounded bg-slate-950/80 px-1 text-[7px] leading-tight font-bold text-cyan-200">
+                W / ↑
+              </span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -1821,8 +2563,8 @@ export function GamePage() {
           </p>
           <span className="mt-3 rounded-full bg-slate-900/75 px-4 py-1.5 text-xs font-semibold text-slate-100 backdrop-blur">
             {zh
-              ? 'A/D 转向 · W 加速 · Shift 换挡 · 撞击字母方块补全单词'
-              : 'A/D Steer · W Throttle · Shift Gear Up · Collect letters to spell!'}
+              ? 'A/D 转向 · W/↑ 加速 · S/↓ 刹车 · Shift/E/G 换挡 · Space 跳跃 · 抢先撞击字母方块！'
+              : 'A/D Steer · W/↑ Gas · S/↓ Brake · Shift/E/G Gear Up · Space Jump · Race for letters!'}
           </span>
         </div>
       )}
@@ -1862,12 +2604,20 @@ export function GamePage() {
             <h2 className="text-2xl font-black text-slate-900">{zh ? '撞到浮标啦！' : 'WIPEOUT!'}</h2>
             <div className="mt-3 space-y-1.5 text-sm">
               <div className="flex justify-between border-b border-slate-200 pb-1 font-semibold text-slate-600">
-                <span>{zh ? '本局得分' : 'Score'}</span>
+                <span>{zh ? '本局得分' : 'Your Score'}</span>
                 <strong className="text-sky-600">{score}</strong>
               </div>
               <div className="flex justify-between border-b border-slate-200 pb-1 font-semibold text-slate-600">
-                <span>{zh ? '拼写完成单词' : 'Words Completed'}</span>
+                <span>{zh ? '到达关卡' : 'Stage Reached'}</span>
+                <strong className="text-emerald-600">STAGE {stage}</strong>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-1 font-semibold text-slate-600">
+                <span>{zh ? '拼写完成单词' : 'Your Words'}</span>
                 <strong className="text-sky-600">{wordsDone}</strong>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-1 font-semibold text-rose-600">
+                <span>{zh ? '对手得分 / 单词' : 'Rival Score / Words'}</span>
+                <strong>{rivalScore} · {rivalWordsDone}</strong>
               </div>
               <div className="flex justify-between pb-1 font-semibold text-slate-600">
                 <span>{zh ? '历史最高' : 'Best Score'}</span>
