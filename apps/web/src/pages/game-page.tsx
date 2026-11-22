@@ -1063,6 +1063,67 @@ export function GamePage() {
       scene.add(chunk)
     }
 
+    // Trackside Spectator Characters (/models/girl.glb, zelda.glb, link1.glb) along both sides of the canal
+    const girlMixers: THREE.AnimationMixer[] = []
+    function loadTracksideModel(url: string, targetHeight: number, offsetX: number, zOffsets: number[]) {
+      gltfLoader.load(
+        url,
+        (gltf) => {
+          if (disposed) return
+          const baseModel = gltf.scene
+          baseModel.updateMatrixWorld(true)
+          const box = new THREE.Box3().setFromObject(baseModel)
+          const size = new THREE.Vector3()
+          box.getSize(size)
+          if (size.lengthSq() < 0.0001) return
+
+          const maxDim = Math.max(size.y, size.x, size.z, 0.001)
+          const scaleFactor = targetHeight / maxDim
+
+          chunks.forEach((chunk) => {
+            ;[-1, 1].forEach((side) => {
+              zOffsets.forEach((zOff) => {
+                const holder = new THREE.Group()
+                const cloned = baseModel.clone(true)
+                cloned.scale.multiplyScalar(scaleFactor)
+                cloned.updateMatrixWorld(true)
+                const cBox = new THREE.Box3().setFromObject(cloned)
+                const cCenter = new THREE.Vector3()
+                cBox.getCenter(cCenter)
+                cloned.position.set(-cCenter.x, -cBox.min.y, -cCenter.z)
+                cloned.traverse((obj) => {
+                  if ((obj as THREE.Mesh).isMesh) {
+                    obj.castShadow = true
+                    obj.receiveShadow = true
+                    obj.frustumCulled = false
+                  }
+                })
+
+                holder.add(cloned)
+                holder.position.set(side * (TRACK_WIDTH / 2 + offsetX), 1.92, zOff)
+                holder.rotation.y = side === -1 ? Math.PI / 2 : -Math.PI / 2
+                chunk.add(holder)
+
+                if (gltf.animations.length > 0) {
+                  const mixer = new THREE.AnimationMixer(cloned)
+                  mixer.clipAction(gltf.animations[0]).play()
+                  girlMixers.push(mixer)
+                }
+              })
+            })
+          })
+        },
+        undefined,
+        (err) => {
+          console.error(`Failed to load ${url}:`, err)
+        },
+      )
+    }
+
+    loadTracksideModel('/models/girl.glb?v=4', 3.6, 2.35, [-9, 9])
+    loadTracksideModel('/models/zelda.glb', 2.1, 3.0, [0])
+    loadTracksideModel('/models/link1.glb', 3.0, 2.75, [-4.5, 4.5])
+
     // Downtown Toronto Background (/models/Toronto.glb)
     const backdropGroup = new THREE.Group()
     scene.add(backdropGroup)
@@ -1703,6 +1764,7 @@ export function GamePage() {
       if (state !== 'paused') {
         if (playerFan) playerFan.rotation.z += dt * (8 + moveSpeed * 0.6)
         if (rivalFan) rivalFan.rotation.z += dt * (8 + moveSpeed * 0.6)
+        for (const mixer of girlMixers) mixer.update(dt)
       }
 
       if (feedbackTimer > 0) {
