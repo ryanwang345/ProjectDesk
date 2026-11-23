@@ -120,9 +120,11 @@ spec:
                 g fetch --quiet "$REMOTE" main
                 g checkout --quiet --force -B release-tag FETCH_HEAD
 
-                # Identify environment-specific values file only (never mutate shared helm/values.yaml)
+                # Identify environment-specific values file only (never mutate shared values.yaml)
                 TARGET_FILES=""
-                if [ -f "helm/values-${ENV}.yaml" ]; then
+                if [ -f "helm/project-desk/values-${ENV}.yaml" ]; then
+                  TARGET_FILES="$TARGET_FILES helm/project-desk/values-${ENV}.yaml"
+                elif [ -f "helm/values-${ENV}.yaml" ]; then
                   TARGET_FILES="$TARGET_FILES helm/values-${ENV}.yaml"
                 fi
 
@@ -167,7 +169,7 @@ spec:
 
                 # Ensure any Postgres PVC / StatefulSet templates in ProjectDesk-GitOps carry
                 # ArgoCD Prune=false,Delete=false and helm.sh/resource-policy=keep across dev/staging/prod
-                for TPL in helm/templates/*postgres*.yaml helm/templates/*db*.yaml helm/templates/*pvc*.yaml; do
+                for TPL in helm/project-desk/templates/*postgres*.yaml helm/project-desk/templates/*db*.yaml helm/project-desk/templates/*pvc*.yaml; do
                   if [ -f "$TPL" ] && ! grep -q "Prune=false" "$TPL"; then
                     echo "[Deploy] Ensuring ArgoCD Prune=false protection in ${TPL}"
                     awk '
